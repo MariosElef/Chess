@@ -1,3 +1,32 @@
 [workspace]
 resolver = "3"
-members = ["backend"]
+members = ["backend", "crates/chess-domain", "desktop"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.lints.clippy]
+float_arithmetic = "warn"
+cast_sign_loss = "warn"
+cast_precision_loss = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[profile.release]
+overflow-checks = true
+
+# GPUI renders slowly unoptimized; these crates are optimized even in debug builds.
+[profile.dev.package]
+gpui-fast = { opt-level = 3 }
+gpui-fast-platform = { opt-level = 3 }
+gpui-component = { opt-level = 3 }
+gpui-kit = { opt-level = 3 }
+gpui-kit-assets = { opt-level = 3 }
+rustybuzz = { opt-level = 3 }
+taffy = { opt-level = 3 }
+ttf-parser = { opt-level = 3 }

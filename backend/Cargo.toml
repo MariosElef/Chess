@@ -1,7 +1,9 @@
 [package]
 name = "chess-backend"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
@@ -21,3 +23,6 @@ uuid = { version = "1.29.1", features = ["v7", "serde"] }
 axum-test = "21.1.0"
 http-body-util = "0.1.5"
 tower = "0.5.3"
+
+[lints]
+workspace = true
