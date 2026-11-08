@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gpui_kit::{component::h_flex, *};
 
 use crate::{
@@ -19,7 +21,10 @@ use crate::{
     enums::{settings::Appearance, shell::Page},
     models::{account::AccountChanged, engine::EngineSettings, play::AnalyzeGame},
     views::{
-        account::AccountView, analysis::AnalysisPage, play::PlayPage, puzzles::PuzzlesView,
+        account::AccountView,
+        analysis::AnalysisPage,
+        play::{OnlineView, PlayPage, SessionSource},
+        puzzles::PuzzlesView,
         settings::apply_appearance,
     },
 };
@@ -278,6 +283,7 @@ fn account_changed(
 ) {
     if account.read(cx).is_admitted() {
         shell.page = Page::Play;
+        shell.play.update(cx, |play, cx| play.connect_online(cx));
     } else {
         shell.fresh_pages(window, cx);
     }
@@ -301,7 +307,7 @@ impl Pages {
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Self {
-        let play = new_play_page(window, cx);
+        let play = new_play_page(client.clone(), account, window, cx);
         let play_events = cx.subscribe_in(&play, window, analyze_game);
         Self {
             play,
@@ -313,8 +319,20 @@ impl Pages {
 }
 
 /// Starts with keyboard focus, so the arrow keys work before anything is clicked.
-fn new_play_page(window: &mut Window, cx: &mut Context<AppShell>) -> Entity<PlayPage> {
-    let play = cx.new(PlayPage::new);
+fn new_play_page(
+    client: ServerClient,
+    account: &Entity<AccountView>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> Entity<PlayPage> {
+    let account = account.downgrade();
+    let session: SessionSource = Rc::new(move |cx| {
+        account
+            .upgrade()
+            .and_then(|account| account.read(cx).session())
+    });
+    let online = cx.new(|cx| OnlineView::new(client, session, cx));
+    let play = cx.new(|cx| PlayPage::new(online, cx));
     let focus = play.read(cx).focus_handle();
     focus.focus(window, cx);
     play

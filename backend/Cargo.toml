@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1.0.104"
 argon2 = "0.6.0"
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.23.1"
 chess-domain = { version = "0.1.0", path = "../crates/chess-domain" }
 chrono = { version = "0.4.45", default-features = false, features = ["now", "serde"] }
@@ -29,7 +29,7 @@ uuid = { version = "1.29.1", features = ["v7", "serde"] }
 zstd = "0.14.3"
 
 [dev-dependencies]
-axum-test = "21.1.0"
+axum-test = { version = "21.1.0", features = ["ws"] }
 http-body-util = "0.1.5"
 zstd = "0.14.3"
 

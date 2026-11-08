@@ -144,7 +144,10 @@ impl RenderOnce for BoardSquare {
             .when_some(self.right_button, |this, handlers| {
                 let RightButton { on_down, on_up } = handlers;
                 this.on_mouse_down(MouseButton::Right, move |_, window, cx| {
-                    on_down(square, window, cx);
+                    // A right-click while a piece is held puts it back, drawing nothing.
+                    if !cx.stop_active_drag(window) {
+                        on_down(square, window, cx);
+                    }
                 })
                 .on_mouse_up(MouseButton::Right, move |_, window, cx| {
                     on_up(square, window, cx);

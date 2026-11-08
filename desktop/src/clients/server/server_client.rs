@@ -3,11 +3,13 @@ use std::{future::Future, sync::Arc};
 use reqwest::{RequestBuilder, Response};
 use serde::Deserialize;
 
+use super::live_socket::LiveSocket;
 use crate::{
     clients::http::{HttpRuntime, no_answer, read_json},
     enums::puzzles::RushKind,
     models::{
         account::{Session, SignIn, SignUp, User},
+        play::LiveEvent,
         puzzles::{AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, RatingRange, RushRecord},
         server::{Problem, ServerError},
     },
@@ -131,6 +133,12 @@ impl ServerClient {
             .bearer_auth(token);
         self.http
             .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// The live socket for online play, signed in as `token`.
+    pub fn live_socket(&self, token: &str) -> (LiveSocket, tokio::sync::mpsc::Receiver<LiveEvent>) {
+        let url = format!("{}/api/ws", self.base_url.replacen("http", "ws", 1));
+        LiveSocket::open(&self.http, url, token.to_owned())
     }
 
     pub fn sign_out(&self, token: &str) -> impl Future<Output = Result<(), ServerError>> + use<> {

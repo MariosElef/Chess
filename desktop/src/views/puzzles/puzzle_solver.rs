@@ -168,6 +168,7 @@ impl PuzzleSolver {
                 last_move: run.last_move(),
                 can_move: run.state() == PuzzleState::Solving,
                 premoves: false,
+                player: None,
                 engine_arrow: None,
             },
             None => ShownPosition {
@@ -175,6 +176,7 @@ impl PuzzleSolver {
                 last_move: None,
                 can_move: false,
                 premoves: false,
+                player: None,
                 engine_arrow: None,
             },
         }

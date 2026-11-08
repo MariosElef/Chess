@@ -78,6 +78,11 @@ impl AccountView {
         self.session.is_some()
     }
 
+    /// The signed-in session: token and account, for live play.
+    pub fn session(&self) -> Option<Session> {
+        self.session.clone()
+    }
+
     /// The token the server knows this app by, for requests made while signed in.
     pub fn token(&self) -> Option<String> {
         self.session.as_ref().map(|session| session.token.clone())

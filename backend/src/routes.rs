@@ -1,5 +1,6 @@
 mod account;
 mod health;
+mod play;
 mod puzzles;
 
 use std::time::Duration;
@@ -30,7 +31,8 @@ const BODY_LIMIT_BYTES: usize = 64 * 1024;
 pub fn build_router(state: AppState) -> Router {
     let api = Router::new()
         .merge(account::router())
-        .nest("/puzzles", puzzles::router());
+        .nest("/puzzles", puzzles::router())
+        .merge(play::router());
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(

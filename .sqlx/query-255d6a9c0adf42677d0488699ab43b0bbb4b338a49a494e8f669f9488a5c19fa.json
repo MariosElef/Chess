@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Live games are held in the server's memory: after a restart, the ones left running are over.\nUPDATE play.games\nSET status = 'aborted', draw_offer_by = NULL, finished_at = now(), updated_at = now()\nWHERE games.status = 'ongoing'\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "255d6a9c0adf42677d0488699ab43b0bbb4b338a49a494e8f669f9488a5c19fa"
+}

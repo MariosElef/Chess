@@ -49,10 +49,12 @@ pub async fn find_credentials(
 /// The first guest account nobody is signed in as, locked for the caller's transaction.
 pub async fn claim_free_guest(
     db: impl PgExecutor<'_>,
+    in_use: &[Uuid],
 ) -> Result<Option<GetUserModel>, sqlx::Error> {
     sqlx::query_file_as!(
         GetUserModel,
-        "src/repositories/sql/account/user/claim_free_guest.sql"
+        "src/repositories/sql/account/user/claim_free_guest.sql",
+        in_use
     )
     .fetch_optional(db)
     .await

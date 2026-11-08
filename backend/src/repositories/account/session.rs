@@ -37,6 +37,18 @@ pub async fn authenticate(
     .await
 }
 
+/// Ends every session of the user: a guest handed to someone new is no longer the last
+/// holder's.
+pub async fn revoke_all_of_user(db: impl PgExecutor<'_>, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query_file!(
+        "src/repositories/sql/account/session/revoke_all_of_user.sql",
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 pub async fn revoke(db: impl PgExecutor<'_>, session_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query_file!(
         "src/repositories/sql/account/session/revoke.sql",

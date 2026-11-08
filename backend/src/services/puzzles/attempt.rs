@@ -8,6 +8,7 @@ use crate::{
         attempt::{CreateAttemptModel, GetAttemptModel, NewAttempt},
         rating::PuzzleStrength,
     },
+    models::rating::RatingSource,
     repositories::{
         database::Db,
         puzzles::{attempt, puzzle},
@@ -71,11 +72,11 @@ impl AttemptService {
                 opponent: puzzle_as_player(strength),
                 score: if body.solved { Score::Win } else { Score::Loss },
             }]);
-            rating::record_puzzle_result(
+            rating::record_result(
                 &mut tx,
                 user_id,
                 PUZZLE_CATEGORY,
-                new_attempt.id,
+                RatingSource::PuzzleAttempt(new_attempt.id),
                 to_row(after),
             )
             .await?;

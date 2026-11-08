@@ -52,6 +52,11 @@ impl HttpRuntime {
         }
     }
 
+    /// Runs `work` on the runtime in the background, for as long as it takes.
+    pub fn spawn(&self, work: impl Future<Output = ()> + Send + 'static) {
+        self.runtime.spawn(work);
+    }
+
     /// Waits for `work` on this thread; for tests, which have no app to await in.
     #[cfg(test)]
     pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {

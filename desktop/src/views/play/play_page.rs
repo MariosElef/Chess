@@ -8,6 +8,7 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         h_flex,
         label::Label,
+        tab::{Tab, TabBar},
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -30,7 +31,7 @@ use crate::{
         history::{MoveList, NavigationBar, PositionPanel},
         play::{CapturedRow, ClockFace, GameSetup},
     },
-    enums::{history::NavStep, sound::Sound},
+    enums::{history::NavStep, play::PlayMode, sound::Sound},
     models::{
         board::{MoveMade, ShownPosition},
         play::AnalyzeGame,
@@ -42,6 +43,7 @@ use crate::{
     views::{
         board::BoardView,
         history::{HistoryNavigation, select_move, step_history, with_history_keys},
+        play::OnlineView,
         sound::{play_move_sound, play_sound},
     },
 };
@@ -49,6 +51,13 @@ use crate::{
 /// The game being played, the position on the board, and what the player is in the middle of.
 pub struct PlayPage {
     stage: Stage,
+    /// Against someone here or online; the menu shows the matching options.
+    mode: PlayMode,
+    /// The online lobby and game, shown in place of the local ones.
+    online: Entity<OnlineView>,
+    _online_changes: Subscription,
+    /// The online game's Analyze goes out as this page's.
+    _online_analyze: Subscription,
     /// The time control picked in the menu; `None` is no clock.
     setup_choice: Option<TimeControl>,
     history: GameHistory,
@@ -67,7 +76,11 @@ pub struct PlayPage {
 }
 
 impl PlayPage {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(online: Entity<OnlineView>, cx: &mut Context<Self>) -> Self {
+        let _online_changes = cx.observe(&online, |_, _, cx| cx.notify());
+        let _online_analyze = cx.subscribe(&online, |_, _, event: &AnalyzeGame, cx| {
+            cx.emit(event.clone());
+        });
         let page = cx.weak_entity();
         let board = cx.new(|_| {
             BoardView::new(move |cx| page.upgrade().map(|page| page.read(cx).shown_position()))
@@ -78,6 +91,10 @@ impl PlayPage {
         });
         Self {
             stage: Stage::Setup,
+            mode: PlayMode::Local,
+            online,
+            _online_changes,
+            _online_analyze,
             setup_choice: DEFAULT_TIME_CONTROL,
             history: GameHistory::new(),
             clock: None,
@@ -94,8 +111,33 @@ impl PlayPage {
         self.focus_handle.clone()
     }
 
+    /// Focuses the page, or the online view while it is shown, so the arrow keys reach it.
     fn focus(&self, window: &mut Window, cx: &mut App) {
-        self.focus_handle.focus(window, cx);
+        if self.shows_online(cx) {
+            self.online.read(cx).focus_handle().focus(window, cx);
+        } else {
+            self.focus_handle.focus(window, cx);
+        }
+    }
+
+    /// Connects for online play, so a game the player is still in comes back to the board.
+    pub fn connect_online(&mut self, cx: &mut Context<Self>) {
+        self.online.update(cx, |online, cx| online.connect(cx));
+    }
+
+    fn choose_mode(&mut self, mode: PlayMode, cx: &mut Context<Self>) {
+        self.mode = mode;
+        if mode == PlayMode::Online {
+            self.connect_online(cx);
+        }
+        cx.notify();
+    }
+
+    /// An online game takes the page; otherwise the online lobby, while that is the mode and
+    /// no local game is going on.
+    fn shows_online(&self, cx: &App) -> bool {
+        self.online.read(cx).in_game()
+            || (self.mode == PlayMode::Online && self.stage == Stage::Setup)
     }
 
     /// Moves can be made only on the live position of a game still going.
@@ -110,6 +152,7 @@ impl PlayPage {
             last_move: self.history.shown_last_move(),
             can_move: self.can_play(),
             premoves: true,
+            player: None,
             engine_arrow: None,
         }
     }
@@ -413,11 +456,26 @@ impl PlayPage {
             .p_6()
             .gap_4()
             .child(Label::new("Play").text_2xl())
+            .child(mode_tabs(self.mode, page.clone()))
             .child(div().flex().justify_center().child(GameSetup::new(
                 self.setup_choice,
                 choose_time(page.clone()),
                 start_game(page),
             )))
+    }
+
+    /// The online lobby under the same heading and tabs; an online game alone.
+    fn online_view(&self, page: WeakEntity<Self>, cx: &App) -> Div {
+        let in_game = self.online.read(cx).in_game();
+        v_flex()
+            .size_full()
+            .p_6()
+            .gap_4()
+            .when(!in_game, |this| {
+                this.child(Label::new("Play").text_2xl())
+                    .child(mode_tabs(self.mode, page))
+            })
+            .child(div().flex_1().min_h_0().child(self.online.clone()))
     }
 
     fn game_view(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> Div {
@@ -456,10 +514,24 @@ impl Render for PlayPage {
             )
             .size_full()
             .child(match self.stage {
+                _ if self.shows_online(cx) => self.online_view(page, cx),
                 Stage::Setup => self.setup_view(page),
                 Stage::Playing => self.game_view(page, cx),
             })
     }
+}
+
+/// On this computer or online.
+fn mode_tabs(mode: PlayMode, page: WeakEntity<PlayPage>) -> TabBar {
+    TabBar::new("play-mode")
+        .segmented()
+        .w_96()
+        .selected_index(mode.index())
+        .children(PlayMode::ALL.map(|mode| Tab::new().label(mode.label())))
+        .on_click(move |index, _, cx| {
+            let mode = PlayMode::ALL[*index];
+            let _ = page.update(cx, |page, cx| page.choose_mode(mode, cx));
+        })
 }
 
 fn flip_button(cx: &mut Context<PlayPage>) -> Button {
@@ -568,13 +640,19 @@ fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
 #[cfg(test)]
 mod tests {
     use chess_domain::{Move, Side, Square, TimeControl};
-    use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+    use gpui_kit::{
+        AppContext as _, Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext,
+    };
+
+    use std::rc::Rc;
 
     use super::PlayPage;
     use crate::{
+        clients::{http::HttpRuntime, server::ServerClient},
         enums::{history::NavStep, sound::Sound},
         testing::{click, drag, lift, release},
         views::history::HistoryNavigation as _,
+        views::play::OnlineView,
         views::sound::{played_sounds, record_sounds},
     };
 
@@ -586,10 +664,18 @@ mod tests {
         Move::new(sq(from), sq(to))
     }
 
+    /// A Play page whose online side reaches no server and has nobody signed in.
+    fn offline_page(cx: &mut gpui_kit::Context<PlayPage>) -> PlayPage {
+        let client =
+            ServerClient::new(HttpRuntime::new().expect("a runtime"), "http://127.0.0.1:9");
+        let online = cx.new(|cx| OnlineView::new(client, Rc::new(|_| None), cx));
+        PlayPage::new(online, cx)
+    }
+
     /// A Play page with a game started, with a 3 | 2 clock or none.
     fn started(cx: &mut TestAppContext, timed: bool) -> (Entity<PlayPage>, &mut VisualTestContext) {
         cx.update(gpui_kit::init);
-        let (page, cx) = cx.add_window_view(|_, cx| PlayPage::new(cx));
+        let (page, cx) = cx.add_window_view(|_, cx| offline_page(cx));
         page.update(cx, |page, cx| {
             page.choose_time(timed.then(|| TimeControl::new(3, 2)), cx);
             page.start_game(cx);
@@ -662,7 +748,7 @@ mod tests {
             gpui_kit::init(cx);
             record_sounds(cx);
         });
-        let (page, cx) = cx.add_window_view(|_, cx| PlayPage::new(cx));
+        let (page, cx) = cx.add_window_view(|_, cx| offline_page(cx));
         page.update(cx, |page, cx| {
             page.choose_time(None, cx);
             page.start_game(cx);
@@ -714,6 +800,24 @@ mod tests {
             cx.debug_bounds("piece-e2").is_some(),
             "dropped back where it was"
         );
+    }
+
+    #[gpui_kit::test]
+    fn a_right_click_puts_a_held_piece_back(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        lift(cx, "square-e2");
+        let target = cx.debug_bounds("square-e4").expect("e4").center();
+        cx.simulate_mouse_move(target, Some(MouseButton::Left), Modifiers::none());
+        cx.simulate_mouse_down(target, MouseButton::Right, Modifiers::none());
+        cx.simulate_mouse_up(target, MouseButton::Right, Modifiers::none());
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("piece-e2").is_some(), "back on its square");
+        release(cx, target);
+        assert!(
+            sans(&page, cx).is_empty(),
+            "letting go after cancelling moves nothing"
+        );
+        assert!(cx.debug_bounds("piece-e2").is_some());
     }
 
     #[gpui_kit::test]

@@ -101,7 +101,7 @@ impl BoardView {
             ClickMode::Move => {
                 let mv = self
                     .interaction
-                    .click(&shown.position, square, shown.can_move);
+                    .click(&shown.position, square, moves_allowed(&shown));
                 self.move_if_any(mv, cx);
             }
             ClickMode::Premove => {
@@ -122,9 +122,10 @@ impl BoardView {
         };
         let mode = self.click_mode(&shown, from);
         let mv = match mode {
-            ClickMode::Move => self
-                .interaction
-                .drop(&shown.position, from, to, shown.can_move),
+            ClickMode::Move => {
+                self.interaction
+                    .drop(&shown.position, from, to, moves_allowed(&shown))
+            }
             ClickMode::Premove => {
                 self.interaction
                     .premove_drop(&self.preview(&shown), waiting_side(&shown), from, to)
@@ -148,7 +149,7 @@ impl BoardView {
         to: Square,
         cx: &App,
     ) {
-        if shown.can_move && from != to && mv.is_none() && !self.interaction.is_promoting() {
+        if moves_allowed(shown) && from != to && mv.is_none() && !self.interaction.is_promoting() {
             play_sound(Sound::Illegal, cx);
         }
     }
@@ -207,7 +208,7 @@ impl BoardView {
     /// A click on the side to move's piece is a move, on the waiting side's a premove; on a
     /// board that takes no moves or no premoves, nothing is premoved.
     fn click_mode(&self, shown: &ShownPosition, square: Square) -> ClickMode {
-        if !shown.can_move || !shown.premoves {
+        if !premoves_allowed(shown) {
             return ClickMode::Move;
         }
         click_mode(
@@ -241,15 +242,18 @@ impl BoardView {
     /// The side to move's pieces can be dragged to move, and with premoves the other side's
     /// to premove; none on a board that takes no moves.
     fn draggable(&self, shown: &ShownPosition) -> Vec<Side> {
-        let mover = shown.position.side_to_move();
-        match (
-            self.interaction.accepts_moves(shown.can_move),
-            shown.premoves,
-        ) {
-            (true, true) => vec![mover, mover.opponent()],
-            (true, false) => vec![mover],
-            (false, _) => Vec::new(),
+        if !self.interaction.accepts_moves(shown.can_move) {
+            return Vec::new();
         }
+        let mover = shown.position.side_to_move();
+        let movable = [
+            (mover, moves_allowed(shown)),
+            (mover.opponent(), premoves_allowed(shown)),
+        ];
+        movable
+            .into_iter()
+            .filter_map(|(side, allowed)| allowed.then_some(side))
+            .collect()
     }
 
     /// The pawn's side: the mover's, or the waiting side's for a premove.
@@ -298,6 +302,23 @@ impl Render for BoardView {
         .on_piece_drop(drop_piece(view))
         .into_any_element()
     }
+}
+
+/// The side to move may move: the board takes moves, and is theirs or anyone's.
+fn moves_allowed(shown: &ShownPosition) -> bool {
+    shown.can_move
+        && shown
+            .player
+            .is_none_or(|player| player == shown.position.side_to_move())
+}
+
+/// The side waiting may premove: the board takes premoves, and is theirs or anyone's.
+fn premoves_allowed(shown: &ShownPosition) -> bool {
+    shown.can_move
+        && shown.premoves
+        && shown
+            .player
+            .is_none_or(|player| player == waiting_side(shown))
 }
 
 /// The side not to move: the one that may queue premoves.

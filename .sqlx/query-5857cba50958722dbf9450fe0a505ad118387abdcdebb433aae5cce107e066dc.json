@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The first guest with no live session, locked until the transaction ends so a sign-in running\n-- at the same moment skips it and takes the next one.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\"\nFROM account.users\nWHERE\n    users.guest_number IS NOT NULL\n    AND NOT EXISTS (\n        SELECT 1\n        FROM account.sessions\n        WHERE\n            sessions.user_id = users.id\n            AND sessions.revoked_at IS NULL\n            AND sessions.expires_at > now()\n    )\nORDER BY users.guest_number\nLIMIT 1\nFOR UPDATE SKIP LOCKED\n",
+  "query": "-- The first guest nobody is using: not among the players the live server has ($1: connected\n-- or at a board), and not signed in within the last minute, which covers an app that has\n-- signed in but not yet connected. Locked until the transaction ends, so a sign-in running at\n-- the same moment skips it and takes the next one.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\"\nFROM account.users\nWHERE\n    users.guest_number IS NOT NULL\n    AND NOT (users.id = ANY($1::uuid[]))\n    AND NOT EXISTS (\n        SELECT 1\n        FROM account.sessions\n        WHERE\n            sessions.user_id = users.id\n            AND sessions.revoked_at IS NULL\n            AND sessions.expires_at > now()\n            AND sessions.created_at > now() - interval '1 minute'\n    )\nORDER BY users.guest_number\nLIMIT 1\nFOR UPDATE SKIP LOCKED\n",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "UuidArray"
+      ]
     },
     "nullable": [
       false,
@@ -65,5 +67,5 @@
       null
     ]
   },
-  "hash": "f918262f63bf1983dd31224a7fbc8a224141714f19d4c7295edef12b2a7f1b52"
+  "hash": "5857cba50958722dbf9450fe0a505ad118387abdcdebb433aae5cce107e066dc"
 }

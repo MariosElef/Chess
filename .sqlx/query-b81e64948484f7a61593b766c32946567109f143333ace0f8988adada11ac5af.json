@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE play.games\nSET\n    status = 'finished',\n    outcome = $2,\n    winner = $3,\n    white_clock_ms = $4,\n    black_clock_ms = $5,\n    draw_offer_by = NULL,\n    finished_at = now(),\n    updated_at = now()\nWHERE games.id = $1 AND games.status = 'ongoing'\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b81e64948484f7a61593b766c32946567109f143333ace0f8988adada11ac5af"
+}

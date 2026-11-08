@@ -10,6 +10,7 @@ use crate::{
         account::{session, user},
         database::Db,
     },
+    services::play::PlayHub,
 };
 
 /// How long a sign-in lasts before the app has to sign in again: thirty days.
@@ -21,11 +22,13 @@ const GUEST_SESSION_HOURS: i32 = 12;
 #[derive(Clone)]
 pub struct SessionService {
     db: Db,
+    /// Says which guests are in use: those connected or at a board.
+    play: PlayHub,
 }
 
 impl SessionService {
-    pub fn new(db: Db) -> Self {
-        Self { db }
+    pub fn new(db: Db, play: PlayHub) -> Self {
+        Self { db, play }
     }
 
     /// A new session for the account whose email or username and password match. Which of
@@ -59,17 +62,20 @@ impl SessionService {
         Ok(response)
     }
 
-    /// A session for the first free guest account, Guest before Guest2 and so on; with all ten
-    /// in use, the player is asked to sign up. Choosing the guest and starting its session is
-    /// one transaction, so two sign-ins at once never share a guest.
+    /// A session for the lowest guest nobody is using, Guest before Guest2 and so on; with all
+    /// ten in use, the player is asked to sign up. A guest left signed in on a closed app is
+    /// free again, and its old sessions end, so that app signs in afresh next time. Choosing
+    /// the guest and starting its session is one transaction, so two sign-ins at once never
+    /// share a guest.
     pub async fn sign_in_as_guest(
         &self,
         user_agent: Option<String>,
     ) -> Result<GetSessionModel, AppError> {
         let mut tx = self.db.begin().await?;
-        let guest = user::claim_free_guest(&mut *tx)
+        let guest = user::claim_free_guest(&mut *tx, &self.play.players_present())
             .await?
             .ok_or(ChessCode::AllGuestsBusy)?;
+        session::revoke_all_of_user(&mut *tx, guest.id).await?;
         let token = new_token();
         let new_session = NewSession {
             id: Uuid::now_v7(),

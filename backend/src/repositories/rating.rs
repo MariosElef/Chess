@@ -1,7 +1,7 @@
 use sqlx::{PgConnection, PgExecutor};
 use uuid::Uuid;
 
-use crate::models::puzzles::rating::RatingRow;
+use crate::models::rating::{RatingRow, RatingSource};
 
 /// The player's rating in `category`, or `None` before their first result in it.
 pub async fn get(
@@ -36,14 +36,18 @@ pub async fn get_for_update(
 }
 
 /// Stores the new rating, counting one more result, and its row in the rating history, which
-/// names the puzzle attempt that moved it.
-pub async fn record_puzzle_result(
+/// names the game or puzzle attempt that moved it.
+pub async fn record_result(
     db: &mut PgConnection,
     user_id: Uuid,
     category: &str,
-    attempt_id: Uuid,
+    source: RatingSource,
     rating: RatingRow,
 ) -> Result<(), sqlx::Error> {
+    let (game_id, attempt_id) = match source {
+        RatingSource::Game(game_id) => (Some(game_id), None),
+        RatingSource::PuzzleAttempt(attempt_id) => (None, Some(attempt_id)),
+    };
     sqlx::query_file!(
         "src/repositories/sql/rating/upsert.sql",
         user_id,
@@ -59,6 +63,7 @@ pub async fn record_puzzle_result(
         Uuid::now_v7(),
         user_id,
         category,
+        game_id,
         attempt_id,
         rating.rating,
         rating.deviation,

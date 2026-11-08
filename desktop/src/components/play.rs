@@ -4,4 +4,4 @@ mod game_setup;
 
 pub use captured_row::CapturedRow;
 pub use clock_face::ClockFace;
-pub use game_setup::GameSetup;
+pub use game_setup::{GameSetup, OnlineOptions};

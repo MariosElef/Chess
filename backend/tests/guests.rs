@@ -6,7 +6,9 @@ use serde_json::{Value, json};
 
 fn server(db: Db) -> TestServer {
     let lichess = LichessClient::new("http://127.0.0.1:9").expect("a client");
-    TestServer::new(build_router(AppState::assemble(db, lichess)))
+    TestServer::builder()
+        .http_transport()
+        .build(build_router(AppState::assemble(db, lichess)))
 }
 
 /// Signs in as a guest: the guest's username and the session's token.
@@ -98,4 +100,45 @@ async fn two_guests_at_once_never_share_an_account(db: Db) {
     let server = server(db);
     let (first, second) = tokio::join!(guest(&server), guest(&server));
     assert_ne!(first.0, second.0);
+}
+
+/// Makes every session look a few minutes old, as if the apps signed in long ago.
+async fn age_sessions(db: &Db) {
+    sqlx::query("UPDATE account.sessions SET created_at = now() - interval '5 minutes'")
+        .execute(db)
+        .await
+        .expect("sessions aged");
+}
+
+#[sqlx::test]
+async fn a_guest_left_on_a_closed_app_goes_to_the_next_player(db: Db) {
+    let server = server(db.clone());
+    let (first, old_token) = guest(&server).await;
+    assert_eq!(first, "Guest");
+    age_sessions(&db).await;
+    let (again, _) = guest(&server).await;
+    assert_eq!(
+        again, "Guest",
+        "nobody was using Guest, so the lowest goes again"
+    );
+    server
+        .get("/api/users/me")
+        .authorization_bearer(&old_token)
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+async fn a_connected_guest_stays_taken(db: Db) {
+    let server = server(db.clone());
+    let (first, token) = guest(&server).await;
+    let _socket = server
+        .get_websocket("/api/ws")
+        .authorization_bearer(&token)
+        .await
+        .into_websocket()
+        .await;
+    age_sessions(&db).await;
+    let (next, _) = guest(&server).await;
+    assert_eq!((first.as_str(), next.as_str()), ("Guest", "Guest2"));
 }

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The move and the game's cached position and clocks, in one statement; any move clears an\n-- open draw offer.\nWITH moved AS (\n    INSERT INTO play.game_moves (game_id, ply, uci, white_clock_ms, black_clock_ms)\n    VALUES ($1, $2, $3, $5, $6)\n)\nUPDATE play.games\nSET\n    ply_count = $2,\n    fen = $4,\n    white_clock_ms = $5,\n    black_clock_ms = $6,\n    last_move_at = now(),\n    draw_offer_by = NULL,\n    updated_at = now()\nWHERE games.id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05eea07edac05000e3d4c58e4d34ac01a2777b1abbf46a9a988e2d5e1a8c2f7e"
+}

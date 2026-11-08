@@ -285,6 +285,7 @@ impl AnalysisPage {
             last_move: self.history.shown_last_move(),
             can_move: true,
             premoves: true,
+            player: None,
             engine_arrow: self.engine_arrow(),
         }
     }

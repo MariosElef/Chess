@@ -1,6 +1,6 @@
 # Chess
 
-A chess app for two people on one computer, a Stockfish analysis board, and puzzles: a GPUI
+A chess app for two people on one computer or online, a Stockfish analysis board, and puzzles: a GPUI
 desktop app (`desktop/`), an axum server (`backend/`) and the chess rules both share
 (`crates/chess-domain/`).
 
@@ -43,6 +43,20 @@ curl -O https://database.lichess.org/lichess_db_puzzle.csv.zst
 DATABASE_URL=postgres://chess:change-me@localhost:5433/chess \
   cargo run --release -p chess-backend -- import-puzzles lichess_db_puzzle.csv.zst
 ```
+
+## Online play
+
+Play → Online finds an opponent who asked for the same time control. The game runs on the
+server over a WebSocket (`/api/ws`): it checks every move, keeps both clocks, ends the game
+and, for a rated game between two accounts, updates both ratings. Guests play unrated. If the
+app drops its connection it reconnects on its own, and the game comes back where it was.
+Before both sides have moved, either player can abort; a side that does not make its first
+move within 30 seconds has the game aborted for it. An aborted game is never rated. Every move
+costs at least 0.01 s, so a premove is never free. Games left unfinished when the server stops
+are marked aborted when it starts again.
+
+A guest is free again once no app signed in as it is connected, so Continue as guest always
+gives the lowest-numbered guest nobody is using.
 
 ## Checks
 
