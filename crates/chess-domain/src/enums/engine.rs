@@ -74,6 +74,26 @@ impl Eval {
             } => 0.0,
         }
     }
+
+    /// The share of the points `side` can expect from here, from 0 (lost) through 0.5 (even) to
+    /// 1 (won): Lichess's winning-chances curve, with a forced mate as a sure result.
+    pub fn expected_points(self, side: Side) -> f64 {
+        let for_white = match self {
+            Self::Centipawns(centipawns) => (1.0 + win_chances(centipawns)) / 2.0,
+            Self::Mate {
+                winner: Side::White,
+                ..
+            } => 1.0,
+            Self::Mate {
+                winner: Side::Black,
+                ..
+            } => 0.0,
+        };
+        match side {
+            Side::White => for_white,
+            Side::Black => 1.0 - for_white,
+        }
+    }
 }
 
 fn for_white(centipawns: i32, side_to_move: Side) -> i32 {
@@ -176,6 +196,21 @@ impl Command {
 mod tests {
     use super::Eval;
     use crate::{Side, engine::UciScore};
+
+    #[test]
+    fn expected_points_are_even_at_zero_and_sure_with_a_mate() {
+        assert!((Eval::Centipawns(0).expected_points(Side::White) - 0.5).abs() < 1e-9);
+        let up_a_pawn = Eval::Centipawns(100);
+        assert!(up_a_pawn.expected_points(Side::White) > 0.55);
+        let both = up_a_pawn.expected_points(Side::White) + up_a_pawn.expected_points(Side::Black);
+        assert!((both - 1.0).abs() < 1e-9, "the two sides share one point");
+        let mate = Eval::Mate {
+            winner: Side::Black,
+            moves: 3,
+        };
+        assert!((mate.expected_points(Side::Black) - 1.0).abs() < 1e-9);
+        assert!(mate.expected_points(Side::White).abs() < 1e-9);
+    }
 
     #[test]
     fn black_to_move_scores_are_turned_around() {

@@ -14,7 +14,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::services::play::presets_in;
+use crate::{components::play::speed_label, services::play::presets_in};
 
 type OnChoose = Rc<dyn Fn(TimeControl, &mut Window, &mut App)>;
 type OnRated = Rc<dyn Fn(bool, &mut Window, &mut App)>;
@@ -102,7 +102,7 @@ impl ChallengePicker {
     fn speed_row(&self, category: Category) -> Div {
         h_flex()
             .gap_2()
-            .child(div().w_20().text_sm().child(category.name()))
+            .child(speed_label(category).w_24())
             .children(
                 presets_in(category)
                     .into_iter()

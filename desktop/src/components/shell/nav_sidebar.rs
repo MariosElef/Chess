@@ -3,17 +3,18 @@ use std::rc::Rc;
 use gpui_kit::{
     assets::IconName,
     component::{
-        ActiveTheme as _, Icon, Selectable,
+        ActiveTheme as _, Icon, Selectable, StyledExt as _,
         button::{Button, ButtonVariants},
         h_flex,
         popover::{Popover, PopoverState},
-        sidebar::{Sidebar, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuItem},
+        sidebar::{Sidebar, SidebarFooter, SidebarMenu},
         v_flex,
     },
     prelude::FluentBuilder as _,
     *,
 };
 
+use super::nav_pictures::page_picture;
 use crate::enums::shell::Page;
 
 type OnSelect = Rc<dyn Fn(Page, &mut Window, &mut App)>;
@@ -49,28 +50,56 @@ impl NavSidebar {
 }
 
 impl RenderOnce for NavSidebar {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        Sidebar::new("nav-sidebar")
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        // The pages are drawn here rather than as menu items: a menu item takes only a tinted
+        // icon, and the pictures are in colour.
+        let nav = v_flex().gap_1().children(self.nav_items(cx));
+        Sidebar::<SidebarMenu>::new("nav-sidebar")
             .collapsible(false)
-            .header(app_header())
-            .child(SidebarMenu::new().children(self.nav_items()))
+            .header(v_flex().w_full().gap_4().child(app_header()).child(nav))
             .footer(self.profile_menu())
     }
 }
 
 impl NavSidebar {
-    fn nav_items(&self) -> [SidebarMenuItem; 4] {
-        let waiting = self.waiting;
-        Page::NAV.map(|page| {
-            let on_select = Rc::clone(&self.on_select);
-            SidebarMenuItem::new(page.label())
-                .icon(page_icon(page))
-                .active(page == self.active)
-                .when(page == Page::Social && waiting > 0, |item| {
-                    item.suffix(move |_, cx| count_pill(waiting, cx))
-                })
-                .on_click(move |_, window, cx| on_select(page, window, cx))
-        })
+    fn nav_items(&self, cx: &App) -> Vec<Stateful<Div>> {
+        Page::NAV
+            .into_iter()
+            .map(|page| self.nav_item(page, cx))
+            .collect()
+    }
+
+    /// A page's link: its picture and name, with what waits on Social; styled as the kit's
+    /// sidebar items are.
+    fn nav_item(&self, page: Page, cx: &App) -> Stateful<Div> {
+        let on_select = Rc::clone(&self.on_select);
+        let active = page == self.active;
+        let waiting = (page == Page::Social && self.waiting > 0).then_some(self.waiting);
+        let theme = cx.theme();
+        h_flex()
+            .id(page.label())
+            .w_full()
+            .h_8()
+            .px_2()
+            .gap_2()
+            .rounded(theme.radius)
+            .text_sm()
+            .cursor_pointer()
+            .hover(|this| {
+                this.bg(theme.sidebar_accent.opacity(0.8))
+                    .text_color(theme.sidebar_accent_foreground)
+            })
+            .when(active, |this| {
+                this.font_medium()
+                    .bg(theme.sidebar_accent)
+                    .text_color(theme.sidebar_accent_foreground)
+            })
+            .when_some(page_picture(page), |this, path| {
+                this.child(img(path).size_5().flex_shrink_0())
+            })
+            .child(div().flex_1().child(page.label()))
+            .when_some(waiting, |this, waiting| this.child(count_pill(waiting, cx)))
+            .on_click(move |_, window, cx| on_select(page, window, cx))
     }
 
     /// The profile row at the bottom; it opens a small menu upward with Account and Settings.
@@ -90,13 +119,12 @@ impl NavSidebar {
     }
 }
 
-fn app_header() -> SidebarHeader {
-    SidebarHeader::new().child(
-        h_flex()
-            .gap_2()
-            .child(Icon::from(IconName::ChessKnight))
-            .child("Chess"),
-    )
+fn app_header() -> Div {
+    h_flex()
+        .p_2()
+        .gap_2()
+        .child(Icon::from(IconName::ChessKnight))
+        .child("Chess")
 }
 
 /// Matches SidebarMenuItem's h_7 with p_2: the footer adds the p_2 around this row.

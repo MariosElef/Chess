@@ -170,6 +170,8 @@ impl PuzzleSolver {
                 premoves: false,
                 player: None,
                 engine_arrow: None,
+                badge: None,
+                best_arrow: None,
             },
             None => ShownPosition {
                 position: Position::starting(),
@@ -178,6 +180,8 @@ impl PuzzleSolver {
                 premoves: false,
                 player: None,
                 engine_arrow: None,
+                badge: None,
+                best_arrow: None,
             },
         }
     }

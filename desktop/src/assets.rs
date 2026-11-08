@@ -5,7 +5,12 @@ use gpui_kit::{
     assets::{Assets, icon_assets},
 };
 
-use crate::components::board::PIECE_IMAGES;
+use crate::components::{
+    analysis::{review_icon, review_icon_paths},
+    board::PIECE_IMAGES,
+    play::{speed_picture_bytes, speed_picture_paths},
+    shell::{nav_picture, nav_picture_paths},
+};
 
 icon_assets!(
     ChessIcons,
@@ -20,17 +25,25 @@ icon_assets!(
         Microscope,
         Users,
         UserPlus,
-        Swords
+        Swords,
+        Sparkles
     ]
 );
 
-/// The kit's default icons, the Lucide icons only this app uses, and the piece images.
+/// The kit's default icons, the Lucide icons only this app uses, the piece images, the game
+/// review's icons, and the sidebar's and the speeds' pictures.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         if let Some(piece) = PIECE_IMAGES.iter().find(|image| image.path == path) {
             return Ok(Some(Cow::Borrowed(piece.bytes)));
+        }
+        if let Some(icon) = review_icon(path)
+            .or_else(|| nav_picture(path))
+            .or_else(|| speed_picture_bytes(path))
+        {
+            return Ok(Some(Cow::Borrowed(icon)));
         }
         match ChessIcons.load(path)? {
             Some(icon) => Ok(Some(icon)),
@@ -44,6 +57,13 @@ impl AssetSource for AppAssets {
             .filter(|image| image.path.starts_with(path))
             .map(|image| image.path.into())
             .collect();
+        paths.extend(
+            review_icon_paths()
+                .chain(nav_picture_paths())
+                .chain(speed_picture_paths())
+                .filter(|icon| icon.starts_with(path))
+                .map(SharedString::from),
+        );
         paths.extend(ChessIcons.list(path)?);
         paths.extend(Assets.list(path)?);
         Ok(paths)
@@ -55,7 +75,7 @@ mod tests {
     use gpui_kit::AssetSource as _;
 
     use super::AppAssets;
-    use crate::components::board::PIECE_IMAGES;
+    use crate::{components::board::PIECE_IMAGES, enums::analysis::MoveClass};
 
     #[test]
     fn every_piece_picture_of_both_sets_is_served() {
@@ -68,5 +88,37 @@ mod tests {
                 .iter()
                 .any(|image| image.path == "pieces/modern/wK.png")
         );
+    }
+
+    #[test]
+    fn every_sidebar_and_speed_picture_is_served() {
+        for path in [
+            "nav/play.png",
+            "nav/puzzles.png",
+            "nav/analyse.png",
+            "nav/social.png",
+            "speed/bullet.png",
+            "speed/blitz.png",
+            "speed/rapid.png",
+        ] {
+            let served = AppAssets.load(path).expect("loading never fails");
+            assert!(
+                served.is_some_and(|bytes| bytes.starts_with(b"\x89PNG")),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_review_icon_is_served() {
+        for class in MoveClass::ALL {
+            let served = AppAssets
+                .load(class.icon_path())
+                .expect("loading never fails");
+            assert!(
+                served.is_some_and(|bytes| bytes.starts_with(b"\x89PNG")),
+                "{class:?}"
+            );
+        }
     }
 }

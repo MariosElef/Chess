@@ -1,41 +1,69 @@
 use chess_domain::{
-    Game, GameStatus, Move, Position, Square,
+    Game, GameStatus, Move, Position, Side, Square,
     engine::{Command, Eval, SearchInfo, UciMessage},
 };
 use gpui_kit::{
     assets::IconName,
     component::{
+        Disableable as _,
         button::{Button, ButtonVariants},
         h_flex,
         input::{InputEvent, InputState},
         label::Label,
         v_flex,
     },
+    prelude::FluentBuilder as _,
     *,
 };
 
 use crate::{
     clients::engine::{Engine, locate_stockfish},
     components::{
-        analysis::{EnginePanel, EvalBar, FenInput},
+        analysis::{EnginePanel, EvalBar, FenInput, ReviewPanel, ShownVerdict},
         history::{MoveList, NavigationBar, PositionPanel},
     },
-    enums::{analysis::EngineStatus, engine::EngineEvent, history::NavStep, sound::Sound},
+    enums::{
+        analysis::{EngineStatus, MoveClass},
+        engine::EngineEvent,
+        history::NavStep,
+        sound::Sound,
+    },
     models::{
-        analysis::LineView,
+        analysis::{GameReview, LineView},
         board::{MoveMade, ShownPosition},
         engine::EngineSettings,
     },
-    services::{analysis::line_view, engine::SearchQueue, history::GameHistory},
+    services::{
+        analysis::{ReviewRun, class_count, line_view, warm_opening_book},
+        engine::SearchQueue,
+        history::GameHistory,
+    },
     views::{
         board::BoardView,
-        history::{HistoryNavigation, select_move, step_history, with_history_keys},
-        sound::play_move_sound,
+        history::{
+            HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
+        },
+        sound::{play_move_sound, play_sound},
     },
 };
 
 /// How many lines the engine panel shows, matching the engine's MultiPV.
 const LINES: usize = 3;
+/// How deep a review searches each position: deep enough to see tactics, quick enough for a
+/// whole game in a few seconds.
+const REVIEW_DEPTH: u32 = 16;
+/// The review's own hash, smaller than the live engine's: each search is short.
+const REVIEW_HASH_MB: usize = 128;
+
+/// A review under way: its own engine, searching the game's positions one after another.
+struct Reviewer {
+    engine: Engine,
+    queue: SearchQueue,
+    run: ReviewRun,
+    /// The lines of the position being searched, as they come.
+    lines: Vec<SearchInfo>,
+    _task: Task<()>,
+}
 
 /// Why the engine is not running although it is switched on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +90,11 @@ pub struct AnalysisPage {
     lines: [Option<SearchInfo>; LINES],
     /// The position the current lines belong to.
     analysed: Option<Position>,
+    /// The game reviewed, while it is the game on the board.
+    review: Option<GameReview>,
+    reviewer: Option<Reviewer>,
+    /// A key or navigation button held down.
+    holding: Holding,
     fen_input: Entity<InputState>,
     fen_error: Option<String>,
     /// Hands engine output to the page; it ends when the engine's output does.
@@ -94,6 +127,9 @@ impl AnalysisPage {
             problem: None,
             lines: Default::default(),
             analysed: None,
+            review: None,
+            reviewer: None,
+            holding: Holding::default(),
             fen_input,
             fen_error: None,
             _engine_task: None,
@@ -116,6 +152,7 @@ impl AnalysisPage {
     pub fn load_game(&mut self, game: &Game, viewing: usize, cx: &mut Context<Self>) {
         let reopened = game.truncated(game.moves().len());
         self.history = GameHistory::from_game(reopened, viewing);
+        self.clear_review();
         self.after_navigation(cx);
     }
 
@@ -134,6 +171,7 @@ impl AnalysisPage {
     /// Back to the starting position with no moves.
     fn reset_board(&mut self, cx: &mut Context<Self>) {
         self.history = GameHistory::new();
+        self.clear_review();
         self.after_navigation(cx);
     }
 
@@ -150,9 +188,10 @@ impl AnalysisPage {
         cx.notify();
     }
 
-    /// Searches the shown position while switched on and visible; otherwise stops searching.
+    /// Searches the shown position while switched on and visible, and no review is running;
+    /// otherwise stops searching.
     fn sync_engine(&mut self, cx: &mut Context<Self>) {
-        if self.enabled && self.shown && self.problem.is_none() {
+        if self.enabled && self.shown && self.problem.is_none() && self.reviewer.is_none() {
             self.ensure_engine(cx);
             self.request_shown();
         } else {
@@ -286,7 +325,9 @@ impl AnalysisPage {
             can_move: true,
             premoves: true,
             player: None,
-            engine_arrow: self.engine_arrow(),
+            engine_arrow: self.engine_arrow().filter(|_| self.best_arrow().is_none()),
+            best_arrow: self.best_arrow(),
+            badge: self.badge(),
         }
     }
 
@@ -295,6 +336,7 @@ impl AnalysisPage {
     /// repetition, say) takes no more moves.
     fn play_move(&mut self, mv: Move, cx: &mut Context<Self>) {
         if self.play_with_sound(mv, cx) {
+            self.clear_review();
             self.run_premoves(cx);
             self.after_position_change(cx);
         }
@@ -353,6 +395,7 @@ impl AnalysisPage {
         match text.trim().parse::<Position>() {
             Ok(position) => {
                 self.history = GameHistory::from_position(position);
+                self.clear_review();
                 self.fen_error = None;
                 self.fen_input
                     .update(cx, |input, cx| input.set_value("", window, cx));
@@ -456,28 +499,258 @@ impl AnalysisPage {
             .w_80()
             .flex_shrink_0()
             .gap_4()
+            .children(self.review_panel())
             .child(EnginePanel::new(
                 self.enabled,
                 self.engine_status(),
                 self.line_views(),
                 toggle_engine(page.clone()),
             ))
-            .child(NavigationBar::new(
-                self.history.can_go_back(),
-                self.history.can_go_forward(),
-                step_history(page.clone()),
-            ))
-            .child(MoveList::new(
-                self.history.sans().to_vec(),
-                self.history.viewing(),
-                select_move(page.clone()),
-            ))
+            .child(
+                NavigationBar::new(
+                    self.history.can_go_back(),
+                    self.history.can_go_forward(),
+                    step_history(page.clone()),
+                )
+                .on_hold(hold_step(page.clone())),
+            )
+            .child(
+                MoveList::new(
+                    self.history.sans().to_vec(),
+                    self.history.viewing(),
+                    select_move(page.clone()),
+                )
+                .classes(self.review_classes()),
+            )
             .child(FenInput::new(
                 self.fen_input.clone(),
                 self.fen_error.clone(),
                 load_fen(page),
             ))
             .child(PositionPanel::new(*self.history.shown()))
+    }
+
+    /// Starts a review of the game on the board with an engine of its own; live analysis
+    /// pauses until it is done.
+    fn start_review(&mut self, cx: &mut Context<Self>) {
+        if self.history.sans().is_empty() || self.reviewer.is_some() {
+            return;
+        }
+        let Some(path) = locate_stockfish() else {
+            self.problem = Some(EngineProblem::NotFound);
+            cx.notify();
+            return;
+        };
+        let Ok((engine, events)) = Engine::spawn(&path) else {
+            self.problem = Some(EngineProblem::Stopped);
+            cx.notify();
+            return;
+        };
+        let settings = EngineSettings {
+            threads: self.settings.threads,
+            hash_mb: REVIEW_HASH_MB,
+            depth: Some(REVIEW_DEPTH),
+        };
+        // The engine takes seconds; the opening table is built meanwhile, off this thread.
+        cx.background_spawn(async { warm_opening_book() }).detach();
+        let (queue, first) = SearchQueue::new(settings);
+        self.reviewer = Some(Reviewer {
+            engine,
+            queue,
+            run: ReviewRun::new(self.history.game()),
+            lines: Vec::new(),
+            _task: listen_review(events, cx),
+        });
+        self.review = None;
+        self.stop_search();
+        self.send_review(&first);
+        cx.notify();
+    }
+
+    fn on_review_event(&mut self, event: EngineEvent, cx: &mut Context<Self>) {
+        match event {
+            EngineEvent::Message(message) => self.on_review_message(message, cx),
+            EngineEvent::Stopped => self.review_failed(cx),
+        }
+        cx.notify();
+    }
+
+    fn on_review_message(&mut self, message: UciMessage, cx: &mut Context<Self>) {
+        let Some(reviewer) = self.reviewer.as_mut() else {
+            return;
+        };
+        match message {
+            UciMessage::UciOk => {
+                let commands = reviewer.queue.on_uciok();
+                self.send_review(&commands);
+            }
+            UciMessage::ReadyOk => {
+                let commands = reviewer.queue.on_readyok();
+                self.send_review(&commands);
+                self.review_next(cx);
+            }
+            UciMessage::Info(info) => {
+                if reviewer.queue.accepts_info() {
+                    reviewer.lines.retain(|line| line.multipv != info.multipv);
+                    reviewer.lines.push(info);
+                }
+            }
+            UciMessage::BestMove(_) => {
+                let commands = reviewer.queue.on_bestmove();
+                let lines = std::mem::take(&mut reviewer.lines);
+                reviewer.run.store(&lines);
+                self.send_review(&commands);
+                self.review_next(cx);
+            }
+            UciMessage::Other => {}
+        }
+    }
+
+    /// Searches the next position, or finishes the review once every one has its value.
+    fn review_next(&mut self, cx: &mut Context<Self>) {
+        let Some(reviewer) = self.reviewer.as_mut() else {
+            return;
+        };
+        match reviewer.run.next_position() {
+            Some((index, fen)) => {
+                let commands = reviewer.queue.request(fen);
+                self.send_review(&commands);
+                self.show_position(index, cx);
+            }
+            None => {
+                self.review = reviewer.run.finish();
+                self.reviewer = None;
+                play_sound(Sound::Notify, cx);
+                self.show_position(0, cx);
+            }
+        }
+    }
+
+    /// Shows the game's position at `index`, 0 being the start: the review walks the board
+    /// through the game as it goes, each move with its sound as when stepping through it, and
+    /// starts it over from the beginning once it is ready.
+    fn show_position(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.walk(
+            |history| match index.checked_sub(1) {
+                Some(move_index) => history.jump_to_move(move_index),
+                None => history.step(NavStep::Start),
+            },
+            true,
+            cx,
+        );
+    }
+
+    fn send_review(&mut self, commands: &[Command]) {
+        let Some(reviewer) = self.reviewer.as_mut() else {
+            return;
+        };
+        if commands
+            .iter()
+            .any(|command| reviewer.engine.send(command).is_err())
+        {
+            self.reviewer = None;
+            self.problem = Some(EngineProblem::Stopped);
+        }
+    }
+
+    /// The review's engine died: the review is dropped and the engine panel says so.
+    fn review_failed(&mut self, cx: &mut Context<Self>) {
+        self.reviewer = None;
+        self.problem = Some(EngineProblem::Stopped);
+        self.sync_engine(cx);
+    }
+
+    /// A review belongs to one game: any change to the game, or a new one, drops it and any
+    /// review still running.
+    fn clear_review(&mut self) {
+        self.review = None;
+        self.reviewer = None;
+    }
+
+    /// Each move's class, once reviewed.
+    fn review_classes(&self) -> Vec<MoveClass> {
+        self.review.as_ref().map_or_else(Vec::new, |review| {
+            review.moves.iter().map(|reviewed| reviewed.class).collect()
+        })
+    }
+
+    /// The engine's choice where the move that led here was not it, as chess.com shows it. The
+    /// live engine's arrow gives way meanwhile, so the board has one arrow to read.
+    fn best_arrow(&self) -> Option<(Square, Square)> {
+        let (_, better) = self.better_move()?;
+        Some((better.from, better.to))
+    }
+
+    /// What the engine preferred to the move that led to the shown position, with that move's
+    /// index: for any move but the best, a Book move or a Forced one.
+    fn better_move(&self) -> Option<(usize, Move)> {
+        let index = self.history.viewing().checked_sub(1)?;
+        let reviewed = self.review.as_ref()?.moves.get(index)?;
+        let played = *self.history.game().moves().get(index)?;
+        let best = reviewed.best.filter(|&best| best != played)?;
+        let shows_better = !matches!(reviewed.class, MoveClass::Book | MoveClass::Forced);
+        shows_better.then_some((index, best))
+    }
+
+    /// The class of the move that led to the shown position, on the square it went to.
+    fn badge(&self) -> Option<(Square, MoveClass)> {
+        let index = self.history.viewing().checked_sub(1)?;
+        let class = self.review.as_ref()?.moves.get(index)?.class;
+        let mv = *self.history.game().moves().get(index)?;
+        Some((mv.to, class))
+    }
+
+    fn review_panel(&self) -> Option<ReviewPanel> {
+        let review = self.review.as_ref()?;
+        let counts = MoveClass::ALL
+            .into_iter()
+            .map(|class| {
+                (
+                    class,
+                    class_count(review, Side::White, class),
+                    class_count(review, Side::Black, class),
+                )
+            })
+            .filter(|(_, white, black)| white + black > 0)
+            .collect();
+        Some(ReviewPanel::new(
+            (review.accuracy, review.ratings),
+            counts,
+            self.shown_verdict(),
+        ))
+    }
+
+    /// What the move on the board was, and what was best when it was not.
+    fn shown_verdict(&self) -> Option<ShownVerdict> {
+        let index = self.history.viewing().checked_sub(1)?;
+        let reviewed = self.review.as_ref()?.moves.get(index)?;
+        let game = self.history.game();
+        let best = self
+            .better_move()
+            .and_then(|(_, best)| game.positions().get(index)?.san(best).ok());
+        Some(ShownVerdict {
+            class: reviewed.class,
+            san: game.sans().get(index)?.clone(),
+            best,
+        })
+    }
+
+    /// Review, or how far a running review has got.
+    fn review_button(&self, cx: &mut Context<Self>) -> Button {
+        let label = match &self.reviewer {
+            Some(reviewer) => {
+                let (done, total) = reviewer.run.progress();
+                format!("Reviewing {done}/{total}")
+            }
+            None => "Review".to_owned(),
+        };
+        Button::new("review-game")
+            .primary()
+            .icon(IconName::Sparkles)
+            .label(label)
+            .loading(self.reviewer.is_some())
+            .disabled(self.reviewer.is_some())
+            .on_click(cx.listener(|page, _, _, cx| page.start_review(cx)))
     }
 
     fn header(&self, cx: &mut Context<Self>) -> Div {
@@ -487,6 +760,9 @@ impl AnalysisPage {
             .child(
                 h_flex()
                     .gap_2()
+                    .when(!self.history.sans().is_empty(), |this| {
+                        this.child(self.review_button(cx))
+                    })
                     .child(flip_button(cx))
                     .child(reset_button(cx)),
             )
@@ -494,13 +770,15 @@ impl AnalysisPage {
 }
 
 impl HistoryNavigation for AnalysisPage {
-    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
-        self.history.step(step);
-        self.after_navigation(cx);
+    fn history_mut(&mut self) -> Option<&mut GameHistory> {
+        Some(&mut self.history)
     }
 
-    fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.history.jump_to_move(index);
+    fn holding(&mut self) -> &mut Holding {
+        &mut self.holding
+    }
+
+    fn after_history_move(&mut self, cx: &mut Context<Self>) {
         self.after_navigation(cx);
     }
 }
@@ -529,6 +807,23 @@ impl Render for AnalysisPage {
                     .child(self.side_column(page)),
             )
     }
+}
+
+/// Reads the review's engine output until it ends or the page is gone.
+fn listen_review(
+    events: gpui_kit::base::async_util::Receiver<EngineEvent>,
+    cx: &mut Context<AnalysisPage>,
+) -> Task<()> {
+    cx.spawn(async move |page, cx| {
+        while let Ok(event) = events.recv().await {
+            if page
+                .update(cx, |page, cx| page.on_review_event(event, cx))
+                .is_err()
+            {
+                break;
+            }
+        }
+    })
 }
 
 fn flip_button(cx: &mut Context<AnalysisPage>) -> Button {
@@ -593,15 +888,21 @@ fn load_fen(page: WeakEntity<AnalysisPage>) -> impl Fn(&mut Window, &mut App) + 
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+    use std::time::Duration;
+
+    use gpui_kit::{Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext};
+
+    use chess_domain::{Game, Move};
 
     use super::AnalysisPage;
     use crate::{
-        enums::sound::Sound,
+        clients::engine::locate_stockfish,
+        enums::{analysis::MoveClass, history::NavStep, sound::Sound},
         models::engine::EngineSettings,
-        testing::{click, drag},
+        testing::{centre_of, click, drag},
         views::sound::{played_sounds, record_sounds},
     };
+    use crate::{components::board::SLIDE_TIME, views::history::HistoryNavigation as _};
 
     fn opened(cx: &mut TestAppContext) -> (Entity<AnalysisPage>, &mut VisualTestContext) {
         cx.update(gpui_kit::init);
@@ -662,6 +963,76 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn stepping_through_the_game_plays_each_moves_sound(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        for (from, to) in [
+            ("square-e2", "square-e4"),
+            ("square-d7", "square-d5"),
+            ("square-e4", "square-d5"),
+        ] {
+            drag(cx, from, to);
+        }
+        cx.update(|_, cx| record_sounds(cx));
+        page.update(cx, |page, cx| {
+            page.navigate(NavStep::Start, cx);
+            page.navigate(NavStep::Forward, cx);
+            page.navigate(NavStep::Live, cx);
+            page.navigate(NavStep::Live, cx);
+            page.select_move(1, cx);
+        });
+        let played = cx.update(|_, cx| played_sounds(cx));
+        assert_eq!(
+            played,
+            [Sound::MoveSelf, Sound::Capture, Sound::MoveSelf],
+            "the start is silent, e4 moves, exd5 captures, staying put is silent, d5 moves"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn stepping_slides_the_piece_but_a_move_made_on_the_board_does_not(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        drag(cx, "square-e2", "square-e4");
+        cx.run_until_parked();
+        assert!(
+            cx.debug_bounds("piece-e4").is_some(),
+            "the dropped pawn stands at once"
+        );
+        page.update(cx, |page, cx| page.navigate(NavStep::Back, cx));
+        cx.run_until_parked();
+        assert!(
+            cx.debug_bounds("piece-e2").is_none(),
+            "the pawn slides back to e2 before it stands there"
+        );
+        cx.executor().advance_clock(SLIDE_TIME * 2);
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("piece-e2").is_some(), "and then it is home");
+    }
+
+    #[gpui_kit::test]
+    fn holding_forward_keeps_stepping_until_let_go(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        page.update(cx, |page, cx| {
+            page.load_game(&fools_mate(), 0, cx);
+        });
+        let forward = centre_of(cx, "held-nav-forward");
+        cx.simulate_mouse_down(forward, MouseButton::Left, Modifiers::none());
+        cx.executor()
+            .advance_clock(Duration::from_millis(400 + 60 * 2 + 10));
+        cx.run_until_parked();
+        let held = page.read_with(cx, |page, _| page.history.viewing());
+        assert!(held >= 3, "the click and the repeats, now at {held}");
+        cx.simulate_mouse_up(forward, MouseButton::Left, Modifiers::none());
+        page.update(cx, |page, cx| page.navigate(NavStep::Start, cx));
+        cx.executor().advance_clock(Duration::from_secs(1));
+        cx.run_until_parked();
+        assert_eq!(
+            page.read_with(cx, |page, _| page.history.viewing()),
+            0,
+            "let go, it stops"
+        );
+    }
+
+    #[gpui_kit::test]
     fn clicks_premove_on_the_analysis_board(cx: &mut TestAppContext) {
         let (page, cx) = opened(cx);
         for selector in ["square-e7", "square-e5", "square-e2", "square-e4"] {
@@ -686,6 +1057,87 @@ mod tests {
         drag(cx, "square-c2", "square-c4");
         page.update(cx, |page, _| {
             assert_eq!(page.history.sans(), ["d4", "Nf6", "c4", "Ng4"]);
+        });
+    }
+
+    /// Fool's mate: f3 e5 g4 Qh4#.
+    fn fools_mate() -> Game {
+        let mut game = Game::new();
+        for uci in ["f2f3", "e7e5", "g2g4", "d8h4"] {
+            let mv: Move = uci.parse().expect("a move");
+            game.play(mv).expect("legal");
+        }
+        game
+    }
+
+    #[gpui_kit::test]
+    fn a_review_with_the_real_engine_finds_the_blunder(cx: &mut TestAppContext) {
+        if locate_stockfish().is_none() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (page, cx) = opened(cx);
+        cx.update(|_, cx| record_sounds(cx));
+        page.update(cx, |page, cx| {
+            page.load_game(&fools_mate(), 4, cx);
+            page.start_review(cx);
+        });
+        for _ in 0..3000 {
+            cx.run_until_parked();
+            if page.read_with(cx, |page, _| page.review.is_some()) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        page.read_with(cx, |page, _| {
+            let review = page.review.as_ref().expect("the review finished");
+            assert_eq!(review.moves[2].class, MoveClass::Blunder, "g4 allows mate");
+            assert!(
+                review
+                    .accuracy
+                    .iter()
+                    .all(|side| (0.0..=100.0).contains(side))
+            );
+            assert!(
+                review.accuracy[1] > review.accuracy[0],
+                "Black played better"
+            );
+
+            assert!(page.reviewer.is_none(), "the review's engine is gone");
+            assert_eq!(
+                page.history.viewing(),
+                0,
+                "the review starts from the beginning"
+            );
+        });
+        let played = cx.update(|_, cx| played_sounds(cx));
+        assert!(
+            played
+                .iter()
+                .filter(|&&sound| sound == Sound::MoveSelf)
+                .count()
+                >= 3,
+            "f3, e5 and g4 sound as the review reaches them: {played:?}"
+        );
+        assert_eq!(
+            played.last(),
+            Some(&Sound::Notify),
+            "then the review is ready"
+        );
+        page.update(cx, |page, cx| {
+            page.select_move(3, cx);
+            let (square, _) = page.badge().expect("Qh4# has its icon");
+            assert_eq!(square.to_string(), "h4");
+            page.select_move(2, cx);
+            let shown = page.shown_position();
+            let (from, to) = shown
+                .best_arrow
+                .expect("g4 was not best: the better move shows");
+            assert_ne!(
+                (from.to_string(), to.to_string()),
+                ("g2".to_owned(), "g4".to_owned())
+            );
+            assert!(shown.engine_arrow.is_none(), "one arrow at a time");
         });
     }
 }

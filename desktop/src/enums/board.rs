@@ -26,6 +26,8 @@ pub enum ClickMode {
 pub enum SquareHighlight {
     None,
     LastMove,
+    /// The last move once reviewed, in its class's colour (`0xRRGGBB`).
+    Reviewed(u32),
     Marked,
     Premove,
     Selected,

@@ -1,5 +1,7 @@
 use chess_domain::{Move, Position, Side, Square};
 
+use crate::enums::analysis::MoveClass;
+
 /// What a page shows on its board: the position, how it was reached, whether moves may be made
 /// on it, and the engine's best move if the page has one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,4 +17,8 @@ pub struct ShownPosition {
     /// premoves. `None` lets either side move, as two players at one computer do.
     pub player: Option<Side>,
     pub engine_arrow: Option<(Square, Square)>,
+    /// What should have been played instead of the move that led here, once reviewed.
+    pub best_arrow: Option<(Square, Square)>,
+    /// A reviewed move's class, drawn on the square it went to.
+    pub badge: Option<(Square, MoveClass)>,
 }

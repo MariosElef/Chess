@@ -32,7 +32,7 @@ use crate::{
         history::{MoveList, NavigationBar, PositionPanel},
         play::{CapturedRow, ClockFace, GameSetup},
     },
-    enums::{history::NavStep, play::PlayMode, sound::Sound},
+    enums::{play::PlayMode, sound::Sound},
     models::{
         board::{MoveMade, ShownPosition},
         play::AnalyzeGame,
@@ -43,7 +43,9 @@ use crate::{
     },
     views::{
         board::BoardView,
-        history::{HistoryNavigation, select_move, step_history, with_history_keys},
+        history::{
+            HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
+        },
         play::OnlineView,
         sound::{play_move_sound, play_sound},
     },
@@ -70,6 +72,8 @@ pub struct PlayPage {
     /// The board, with what the player is doing on it and the queued premoves.
     board: Entity<BoardView>,
     _board_moves: Subscription,
+    /// A key or navigation button held down.
+    holding: Holding,
     /// Who has heard the low-time warning this game.
     clock_warning: ClockWarning,
     /// Keyboard focus, so the arrow keys reach this page.
@@ -103,6 +107,7 @@ impl PlayPage {
             _ticker: None,
             board,
             _board_moves,
+            holding: Holding::default(),
             clock_warning: ClockWarning::default(),
             focus_handle: cx.focus_handle(),
         }
@@ -155,6 +160,8 @@ impl PlayPage {
             premoves: true,
             player: None,
             engine_arrow: None,
+            badge: None,
+            best_arrow: None,
         }
     }
 
@@ -406,8 +413,9 @@ impl PlayPage {
         NavigationBar::new(
             self.history.can_go_back(),
             self.history.can_go_forward(),
-            step_history(page),
+            step_history(page.clone()),
         )
+        .on_hold(hold_step(page))
     }
 
     /// The navigation buttons, the move list, and the shown position's FEN.
@@ -492,14 +500,16 @@ impl PlayPage {
 impl EventEmitter<AnalyzeGame> for PlayPage {}
 
 impl HistoryNavigation for PlayPage {
-    /// Moves the board through the history; the picked-up piece is put down first.
-    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
-        self.history.step(step);
-        self.end_interaction(cx);
+    fn history_mut(&mut self) -> Option<&mut GameHistory> {
+        Some(&mut self.history)
     }
 
-    fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.history.jump_to_move(index);
+    fn holding(&mut self) -> &mut Holding {
+        &mut self.holding
+    }
+
+    /// The picked-up piece is put down first.
+    fn after_history_move(&mut self, cx: &mut Context<Self>) {
         self.end_interaction(cx);
     }
 }
@@ -641,8 +651,11 @@ fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
 #[cfg(test)]
 mod tests {
     use chess_domain::{Move, Side, Square, TimeControl};
+    use std::time::Duration;
+
     use gpui_kit::{
-        AppContext as _, Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext,
+        AppContext as _, Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext, point,
+        px,
     };
 
     use std::rc::Rc;
@@ -805,6 +818,43 @@ mod tests {
         assert!(
             cx.debug_bounds("piece-e2").is_some(),
             "dropped back where it was"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_pressed_piece_glides_to_the_cursor_and_goes_back_when_let_go(cx: &mut TestAppContext) {
+        let (_, cx) = started(cx, false);
+        let square = cx.debug_bounds("square-e2").expect("e2");
+        let corner = square.origin + point(px(6.), px(6.));
+        cx.simulate_mouse_down(corner, MouseButton::Left, Modifiers::none());
+        // Frames as the app gets them: each animation frame asks for the next.
+        for _ in 0..10 {
+            cx.executor().advance_clock(Duration::from_millis(30));
+            cx.update(|window, cx| window.simulate_next_frame(cx));
+            cx.run_until_parked();
+        }
+        let piece = cx
+            .debug_bounds("pressed-piece")
+            .expect("the pawn, lifted")
+            .center();
+        assert!(
+            (piece.x - corner.x).abs() < px(2.) && (piece.y - corner.y).abs() < px(2.),
+            "centred on the cursor: {piece:?} for {corner:?}"
+        );
+        assert!(
+            cx.debug_bounds("piece-e2").is_none(),
+            "not also left on its square"
+        );
+        cx.simulate_mouse_up(corner, MouseButton::Left, Modifiers::none());
+        cx.run_until_parked();
+        let home = cx.debug_bounds("piece-e2").expect("the pawn").center();
+        assert!(
+            (home.x - square.center().x).abs() < px(2.),
+            "back on its square"
+        );
+        assert!(
+            cx.debug_bounds("pressed-piece").is_none(),
+            "and no longer lifted"
         );
     }
 

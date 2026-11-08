@@ -59,6 +59,34 @@ are marked aborted when it starts again.
 A guest is free again once no app signed in as it is connected, so Continue as guest always
 gives the lowest-numbered guest nobody is using.
 
+## Game review
+
+On the Analysis board, **Review** (shown once the game has a move) runs a Stockfish of its own
+over every position, depth 16, and labels each move the way chess.com's Game Review does:
+Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss or Blunder.
+While it runs, the board plays through the game with each move's slide and sound; when it is
+ready, it goes back to the start. Each move's icon shows beside it and on the board, where the
+move's squares take its colour; for any move but the best, a green arrow and "Best was …" show
+what the engine preferred. The panel gives each side's accuracy, counts of each kind of move,
+and a game rating: the rating that accuracy is typical of (an estimate, given to the nearest
+fifty, with at least five moves of a side's own).
+
+A move is graded by the expected points it loses against the engine's best move: Excellent up
+to 0.02, Good to 0.05, Inaccuracy to 0.10, Mistake to 0.20, Blunder beyond (chess.com's
+published bands). Brilliant is a sound piece sacrifice from a position that was not already
+won; Great is the only good move; Miss lets the opponent's error go; Book follows the opening
+table in `desktop/assets/review/openings.txt`; Forced is the only legal move. Chess.com's own
+evaluation curve and accuracy formula are not published, so this uses Lichess's: the numbers
+will be close to theirs, not equal.
+
+## The board
+
+Every board shares the same behaviour. Stepping through a game (arrow keys, the ◀ ▶ buttons or
+the move list) plays each move's sound and slides the piece; a jump does not slide. Holding a key
+or button keeps stepping, and after two seconds goes fast, several moves a step without sounds.
+Pressing a piece lifts it to the cursor at once; dragging it outlines the square under it, and a
+right-click puts it back. Your own moves do not slide: you already put the piece there.
+
 ## Social
 
 The Social page lists your friends, with who is online, and the friend requests each way.

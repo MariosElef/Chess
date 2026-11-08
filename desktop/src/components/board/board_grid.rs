@@ -10,8 +10,14 @@ use gpui_kit::{
 use super::{
     arrows::{paint_arrows, square_width},
     board_colors::BoardColors,
-    board_square::{BoardSquare, OnPieceDrop, OnSquareClick, RightButton, SquareSize},
+    board_press::{BoardPress, press_state, pressed_layer},
+    board_square::{
+        BoardSquare, HOVER_BORDER, OnPieceDrop, OnSquareClick, RightButton, SquareSize,
+    },
+    board_style::BoardStyle,
+    piece_images::piece_image,
     promotion_picker::{PromotionPicker, PromotionPrompt},
+    sliding_pieces::{SlidingPiece, sliding_layer},
 };
 use crate::{
     enums::board::SquareHighlight,
@@ -38,6 +44,15 @@ pub struct BoardGrid {
     marks: Vec<Square>,
     arrows: Vec<(Square, Square)>,
     engine_arrow: Option<(Square, Square)>,
+    /// A reviewed move's icon and the square it sits on.
+    badge: Option<(Square, &'static str)>,
+    /// A reviewed move's better choice, drawn in green.
+    best_arrow: Option<(Square, Square)>,
+    /// Pieces gliding to their squares, and which slide this is.
+    slides: Vec<(Square, Square)>,
+    slide_run: usize,
+    /// The last move's squares take this colour (`0xRRGGBB`) once it is reviewed.
+    last_move_tint: Option<u32>,
     on_square_click: Option<OnSquareClick>,
     on_piece_drop: Option<OnPieceDrop>,
     right_button: Option<RightButton>,
@@ -58,6 +73,11 @@ impl BoardGrid {
             marks: Vec::new(),
             arrows: Vec::new(),
             engine_arrow: None,
+            badge: None,
+            best_arrow: None,
+            slides: Vec::new(),
+            slide_run: 0,
+            last_move_tint: None,
             on_square_click: None,
             on_piece_drop: None,
             right_button: None,
@@ -79,6 +99,32 @@ impl BoardGrid {
     /// The engine's best move, drawn in its own colour under the player's arrows.
     pub fn engine_arrow(mut self, arrow: Option<(Square, Square)>) -> Self {
         self.engine_arrow = arrow;
+        self
+    }
+
+    /// Slides pieces from their old squares to the ones they stand on now; `run` tells one
+    /// slide from the next.
+    pub fn slides(mut self, slides: Vec<(Square, Square)>, run: usize) -> Self {
+        self.slides = slides;
+        self.slide_run = run;
+        self
+    }
+
+    /// What should have been played, as a green arrow.
+    pub fn best_arrow(mut self, arrow: Option<(Square, Square)>) -> Self {
+        self.best_arrow = arrow;
+        self
+    }
+
+    /// Colours the last move's squares (`0xRRGGBB`), as a reviewed move's class does.
+    pub fn last_move_tint(mut self, tint: Option<u32>) -> Self {
+        self.last_move_tint = tint;
+        self
+    }
+
+    /// An icon, by asset path, in the corner of a square.
+    pub fn badge(mut self, badge: Option<(Square, &'static str)>) -> Self {
+        self.badge = badge;
         self
     }
 
@@ -183,9 +229,11 @@ impl BoardGrid {
 }
 
 impl RenderOnce for BoardGrid {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let colors = BoardColors::current(cx);
         let size = SquareSize::new(std::cell::Cell::new(FIRST_SQUARE_SIZE));
+        let press = press_state(window, cx);
+        let pressed = self.pressed_piece(&press, cx);
         v_flex()
             .relative()
             .h_full()
@@ -195,9 +243,11 @@ impl RenderOnce for BoardGrid {
             .overflow_hidden()
             .children(
                 self.display_ranks()
-                    .map(|rank| self.rank_row(rank, colors, &size)),
+                    .map(|rank| self.rank_row(rank, colors, (&size, &press))),
             )
+            .child(sliding_layer(self.sliding_pieces(cx), self.slide_run))
             .child(self.arrow_layer(colors, size))
+            .children(pressed)
             .when_some(self.promotion.clone(), |this, prompt| {
                 this.child(PromotionPicker::new(prompt, colors))
             })
@@ -227,16 +277,50 @@ impl BoardGrid {
     /// measures the squares for the drag preview.
     fn arrow_layer(&self, colors: BoardColors, size: SquareSize) -> Canvas<()> {
         let engine: Vec<(Cell, Cell)> = self.cells(self.engine_arrow.iter());
+        let best: Vec<(Cell, Cell)> = self.cells(self.best_arrow.iter());
         let player: Vec<(Cell, Cell)> = self.cells(self.arrows.iter());
         canvas(
             move |bounds, _, _| size.set(square_width(bounds)),
             move |bounds, (), window, _| {
                 paint_arrows(bounds, &engine, colors.engine_arrow, window);
+                paint_arrows(bounds, &best, colors.best_arrow, window);
                 paint_arrows(bounds, &player, colors.arrow, window);
             },
         )
         .absolute()
         .inset_0()
+    }
+
+    /// The pressed piece gliding to the cursor, until a drag takes over or it is let go.
+    fn pressed_piece(&self, press: &Entity<BoardPress>, cx: &App) -> Option<Div> {
+        if cx.has_active_drag() {
+            return None;
+        }
+        let state = *press.read(cx);
+        let (square, shift) = state.pressed()?;
+        let piece = self.board.piece_at(square)?;
+        let picture = piece_image(piece, BoardStyle::current(cx).pieces).path;
+        Some(pressed_layer(
+            picture,
+            (self.cell(square), shift),
+            (state.run(), HOVER_BORDER),
+        ))
+    }
+
+    /// Each sliding piece with its picture, read from where it stands now.
+    fn sliding_pieces(&self, cx: &App) -> Vec<SlidingPiece> {
+        let set = BoardStyle::current(cx).pieces;
+        self.slides
+            .iter()
+            .filter_map(|&(from, to)| {
+                let piece = self.board.piece_at(to)?;
+                Some(SlidingPiece {
+                    picture: piece_image(piece, set).path,
+                    from: self.cell(from),
+                    to: self.cell(to),
+                })
+            })
+            .collect()
     }
 
     fn cells<'a>(&self, arrows: impl Iterator<Item = &'a (Square, Square)>) -> Vec<(Cell, Cell)> {
@@ -253,21 +337,39 @@ impl BoardGrid {
         )
     }
 
-    fn rank_row(&self, rank: u8, colors: BoardColors, size: &SquareSize) -> Div {
+    fn rank_row(
+        &self,
+        rank: u8,
+        colors: BoardColors,
+        (size, press): (&SquareSize, &Entity<BoardPress>),
+    ) -> Div {
         h_flex().flex_1().items_stretch().children(
             self.display_files()
-                .map(|file| self.square(file, rank, colors, Rc::clone(size))),
+                .map(|file| self.square((file, rank), colors, Rc::clone(size), press.clone())),
         )
     }
 
-    fn square(&self, file: u8, rank: u8, colors: BoardColors, size: SquareSize) -> BoardSquare {
+    fn square(
+        &self,
+        (file, rank): (u8, u8),
+        colors: BoardColors,
+        size: SquareSize,
+        press: Entity<BoardPress>,
+    ) -> BoardSquare {
         let square = Square::new(file, rank).expect("0..8 stays on the board");
         let piece = self.board.piece_at(square);
         BoardSquare::new(square, piece, colors, size)
+            .press(press)
             .highlight(self.highlight(square))
             .target(self.targets.contains(&square))
             .draggable(piece.is_some_and(|piece| self.draggable.contains(&piece.side)))
             .labels(self.file_label(square), self.rank_label(square))
+            .hide_piece(self.slides.iter().any(|&(_, to)| to == square))
+            .badge(
+                self.badge
+                    .filter(|(badged, _)| *badged == square)
+                    .map(|(_, path)| path),
+            )
             .on_click(self.on_square_click.clone())
             .on_drop(self.on_piece_drop.clone())
             .right_button(self.right_button.clone())
@@ -286,7 +388,8 @@ impl BoardGrid {
             .last_move
             .is_some_and(|mv| mv.from == square || mv.to == square)
         {
-            SquareHighlight::LastMove
+            self.last_move_tint
+                .map_or(SquareHighlight::LastMove, SquareHighlight::Reviewed)
         } else {
             SquareHighlight::None
         }

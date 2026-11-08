@@ -4,10 +4,10 @@ use chess_domain::{Board, Move, PieceKind, Position, Side, Square};
 use gpui_kit::*;
 
 use crate::{
-    components::board::{BoardGrid, PromotionPrompt},
+    components::board::{BoardGrid, PromotionPrompt, SLIDE_TIME},
     enums::{board::ClickMode, sound::Sound},
     models::board::{MoveMade, ShownPosition},
-    services::board::{BoardInteraction, PremoveQueue, click_mode},
+    services::board::{BoardInteraction, PremoveQueue, click_mode, move_slides},
     views::sound::play_sound,
 };
 
@@ -24,6 +24,14 @@ pub struct BoardView {
     /// The open promotion picker is for a premove, not a move.
     pending_premove: bool,
     shown: ShownSource,
+    /// The position last drawn and the move that led to it, to see what changed since.
+    seen: Option<(Position, Option<Move>)>,
+    /// Pieces gliding to their new squares, and which slide this is.
+    sliding: Vec<(Square, Square)>,
+    slide_run: usize,
+    /// A move made on this board: the player already put the piece there, so it does not slide.
+    own_move: Option<Move>,
+    _slide_end: Option<Task<()>>,
 }
 
 impl EventEmitter<MoveMade> for BoardView {}
@@ -35,6 +43,11 @@ impl BoardView {
             premoves: PremoveQueue::default(),
             pending_premove: false,
             shown: Rc::new(shown),
+            seen: None,
+            sliding: Vec::new(),
+            slide_run: 0,
+            own_move: None,
+            _slide_end: None,
         }
     }
 
@@ -192,6 +205,7 @@ impl BoardView {
     fn move_if_any(&mut self, mv: Option<Move>, cx: &mut Context<Self>) {
         self.pending_premove = false;
         if let Some(mv) = mv {
+            self.own_move = Some(mv);
             cx.emit(MoveMade(mv));
         }
     }
@@ -279,11 +293,52 @@ impl BoardView {
     }
 }
 
+impl BoardView {
+    /// A step of one move forward or back slides the pieces that moved; a jump, a new position,
+    /// or a move the player made here does not.
+    fn follow_shown(&mut self, shown: &ShownPosition, cx: &mut Context<Self>) {
+        let now = (shown.position, shown.last_move);
+        let Some(before) = self.seen.replace(now) else {
+            return;
+        };
+        if before.0.is_same_position(&now.0) && before.1 == now.1 {
+            return;
+        }
+        let own = self.own_move.take();
+        let slides = if own.is_some() && own == now.1 {
+            Vec::new()
+        } else {
+            move_slides((&before.0, before.1), (&now.0, now.1))
+        };
+        self.sliding = slides;
+        if self.sliding.is_empty() {
+            self._slide_end = None;
+            return;
+        }
+        self.slide_run += 1;
+        self._slide_end = Some(end_slide_later(self.slide_run, cx));
+    }
+}
+
+/// Puts the pieces back on their squares once `run` has had its time.
+fn end_slide_later(run: usize, cx: &mut Context<BoardView>) -> Task<()> {
+    cx.spawn(async move |view, cx| {
+        cx.background_executor().timer(SLIDE_TIME).await;
+        let _ = view.update(cx, |view, cx| {
+            if view.slide_run == run {
+                view.sliding.clear();
+                cx.notify();
+            }
+        });
+    })
+}
+
 impl Render for BoardView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(shown) = (self.shown)(cx) else {
             return div().into_any_element();
         };
+        self.follow_shown(&shown, cx);
         let view = cx.entity().downgrade();
         let board = self.preview(&shown);
         BoardGrid::for_interaction(
@@ -296,6 +351,14 @@ impl Render for BoardView {
         )
         .premoves(self.premoves.pairs())
         .engine_arrow(shown.engine_arrow)
+        .badge(
+            shown
+                .badge
+                .map(|(square, class)| (square, class.icon_path())),
+        )
+        .last_move_tint(shown.badge.map(|(_, class)| class.color()))
+        .best_arrow(shown.best_arrow)
+        .slides(self.sliding.clone(), self.slide_run)
         .promotion(self.promotion_prompt(&shown, view.clone()))
         .on_right_button(right_down(view.clone()), right_up(view.clone()))
         .on_square_click(click_square(view.clone()))

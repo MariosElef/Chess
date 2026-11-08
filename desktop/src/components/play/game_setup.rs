@@ -14,6 +14,7 @@ use gpui_kit::{
     *,
 };
 
+use super::speed_label::speed_label;
 use crate::services::play::presets_in;
 
 type OnChoose = Rc<dyn Fn(Option<TimeControl>, &mut Window, &mut App)>;
@@ -97,16 +98,13 @@ impl RenderOnce for GameSetup {
 
 impl GameSetup {
     fn category_section(&self, category: Category) -> Div {
-        v_flex()
-            .gap_2()
-            .child(Label::new(category.name()).text_sm())
-            .child(
-                h_flex().gap_2().children(
-                    presets_in(category)
-                        .into_iter()
-                        .map(|control| self.preset_button(control)),
-                ),
-            )
+        v_flex().gap_2().child(speed_label(category)).child(
+            h_flex().gap_2().children(
+                presets_in(category)
+                    .into_iter()
+                    .map(|control| self.preset_button(control)),
+            ),
+        )
     }
 
     fn preset_button(&self, control: TimeControl) -> Button {

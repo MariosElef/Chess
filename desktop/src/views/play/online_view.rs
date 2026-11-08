@@ -22,7 +22,7 @@ use crate::{
         history::{MoveList, NavigationBar},
         play::{CapturedRow, ClockFace, GameSetup, OnlineOptions},
     },
-    enums::{history::NavStep, play::LiveStatus, sound::Sound},
+    enums::{play::LiveStatus, sound::Sound},
     models::{
         board::{MoveMade, ShownPosition},
         play::{AnalyzeGame, ClientMessage, GameSnapshot, LiveEvent, ServerMessage},
@@ -36,7 +36,9 @@ use crate::{
     },
     views::{
         board::BoardView,
-        history::{HistoryNavigation, select_move, step_history, with_history_keys},
+        history::{
+            HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
+        },
         live::{LiveConnection, SessionSource},
         sound::{play_move_sound, play_sound},
     },
@@ -72,6 +74,8 @@ pub struct OnlineView {
     problem: Option<String>,
     board: Entity<BoardView>,
     _board_moves: Subscription,
+    /// A key or navigation button held down.
+    holding: Holding,
     _ticker: Option<Task<()>>,
     focus_handle: FocusHandle,
 }
@@ -104,6 +108,7 @@ impl OnlineView {
             problem: None,
             board,
             _board_moves,
+            holding: Holding::default(),
             _ticker: None,
             focus_handle: cx.focus_handle(),
         }
@@ -302,6 +307,8 @@ impl OnlineView {
                 premoves: false,
                 player: None,
                 engine_arrow: None,
+                badge: None,
+                best_arrow: None,
             };
         };
         let ongoing = live.snapshot.status == LiveStatus::Ongoing;
@@ -318,6 +325,8 @@ impl OnlineView {
                 premoves: true,
                 player: live.me,
                 engine_arrow: None,
+                badge: None,
+                best_arrow: None,
             },
             None => ShownPosition {
                 position: *live.history.shown(),
@@ -326,6 +335,8 @@ impl OnlineView {
                 premoves: true,
                 player: live.me,
                 engine_arrow: None,
+                badge: None,
+                best_arrow: None,
             },
         }
     }
@@ -484,11 +495,14 @@ impl OnlineView {
                         v_flex()
                             .w_80()
                             .gap_4()
-                            .child(NavigationBar::new(
-                                live.history.can_go_back(),
-                                live.history.can_go_forward(),
-                                step_history(page.clone()),
-                            ))
+                            .child(
+                                NavigationBar::new(
+                                    live.history.can_go_back(),
+                                    live.history.can_go_forward(),
+                                    step_history(page.clone()),
+                                )
+                                .on_hold(hold_step(page.clone())),
+                            )
                             .child(MoveList::new(
                                 live.history.sans().to_vec(),
                                 live.history.viewing(),
@@ -645,18 +659,15 @@ impl OnlineView {
 impl EventEmitter<AnalyzeGame> for OnlineView {}
 
 impl HistoryNavigation for OnlineView {
-    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
-        if let Some(live) = self.live.as_mut() {
-            live.history.step(step);
-        }
-        self.board.update(cx, |board, cx| board.put_down(cx));
-        cx.notify();
+    fn history_mut(&mut self) -> Option<&mut GameHistory> {
+        self.live.as_mut().map(|live| &mut live.history)
     }
 
-    fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
-        if let Some(live) = self.live.as_mut() {
-            live.history.jump_to_move(index);
-        }
+    fn holding(&mut self) -> &mut Holding {
+        &mut self.holding
+    }
+
+    fn after_history_move(&mut self, cx: &mut Context<Self>) {
         self.board.update(cx, |board, cx| board.put_down(cx));
         cx.notify();
     }

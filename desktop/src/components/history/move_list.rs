@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use crate::enums::analysis::MoveClass;
+
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex, label::Label, v_flex},
     prelude::FluentBuilder as _,
@@ -14,6 +16,8 @@ pub struct MoveList {
     sans: Vec<String>,
     /// The shown position: 0 is the start, `n` is after the n-th move.
     viewing: usize,
+    /// Each move's class once the game is reviewed; empty otherwise.
+    classes: Vec<MoveClass>,
     on_select: OnSelect,
 }
 
@@ -26,8 +30,15 @@ impl MoveList {
         Self {
             sans,
             viewing,
+            classes: Vec::new(),
             on_select: Rc::new(on_select),
         }
+    }
+
+    /// Shows each move's review icon beside it.
+    pub fn classes(mut self, classes: Vec<MoveClass>) -> Self {
+        self.classes = classes;
+        self
     }
 }
 
@@ -65,11 +76,14 @@ impl MoveList {
             })
     }
 
-    /// One move; highlighted while the board shows the position after it.
+    /// One move, with its review icon once reviewed; highlighted while the board shows the
+    /// position after it.
     fn move_cell(&self, (index, san): (usize, &str), cx: &App) -> Stateful<Div> {
         let on_select = Rc::clone(&self.on_select);
-        div()
+        let class = self.classes.get(index).copied();
+        h_flex()
             .id(("move", index))
+            .gap_1()
             .flex_1()
             .px_2()
             .py_1()
@@ -81,6 +95,9 @@ impl MoveList {
                     .text_color(cx.theme().primary_foreground)
             })
             .on_click(move |_, window, cx| on_select(index, window, cx))
+            .when_some(class, |this, class| {
+                this.child(img(class.icon_path()).size_4().flex_shrink_0())
+            })
             .child(san.to_owned())
     }
 }
