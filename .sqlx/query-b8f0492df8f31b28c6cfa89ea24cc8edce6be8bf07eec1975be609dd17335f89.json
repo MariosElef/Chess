@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE account.sessions\nSET last_seen_at = now()\nFROM account.users\nWHERE\n    sessions.token_hash = $1\n    AND sessions.revoked_at IS NULL\n    AND sessions.expires_at > now()\n    AND users.id = sessions.user_id\n    AND users.deleted_at IS NULL\nRETURNING\n    sessions.id AS session_id,\n    sessions.user_id\n",
+  "query": "UPDATE account.sessions\nSET last_seen_at = now()\nFROM account.users\nWHERE\n    sessions.token_hash = $1\n    AND sessions.revoked_at IS NULL\n    AND sessions.expires_at > now()\n    AND users.id = sessions.user_id\n    AND users.deleted_at IS NULL\nRETURNING\n    sessions.id AS session_id,\n    sessions.user_id,\n    users.guest_number IS NOT NULL AS \"guest!\"\n",
   "describe": {
     "columns": [
       {
@@ -24,6 +24,12 @@
             "name": "user_id"
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "guest!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -33,8 +39,9 @@
     },
     "nullable": [
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "8e0a8a27434765a4064ff7b72aae492a32c11eaaa5e150a7314eb78ffda253b2"
+  "hash": "b8f0492df8f31b28c6cfa89ea24cc8edce6be8bf07eec1975be609dd17335f89"
 }

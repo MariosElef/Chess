@@ -16,6 +16,12 @@ pub enum AppError {
         detail: Option<String>,
         fields: Vec<FieldError>,
     },
+    /// A service this server depends on failed: answered with the code's title, the cause
+    /// only logged.
+    Unavailable {
+        code: ChessCode,
+        cause: anyhow::Error,
+    },
     /// A failure of ours: logged in full, answered as `internal-error` without the cause.
     Unexpected(anyhow::Error),
 }
@@ -45,6 +51,13 @@ impl AppError {
         }
     }
 
+    pub fn unavailable(code: ChessCode, cause: impl Into<anyhow::Error>) -> Self {
+        Self::Unavailable {
+            code,
+            cause: cause.into(),
+        }
+    }
+
     pub fn fields(fields: Vec<FieldError>) -> Self {
         Self::Problem {
             code: ChessCode::InvalidFields,
@@ -56,7 +69,7 @@ impl AppError {
     /// The code this error answers with.
     pub fn code(&self) -> ChessCode {
         match self {
-            Self::Problem { code, .. } => *code,
+            Self::Problem { code, .. } | Self::Unavailable { code, .. } => *code,
             Self::Unexpected(_) => ChessCode::InternalError,
         }
     }
@@ -96,6 +109,10 @@ impl IntoResponse for AppError {
         let code = self.code();
         let (detail, errors) = match self {
             Self::Problem { detail, fields, .. } => (detail, fields),
+            Self::Unavailable { cause, .. } => {
+                tracing::warn!(error = ?cause, problem = %code.problem_type(), "a dependency failed");
+                (None, Vec::new())
+            }
             Self::Unexpected(error) => {
                 tracing::error!(error = ?error, "unexpected error");
                 (None, Vec::new())

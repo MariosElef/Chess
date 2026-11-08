@@ -1,0 +1,12 @@
+id: clients-imports
+language: Rust
+severity: error
+message: "A client only talks to the network: it reaches no service, route or repository."
+note: Imports point downward only — routes → services → repositories and clients → models.
+files: ['**/src/clients/**', '**/src/clients.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(services|routes|repositories)\b'
+    - matches: outer-path
+      regex: '^crate::(services|routes|repositories)\b'

@@ -190,6 +190,28 @@ impl RenderOnce for SignedInCard {
     }
 }
 
+/// A moment of waiting, said in a sentence.
+#[derive(IntoElement)]
+pub struct WaitingCard {
+    message: &'static str,
+}
+
+impl WaitingCard {
+    pub fn new(message: &'static str) -> Self {
+        Self { message }
+    }
+}
+
+impl RenderOnce for WaitingCard {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        card(cx).child(
+            Label::new(self.message)
+                .text_sm()
+                .text_color(cx.theme().muted_foreground),
+        )
+    }
+}
+
 /// The same bordered panel the new-game menu uses.
 fn card(cx: &App) -> Div {
     v_flex()

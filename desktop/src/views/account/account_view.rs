@@ -10,7 +10,7 @@ use gpui_kit::{
 
 use crate::{
     clients::{server::ServerClient, settings::SessionTokenFile},
-    components::account::{AccountCard, FormField, GuestCard, SignedInCard},
+    components::account::{AccountCard, FormField, GuestCard, SignedInCard, WaitingCard},
     enums::account::AccountForm,
     models::{
         account::{AccountChanged, FormProblems, Session, SignIn, SignUp, User},
@@ -32,6 +32,8 @@ pub struct AccountView {
     problems: FormProblems,
     /// A request is on its way; the button shows it and a second press does nothing.
     busy: bool,
+    /// The saved token is being checked at launch: a moment with no form to fill.
+    restoring: bool,
     /// Enter in any field submits the form.
     _enter_presses: Vec<Subscription>,
 }
@@ -64,6 +66,7 @@ impl AccountView {
             password,
             problems: FormProblems::default(),
             busy: false,
+            restoring: false,
             _enter_presses,
         };
         view.restore(window, cx);
@@ -73,6 +76,11 @@ impl AccountView {
     /// Signed in, with an account or as a guest: either way the app opens.
     pub fn is_admitted(&self) -> bool {
         self.session.is_some()
+    }
+
+    /// The token the server knows this app by, for requests made while signed in.
+    pub fn token(&self) -> Option<String> {
+        self.session.as_ref().map(|session| session.token.clone())
     }
 
     /// The name the sidebar shows: the username, Guest3 for a guest.
@@ -92,6 +100,7 @@ impl AccountView {
             return;
         };
         self.busy = true;
+        self.restoring = true;
         let request = self.client.me(&token);
         cx.spawn_in(window, async move |view, cx| {
             let result = request.await;
@@ -108,6 +117,7 @@ impl AccountView {
         cx: &mut Context<Self>,
     ) {
         self.busy = false;
+        self.restoring = false;
         match result {
             Ok(user) => self.signed_in(Session { token, user }, cx),
             Err(ServerError::Refused(_)) => {
@@ -125,7 +135,7 @@ impl AccountView {
     }
 
     /// Takes the first free guest account; with all ten in use, the form says so.
-    fn continue_as_guest(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn continue_as_guest(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let request = self.client.sign_in_as_guest();
         self.request_session(request, window, cx);
     }
@@ -201,7 +211,7 @@ impl AccountView {
 
     /// Signs out here at once; the server is told too, and if it cannot be reached the token
     /// simply expires there.
-    fn sign_out(&mut self, cx: &mut Context<Self>) {
+    pub fn sign_out(&mut self, cx: &mut Context<Self>) {
         let Some(session) = self.session.take() else {
             return;
         };
@@ -251,6 +261,9 @@ impl AccountView {
     }
 
     fn card(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.restoring {
+            return WaitingCard::new("Signing you in…").into_any_element();
+        }
         let view = cx.entity().downgrade();
         if self.user().is_some_and(|user| user.guest) {
             let sign_up_view = view.clone();
@@ -360,7 +373,11 @@ fn submit_on_enter(
 mod tests {
     use std::{env, process, thread, time::Duration};
 
-    use axum::{Json, Router, http::StatusCode, routing::post};
+    use axum::{
+        Json, Router,
+        http::StatusCode,
+        routing::{get, post},
+    };
     use gpui_kit::{Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
 
@@ -392,6 +409,17 @@ mod tests {
                 .route(
                     "/api/sessions/guest",
                     post(move || async move { (StatusCode::CREATED, Json(guest)) }),
+                )
+                .route(
+                    "/api/users/me",
+                    get(|| async {
+                        // A real server takes a moment: long enough to see the wait.
+                        tokio::time::sleep(Duration::from_millis(300)).await;
+                        Json(json!({
+                            "id": "1", "email": "m@example.com",
+                            "username": "Mario", "guest": false
+                        }))
+                    }),
                 ),
         )
     }
@@ -465,5 +493,28 @@ mod tests {
         assert!(!admitted, "back to the account screen");
         assert_eq!(form, AccountForm::SignUp);
         assert_eq!(tokens.load(), None);
+    }
+
+    #[gpui_kit::test]
+    fn a_saved_session_signs_back_in_without_showing_the_form(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let path = env::temp_dir().join(format!("chess-account-restore-{}", process::id()));
+        let tokens = SessionTokenFile::at(path);
+        tokens.save("abc").expect("saved");
+        let view_tokens = tokens.clone();
+        let (view, cx) = cx
+            .add_window_view(|window, cx| AccountView::new(fake_server(), view_tokens, window, cx));
+        assert!(
+            view.update(cx, |view, _| view.restoring),
+            "a moment of \"Signing you in…\" first"
+        );
+        wait_for(&view, cx, AccountView::is_admitted);
+        assert!(!view.update(cx, |view, _| view.restoring));
+        assert_eq!(
+            view.update(cx, |view, _| view.player_name()).as_deref(),
+            Some("Mario")
+        );
+        tokens.forget().expect("cleaned up");
     }
 }

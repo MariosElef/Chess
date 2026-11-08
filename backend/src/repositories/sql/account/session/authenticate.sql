@@ -9,4 +9,5 @@ WHERE
     AND users.deleted_at IS NULL
 RETURNING
     sessions.id AS session_id,
-    sessions.user_id
+    sessions.user_id,
+    users.guest_number IS NOT NULL AS "guest!"

@@ -1,5 +1,6 @@
 mod account;
 mod health;
+mod puzzles;
 
 use std::time::Duration;
 
@@ -27,7 +28,9 @@ const BODY_LIMIT_BYTES: usize = 64 * 1024;
 /// Every route under `/api` behind the middleware; the health probes after it, so they make no
 /// log lines.
 pub fn build_router(state: AppState) -> Router {
-    let api = Router::new().merge(account::router());
+    let api = Router::new()
+        .merge(account::router())
+        .nest("/puzzles", puzzles::router());
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(

@@ -1,11 +1,12 @@
 //! The ten shared guest accounts, each test on its own freshly migrated database.
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use chess_backend::{AppState, Db, build_router};
+use chess_backend::{AppState, Db, LichessClient, build_router};
 use serde_json::{Value, json};
 
 fn server(db: Db) -> TestServer {
-    TestServer::new(build_router(AppState::assemble(db)))
+    let lichess = LichessClient::new("http://127.0.0.1:9").expect("a client");
+    TestServer::new(build_router(AppState::assemble(db, lichess)))
 }
 
 /// Signs in as a guest: the guest's username and the session's token.

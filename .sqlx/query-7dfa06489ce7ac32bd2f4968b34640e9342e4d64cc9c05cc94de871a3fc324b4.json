@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT max(rush_runs.score) AS best\nFROM puzzle.rush_runs\nWHERE rush_runs.user_id = $1 AND rush_runs.kind = $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "best",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7dfa06489ce7ac32bd2f4968b34640e9342e4d64cc9c05cc94de871a3fc324b4"
+}

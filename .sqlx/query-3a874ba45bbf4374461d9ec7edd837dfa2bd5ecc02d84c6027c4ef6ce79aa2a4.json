@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A puzzle attempt's rating; a game's will name its game instead.\nINSERT INTO play.rating_history (\n    id, user_id, category_id, puzzle_attempt_id, rating, deviation, volatility\n)\nVALUES ($1, $2, $3, $4, $5, $6, $7)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Float8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a874ba45bbf4374461d9ec7edd837dfa2bd5ecc02d84c6027c4ef6ce79aa2a4"
+}

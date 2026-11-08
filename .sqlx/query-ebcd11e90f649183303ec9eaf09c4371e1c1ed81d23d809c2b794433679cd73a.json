@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Themes and opening tags arrive space-separated, as in the Lichess file, and are split here.\nINSERT INTO puzzle.puzzles (\n    id, fen, moves, rating, rating_deviation, popularity, nb_plays, themes, game_url,\n    opening_tags\n)\nSELECT\n    batch.id,\n    batch.fen,\n    batch.moves,\n    batch.rating,\n    batch.rating_deviation,\n    batch.popularity,\n    batch.nb_plays,\n    string_to_array(batch.themes, ' '),\n    batch.game_url,\n    string_to_array(batch.opening_tags, ' ')\nFROM unnest(\n    $1::text [], $2::text [], $3::text [], $4::int [], $5::int [], $6::int [], $7::int [],\n    $8::text [], $9::text [], $10::text []\n) AS batch (\n    id, fen, moves, rating, rating_deviation, popularity, nb_plays, themes, game_url,\n    opening_tags\n)\nON CONFLICT (id) DO UPDATE SET\n    fen = excluded.fen,\n    moves = excluded.moves,\n    rating = excluded.rating,\n    rating_deviation = excluded.rating_deviation,\n    popularity = excluded.popularity,\n    nb_plays = excluded.nb_plays,\n    themes = excluded.themes,\n    game_url = excluded.game_url,\n    opening_tags = excluded.opening_tags\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ebcd11e90f649183303ec9eaf09c4371e1c1ed81d23d809c2b794433679cd73a"
+}

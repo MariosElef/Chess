@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n    puzzles.rating,\n    puzzles.rating_deviation\nFROM puzzle.puzzles\nWHERE puzzles.id = $1\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rating",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "rating_deviation",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "rating_deviation"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7fec677992d93ce513c6c03067c03a8b267a23b9d7c3fbdd81dafccb6ed5d5b2"
+}

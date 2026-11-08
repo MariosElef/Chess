@@ -34,3 +34,17 @@ invalid:
   - "use crate::config::AppConfig;"
   - "use crate::repositories::database::Db;"
   - "fn f() -> crate::services::account::UserService { todo!() }"
+---
+id: clients-imports
+valid:
+  - "use crate::models::puzzle::GetPuzzleModel;"
+invalid:
+  - "use crate::services::puzzle::PuzzleService;"
+  - "use crate::repositories::account::user;"
+---
+id: clients-imports
+valid:
+  - "use crate::models::puzzle::GetPuzzleModel;"
+invalid:
+  - "use crate::services::puzzle::PuzzleService;"
+  - "use crate::repositories::account::user;"

@@ -5,4 +5,6 @@ pub mod board;
 pub mod engine;
 pub mod history;
 pub mod play;
+pub mod puzzles;
+pub mod server;
 pub mod sound;

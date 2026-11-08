@@ -1,17 +1,16 @@
-use crate::models::{
-    account::FormProblems,
-    server::{Problem, ServerError},
+use crate::{
+    models::{
+        account::FormProblems,
+        server::{Problem, ServerError},
+    },
+    services::server::error_message,
 };
-
-const UNREACHABLE: &str = "Can't reach the server. Check that it is running.";
-const UNEXPECTED: &str = "Something went wrong. Try again.";
 
 /// Where each of the server's complaints shows on an account form.
 pub fn form_problems(error: &ServerError) -> FormProblems {
     match error {
         ServerError::Refused(problem) => refused(problem),
-        ServerError::Unreachable => form_wide(UNREACHABLE),
-        ServerError::Unexpected(_) => form_wide(UNEXPECTED),
+        ServerError::Unreachable | ServerError::Unexpected(_) => form_wide(&error_message(error)),
     }
 }
 

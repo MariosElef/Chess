@@ -1,11 +1,12 @@
 //! The account API end to end, each test on its own freshly migrated database.
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use chess_backend::{AppState, Db, build_router};
+use chess_backend::{AppState, Db, LichessClient, build_router};
 use serde_json::{Value, json};
 
 fn server(db: Db) -> TestServer {
-    TestServer::new(build_router(AppState::assemble(db)))
+    let lichess = LichessClient::new("http://127.0.0.1:9").expect("a client");
+    TestServer::new(build_router(AppState::assemble(db, lichess)))
 }
 
 async fn sign_up(server: &TestServer, email: &str, username: &str) {

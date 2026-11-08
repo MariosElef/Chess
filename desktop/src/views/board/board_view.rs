@@ -42,6 +42,13 @@ impl BoardView {
         self.interaction.flipped()
     }
 
+    /// Turns the board so `side` plays from the bottom.
+    pub fn face(&mut self, side: Side, cx: &mut Context<Self>) {
+        if self.interaction.flipped() != (side == Side::Black) {
+            self.flip(cx);
+        }
+    }
+
     pub fn flip(&mut self, cx: &mut Context<Self>) {
         self.interaction.flip();
         cx.notify();
@@ -198,9 +205,9 @@ impl BoardView {
     }
 
     /// A click on the side to move's piece is a move, on the waiting side's a premove; on a
-    /// board that takes no moves, nothing is premoved.
+    /// board that takes no moves or no premoves, nothing is premoved.
     fn click_mode(&self, shown: &ShownPosition, square: Square) -> ClickMode {
-        if !shown.can_move {
+        if !shown.can_move || !shown.premoves {
             return ClickMode::Move;
         }
         click_mode(
@@ -211,9 +218,9 @@ impl BoardView {
         )
     }
 
-    /// The pieces as the queued premoves leave them; a board that takes no moves as it is.
+    /// The pieces as the queued premoves leave them; a board without premoves as it is.
     fn preview(&self, shown: &ShownPosition) -> Board {
-        if shown.can_move {
+        if shown.can_move && shown.premoves {
             self.premoves
                 .preview(shown.position.board(), shown.position.side_to_move())
         } else {
@@ -231,13 +238,17 @@ impl BoardView {
         }
     }
 
-    /// Either side's pieces can be dragged, the side to move's to move and the other's to
-    /// premove, unless the board takes no moves.
+    /// The side to move's pieces can be dragged to move, and with premoves the other side's
+    /// to premove; none on a board that takes no moves.
     fn draggable(&self, shown: &ShownPosition) -> Vec<Side> {
-        if self.interaction.accepts_moves(shown.can_move) {
-            vec![Side::White, Side::Black]
-        } else {
-            Vec::new()
+        let mover = shown.position.side_to_move();
+        match (
+            self.interaction.accepts_moves(shown.can_move),
+            shown.premoves,
+        ) {
+            (true, true) => vec![mover, mover.opponent()],
+            (true, false) => vec![mover],
+            (false, _) => Vec::new(),
         }
     }
 

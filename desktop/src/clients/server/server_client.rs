@@ -1,119 +1,211 @@
-use std::{future::Future, io, sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc};
 
-use reqwest::{Client, RequestBuilder, Response};
-use serde::de::DeserializeOwned;
-use tokio::runtime::{Builder, Runtime};
+use reqwest::{RequestBuilder, Response};
+use serde::Deserialize;
 
-use crate::models::{
-    account::{Session, SignIn, SignUp, User},
-    server::{Problem, ServerError},
+use crate::{
+    clients::http::{HttpRuntime, no_answer, read_json},
+    enums::puzzles::RushKind,
+    models::{
+        account::{Session, SignIn, SignUp, User},
+        puzzles::{AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, RatingRange, RushRecord},
+        server::{Problem, ServerError},
+    },
 };
 
-/// A request that takes longer than this counts as the server being unreachable.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// The chess server's API. Requests run on the client's own small Tokio runtime, so the app's
-/// executors never wait on the network; each call returns a future that can be awaited from
-/// anywhere. Cloning shares the runtime and the connection pool.
+/// The chess server's API, over the app's shared HTTP runtime. Cloning is cheap.
 #[derive(Clone)]
 pub struct ServerClient {
-    http: Client,
+    http: HttpRuntime,
     base_url: Arc<str>,
-    runtime: Arc<Runtime>,
 }
 
 impl ServerClient {
-    pub fn new(base_url: &str) -> io::Result<Self> {
-        let runtime = Builder::new_multi_thread()
-            .worker_threads(1)
-            .thread_name("chess-server-client")
-            .enable_all()
-            .build()?;
-        let http = Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-            .map_err(io::Error::other)?;
-        Ok(Self {
+    pub fn new(http: HttpRuntime, base_url: &str) -> Self {
+        Self {
             http,
             base_url: base_url.trim_end_matches('/').into(),
-            runtime: Arc::new(runtime),
-        })
+        }
     }
 
     pub fn sign_up(&self, body: &SignUp) -> impl Future<Output = Result<(), ServerError>> + use<> {
-        let request = self.http.post(self.url("/api/users")).json(body);
-        self.run(async move { send(request).await.map(|_| ()) })
+        let request = self.http.client().post(self.url("/api/users")).json(body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
     }
 
     pub fn sign_in(
         &self,
         body: &SignIn,
     ) -> impl Future<Output = Result<Session, ServerError>> + use<> {
-        let request = self.http.post(self.url("/api/sessions")).json(body);
-        self.run(async move { read_json(send(request).await?).await })
+        let request = self
+            .http
+            .client()
+            .post(self.url("/api/sessions"))
+            .json(body);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
     }
 
     /// A session for the first free guest account.
     pub fn sign_in_as_guest(&self) -> impl Future<Output = Result<Session, ServerError>> + use<> {
-        let request = self.http.post(self.url("/api/sessions/guest"));
-        self.run(async move { read_json(send(request).await?).await })
+        let request = self.http.client().post(self.url("/api/sessions/guest"));
+        self.http
+            .run(async move { read_json(send(request).await?).await })
     }
 
     /// The account `token` is signed in as.
     pub fn me(&self, token: &str) -> impl Future<Output = Result<User, ServerError>> + use<> {
-        let request = self.http.get(self.url("/api/users/me")).bearer_auth(token);
-        self.run(async move { read_json(send(request).await?).await })
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/users/me"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// A puzzle rated within `range`, for whoever `token` signs in.
+    pub fn next_puzzle(
+        &self,
+        token: &str,
+        range: RatingRange,
+    ) -> impl Future<Output = Result<Puzzle, ServerError>> + use<> {
+        let path = format!(
+            "/api/puzzles/next?min_rating={}&max_rating={}",
+            range.min, range.max
+        );
+        let request = self.http.client().get(self.url(&path)).bearer_auth(token);
+        self.http.run(async move {
+            let wire: WirePuzzle = read_json(send(request).await?).await?;
+            wire.into_puzzle()
+        })
+    }
+
+    /// Tells the server how a puzzle went; after a rated one, the player's new rating.
+    pub fn record_attempt(
+        &self,
+        token: &str,
+        puzzle_id: &str,
+        report: AttemptReport,
+    ) -> impl Future<Output = Result<Option<PuzzleRating>, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .post(self.url(&format!("/api/puzzles/{puzzle_id}/attempts")))
+            .bearer_auth(token)
+            .json(&report);
+        self.http.run(async move {
+            let answer: AttemptAnswer = read_json(send(request).await?).await?;
+            Ok(answer.rating)
+        })
+    }
+
+    /// Stores a finished rush; the best of its kind, and whether this one set it.
+    pub fn record_rush(
+        &self,
+        token: &str,
+        kind: RushKind,
+        score: u32,
+    ) -> impl Future<Output = Result<RushRecord, ServerError>> + use<> {
+        let body = serde_json::json!({ "kind": kind.key(), "score": score });
+        let request = self
+            .http
+            .client()
+            .post(self.url("/api/puzzles/rush"))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// The puzzle rating and best rushes, for the Puzzles menu.
+    pub fn puzzle_summary(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<PuzzleSummary, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/puzzles/summary"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
     }
 
     pub fn sign_out(&self, token: &str) -> impl Future<Output = Result<(), ServerError>> + use<> {
         let request = self
             .http
+            .client()
             .delete(self.url("/api/sessions/current"))
             .bearer_auth(token);
-        self.run(async move { send(request).await.map(|_| ()) })
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
     }
 
-    /// Waits for `work` on this thread; for tests, which have no app to await in.
-    #[cfg(test)]
-    pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {
-        self.runtime.block_on(work)
-    }
-
-    /// A client talking to `app`, a fake server run on the client's own runtime at a free port.
+    /// A client talking to `app`, a fake server on its own runtime; for tests.
     #[cfg(test)]
     pub fn serving(app: axum::Router) -> Self {
-        let client = Self::new("http://127.0.0.1:1").expect("a client");
-        let listener = client
-            .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
-            .expect("a free port");
-        let address = listener.local_addr().expect("an address");
-        client.runtime.spawn(async move {
-            axum::serve(listener, app)
-                .await
-                .expect("the fake server runs");
-        });
-        Self {
-            base_url: format!("http://{address}").into(),
-            ..client
-        }
+        let http = HttpRuntime::new().expect("a runtime");
+        let base_url = http.serve(app);
+        Self::new(http, &base_url)
+    }
+
+    #[cfg(test)]
+    pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {
+        self.http.block_on(work)
     }
 
     fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base_url)
     }
+}
 
-    /// Starts `work` on the client's runtime; the returned future only waits for its result.
-    fn run<T, F>(&self, work: F) -> impl Future<Output = Result<T, ServerError>> + use<T, F>
-    where
-        T: Send + 'static,
-        F: Future<Output = Result<T, ServerError>> + Send + 'static,
-    {
-        let handle = self.runtime.spawn(work);
-        async move {
-            handle
-                .await
-                .unwrap_or_else(|error| Err(ServerError::Unexpected(error.to_string())))
-        }
+/// The answer to an attempt: the new rating, or none.
+#[derive(Deserialize)]
+struct AttemptAnswer {
+    rating: Option<PuzzleRating>,
+}
+
+/// A puzzle as the server sends it: the position and moves still as text.
+#[derive(Deserialize)]
+struct WirePuzzle {
+    id: String,
+    rating: u32,
+    plays: u32,
+    themes: Vec<String>,
+    fen: String,
+    last_move: Option<String>,
+    solution: Vec<String>,
+}
+
+impl WirePuzzle {
+    /// The position and moves read; a puzzle that does not parse is one this app cannot use.
+    fn into_puzzle(self) -> Result<Puzzle, ServerError> {
+        let unreadable =
+            |what: &str| ServerError::Unexpected(format!("puzzle {}: bad {what}", self.id));
+        let position = self.fen.parse().map_err(|_| unreadable("FEN"))?;
+        let last_move = self
+            .last_move
+            .as_deref()
+            .map(str::parse)
+            .transpose()
+            .map_err(|_| unreadable("last move"))?;
+        let solution = self
+            .solution
+            .iter()
+            .map(|mv| mv.parse())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| unreadable("solution"))?;
+        Ok(Puzzle {
+            id: self.id.clone(),
+            rating: self.rating,
+            plays: self.plays,
+            themes: self.themes.clone(),
+            position,
+            last_move,
+            solution,
+        })
     }
 }
 
@@ -132,22 +224,6 @@ async fn send(request: RequestBuilder) -> Result<Response, ServerError> {
     }
 }
 
-async fn read_json<T: DeserializeOwned>(response: Response) -> Result<T, ServerError> {
-    response
-        .json()
-        .await
-        .map_err(|error| ServerError::Unexpected(error.to_string()))
-}
-
-/// A server that is down, or a request that timed out, is unreachable; anything else is ours.
-fn no_answer(error: reqwest::Error) -> ServerError {
-    if error.is_connect() || error.is_timeout() {
-        ServerError::Unreachable
-    } else {
-        ServerError::Unexpected(error.to_string())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use axum::{
@@ -159,9 +235,13 @@ mod tests {
     use serde_json::json;
 
     use super::ServerClient;
-    use crate::models::{
-        account::{SignIn, SignUp},
-        server::ServerError,
+    use crate::{
+        clients::http::HttpRuntime,
+        models::{
+            account::{SignIn, SignUp},
+            puzzles::RatingRange,
+            server::ServerError,
+        },
     };
 
     fn sign_in() -> SignIn {
@@ -248,8 +328,40 @@ mod tests {
 
     #[test]
     fn no_server_is_unreachable() {
-        let client = ServerClient::new("http://127.0.0.1:9").expect("a client");
+        let http = HttpRuntime::new().expect("a runtime");
+        let client = ServerClient::new(http, "http://127.0.0.1:9");
         let result = client.block_on(client.sign_in(&sign_in()));
         assert!(matches!(result, Err(ServerError::Unreachable)));
+    }
+
+    fn puzzle_server(fen: &'static str) -> ServerClient {
+        ServerClient::serving(Router::new().route(
+            "/api/puzzles/next",
+            get(move || async move {
+                Json(json!({
+                    "id": "5laTS", "rating": 1593, "plays": 2015,
+                    "themes": ["mateIn3"], "fen": fen, "last_move": "h7h8",
+                    "solution": ["h5e8", "e7e8", "e1e8", "d6f8", "e8f8"]
+                }))
+            }),
+        ))
+    }
+
+    #[test]
+    fn a_puzzle_arrives_with_its_position_and_moves_read() {
+        let client = puzzle_server("7k/pp2r1p1/2pb3r/3p1B1Q/3N4/8/P2q2PP/4R2K w - - 1 1");
+        let puzzle = client
+            .block_on(client.next_puzzle("abc", RatingRange::DEFAULT))
+            .expect("a puzzle");
+        assert_eq!(puzzle.rating, 1593);
+        assert_eq!(puzzle.solution.len(), 5);
+        assert_eq!(puzzle.last_move, Some("h7h8".parse().expect("a move")));
+    }
+
+    #[test]
+    fn a_puzzle_that_does_not_parse_is_unexpected() {
+        let client = puzzle_server("not a position");
+        let result = client.block_on(client.next_puzzle("abc", RatingRange::DEFAULT));
+        assert!(matches!(result, Err(ServerError::Unexpected(_))));
     }
 }

@@ -14,6 +14,8 @@ use crate::{
 pub struct SignedIn {
     pub user_id: Uuid,
     pub session_id: Uuid,
+    /// One of the shared guest accounts: nothing personal, such as a rating, is kept for it.
+    pub guest: bool,
 }
 
 impl FromRequestParts<AppState> for SignedIn {
@@ -25,6 +27,7 @@ impl FromRequestParts<AppState> for SignedIn {
         Ok(Self {
             user_id: session.user_id,
             session_id: session.session_id,
+            guest: session.guest,
         })
     }
 }

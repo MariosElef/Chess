@@ -45,3 +45,73 @@ pub fn drag(cx: &mut VisualTestContext, from: &'static str, to: &'static str) {
     cx.simulate_mouse_move(end, Some(MouseButton::Left), Modifiers::none());
     release(cx, end);
 }
+
+/// The opponent's scripted answer comes within this.
+const ANSWER_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// A server for the puzzle pages: always Lichess's 5laTS, a mate in three for White; a rated
+/// attempt brings the rating to 1512 (+12); a rush is always a new best.
+pub fn puzzle_server() -> crate::clients::server::ServerClient {
+    use axum::{
+        Json, Router,
+        routing::{get, post},
+    };
+    use serde_json::json;
+    crate::clients::server::ServerClient::serving(
+        Router::new()
+            .route(
+                "/api/puzzles/next",
+                get(|| async {
+                    Json(json!({
+                        "id": "5laTS", "rating": 1593, "plays": 2015,
+                        "themes": ["mateIn3"],
+                        "fen": "7k/pp2r1p1/2pb3r/3p1B1Q/3N4/8/P2q2PP/4R2K w - - 1 1",
+                        "last_move": "h7h8",
+                        "solution": ["h5e8", "e7e8", "e1e8", "d6f8", "e8f8"]
+                    }))
+                }),
+            )
+            .route(
+                "/api/puzzles/{id}/attempts",
+                post(|| async {
+                    Json(json!({ "rating": {
+                        "rating": 1512, "deviation": 80, "provisional": false, "change": 12
+                    }}))
+                }),
+            )
+            .route(
+                "/api/puzzles/rush",
+                post(|| async { Json(json!({ "best": 1, "new_best": true })) }),
+            )
+            .route(
+                "/api/puzzles/summary",
+                get(|| async {
+                    Json(json!({
+                        "guest": false,
+                        "rating": { "rating": 1500, "deviation": 300, "provisional": true },
+                        "best_rush": { "three_minutes": 9, "five_minutes": null, "survival": null }
+                    }))
+                }),
+            ),
+    )
+}
+
+/// Answers from the server arrive on another thread: lets the app run until `done`.
+pub fn wait_until(cx: &mut VisualTestContext, done: impl Fn(&mut VisualTestContext) -> bool) {
+    for _ in 0..300 {
+        cx.run_until_parked();
+        if done(cx) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the server's answer never arrived");
+}
+
+/// One of the player's moves by clicking, then the opponent's answer after its pause.
+pub fn play_and_wait(cx: &mut VisualTestContext, from: &'static str, to: &'static str) {
+    click(cx, from);
+    click(cx, to);
+    cx.executor().advance_clock(ANSWER_WAIT);
+    cx.run_until_parked();
+}

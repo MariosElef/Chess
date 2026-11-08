@@ -5,6 +5,7 @@ pub mod analysis;
 pub mod board;
 pub mod engine;
 pub mod history;
+pub mod puzzles;
 pub mod settings;
 pub mod shell;
 pub mod sound;

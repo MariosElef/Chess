@@ -12,6 +12,8 @@ pub enum ChessCode {
     EmailTaken,
     UsernameTaken,
     AllGuestsBusy,
+    LichessUnavailable,
+    NoPuzzleInRange,
     InternalError,
 }
 
@@ -20,9 +22,10 @@ impl ChessCode {
         match self {
             Self::InvalidRequestBody => StatusCode::BAD_REQUEST,
             Self::InvalidFields => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::RouteNotFound => StatusCode::NOT_FOUND,
+            Self::RouteNotFound | Self::NoPuzzleInRange => StatusCode::NOT_FOUND,
             Self::SignInRequired | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::UsernameTaken | Self::AllGuestsBusy => StatusCode::CONFLICT,
+            Self::LichessUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             Self::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -37,6 +40,8 @@ impl ChessCode {
             Self::EmailTaken => "Email already in use",
             Self::UsernameTaken => "Username already taken",
             Self::AllGuestsBusy => "Every guest account is in use: sign up to play",
+            Self::LichessUnavailable => "Puzzles are unavailable right now",
+            Self::NoPuzzleInRange => "No new puzzle in that range: try a wider one",
             Self::InternalError => "Something went wrong",
         }
     }
@@ -56,6 +61,8 @@ impl ChessCode {
             Self::EmailTaken => "email-taken",
             Self::UsernameTaken => "username-taken",
             Self::AllGuestsBusy => "all-guests-busy",
+            Self::LichessUnavailable => "lichess-unavailable",
+            Self::NoPuzzleInRange => "no-puzzle-in-range",
             Self::InternalError => "internal-error",
         }
     }

@@ -4,4 +4,5 @@ pub mod analysis;
 pub mod board;
 pub mod engine;
 pub mod play;
+pub mod puzzles;
 pub mod server;

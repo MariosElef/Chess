@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Walks puzzles_rating_id_idx from the given point, so a random point gives a random puzzle,\n-- skipping the ones the player has already attempted.\nSELECT\n    puzzles.id,\n    puzzles.fen,\n    puzzles.moves,\n    puzzles.rating,\n    puzzles.nb_plays,\n    puzzles.themes\nFROM puzzle.puzzles\nWHERE\n    puzzles.rating BETWEEN $1 AND $2\n    AND (puzzles.rating, puzzles.id) >= ($3, $4)\n    AND NOT EXISTS (\n        SELECT 1\n        FROM puzzle.puzzle_attempts\n        WHERE puzzle_attempts.user_id = $5 AND puzzle_attempts.puzzle_id = puzzles.id\n    )\nORDER BY puzzles.rating, puzzles.id\nLIMIT 1\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "fen",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "fen"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "moves",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "moves"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "rating",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "nb_plays",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "nb_plays"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "themes",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzles",
+            "name": "themes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "855653935dd013bc629dbfd2c96729c8fe29ca13b9d88f1cb27c8f661ceef0a5"
+}

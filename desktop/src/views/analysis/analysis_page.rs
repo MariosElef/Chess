@@ -284,6 +284,7 @@ impl AnalysisPage {
             position: *self.history.shown(),
             last_move: self.history.shown_last_move(),
             can_move: true,
+            premoves: true,
             engine_arrow: self.engine_arrow(),
         }
     }

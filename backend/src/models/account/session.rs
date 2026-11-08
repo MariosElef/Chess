@@ -33,4 +33,6 @@ pub struct NewSession {
 pub struct SessionUser {
     pub session_id: Uuid,
     pub user_id: Uuid,
+    /// One of the shared guest accounts.
+    pub guest: bool,
 }

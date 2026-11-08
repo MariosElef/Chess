@@ -109,6 +109,7 @@ impl PlayPage {
             position: *self.history.shown(),
             last_move: self.history.shown_last_move(),
             can_move: self.can_play(),
+            premoves: true,
             engine_arrow: None,
         }
     }
