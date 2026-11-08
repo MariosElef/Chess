@@ -2,6 +2,7 @@ mod board;
 mod castling;
 mod chess_move;
 mod clock;
+pub mod engine;
 mod fen;
 mod game;
 mod material;
@@ -14,7 +15,7 @@ mod square;
 
 pub use board::Board;
 pub use castling::CastlingRights;
-pub use chess_move::Move;
+pub use chess_move::{Move, ParseMoveError};
 pub use clock::{Category, Clock, TimeControl};
 pub use fen::FenError;
 pub use game::{Game, GameError, Outcome};

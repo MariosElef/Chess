@@ -15,8 +15,13 @@ pub struct BoardColors {
     pub marked_square: Hsla,
     /// Arrows the player drew with a right-drag.
     pub arrow: Hsla,
+    /// The engine's best move, a different colour from the player's own arrows.
+    pub engine_arrow: Hsla,
     /// The dots and rings marking where the picked-up piece can go.
     pub move_hint: Hsla,
+    /// White's and Black's parts of the analysis eval bar.
+    pub eval_white: Hsla,
+    pub eval_black: Hsla,
     /// Dims the board behind the promotion picker.
     pub overlay: Hsla,
 }
@@ -76,7 +81,10 @@ impl BoardColors {
             check_square: rgb(0xd9483b).into(),
             marked_square: rgb(0xeb8f80).into(),
             arrow: hsla(0.09, 0.95, 0.5, 0.8),
+            engine_arrow: hsla(0.6, 0.75, 0.45, 0.75),
             move_hint: hsla(0., 0., 0., 0.25),
+            eval_white: rgb(0xf4f2ee).into(),
+            eval_black: rgb(0x3a3a3c).into(),
             overlay: hsla(0., 0., 0., 0.45),
         }
     }
@@ -90,7 +98,10 @@ impl BoardColors {
             check_square: rgb(0xb5342a).into(),
             marked_square: rgb(0xc9776a).into(),
             arrow: hsla(0.09, 0.9, 0.5, 0.8),
+            engine_arrow: hsla(0.6, 0.7, 0.55, 0.75),
             move_hint: hsla(0., 0., 0., 0.3),
+            eval_white: rgb(0xe8e6e1).into(),
+            eval_black: rgb(0x1f1f21).into(),
             overlay: hsla(0., 0., 0., 0.55),
         }
     }

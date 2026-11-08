@@ -104,6 +104,19 @@ impl Game {
         &self.sans
     }
 
+    /// The game cut after its first `plies` moves: a fresh line from an earlier point, so a
+    /// resignation, agreed draw or open offer does not carry over.
+    pub fn truncated(&self, plies: usize) -> Self {
+        let plies = plies.min(self.moves.len());
+        Self {
+            positions: self.positions[..=plies].to_vec(),
+            moves: self.moves[..plies].to_vec(),
+            sans: self.sans[..plies].to_vec(),
+            chosen_end: None,
+            draw_offer: None,
+        }
+    }
+
     /// The side whose draw offer is waiting for an answer.
     pub fn draw_offer(&self) -> Option<Side> {
         self.draw_offer
@@ -338,6 +351,17 @@ mod tests {
         game.play(mv("e7", "e5")).expect("legal");
         assert_eq!(game.draw_offer(), None);
         assert!(!game.is_over());
+    }
+
+    #[test]
+    fn truncating_keeps_the_first_moves_and_drops_a_resignation() {
+        let mut game = Game::new();
+        play_all(&mut game, &[("e2", "e4"), ("e7", "e5"), ("g1", "f3")]);
+        game.resign(Side::Black).expect("ongoing");
+        let earlier = game.truncated(2);
+        assert_eq!(earlier.sans(), ["e4", "e5"]);
+        assert_eq!(earlier.outcome(), None);
+        assert_eq!(game.truncated(99).moves().len(), 3);
     }
 
     #[test]

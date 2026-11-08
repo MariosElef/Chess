@@ -5,8 +5,7 @@ use gpui_kit::{
     *,
 };
 
-use super::status::side_name;
-use crate::board::piece_image;
+use crate::{board::piece_image, history::side_name};
 
 /// The pieces one side has taken, small, with "+N" when that side is ahead in material.
 #[derive(IntoElement)]

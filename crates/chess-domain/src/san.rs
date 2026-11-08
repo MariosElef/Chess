@@ -16,6 +16,21 @@ impl Position {
         ))
     }
 
+    /// A line of moves in notation, as an engine's suggestion is shown; it stops at the first
+    /// move that is not legal where it would be played.
+    pub fn san_line(&self, moves: &[Move]) -> Vec<String> {
+        let mut position = *self;
+        let mut sans = Vec::new();
+        for &mv in moves {
+            let (Ok(san), Ok(next)) = (position.san(mv), position.play(mv)) else {
+                break;
+            };
+            sans.push(san);
+            position = next;
+        }
+        sans
+    }
+
     fn move_text(&self, piece: Piece, mv: Move) -> String {
         if is_castle(piece, mv) {
             return castle_text(mv).to_owned();
@@ -212,6 +227,13 @@ mod tests {
             position.san(Move::new(sq("e5"), sq("d6"))),
             Ok("exd6".to_owned())
         );
+    }
+
+    #[test]
+    fn a_line_is_written_until_its_first_illegal_move() {
+        let moves = [("e2", "e4"), ("e7", "e5"), ("e4", "e5"), ("g1", "f3")]
+            .map(|(from, to)| Move::new(sq(from), sq(to)));
+        assert_eq!(Position::starting().san_line(&moves), ["e4", "e5"]);
     }
 
     #[test]

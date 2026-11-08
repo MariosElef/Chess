@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chess_domain::{Clock, Move, PieceKind, Position, Side, Square, TimeControl};
+use chess_domain::{Clock, Move, PieceKind, Side, Square, TimeControl};
 use gpui_kit::{
     assets::IconName,
     component::{
@@ -18,17 +18,8 @@ use gpui_kit::{
 };
 
 use super::{
-    annotations::Annotations,
-    captured_row::CapturedRow,
-    clock_face::ClockFace,
-    game_setup::GameSetup,
-    history::GameHistory,
-    keys::{CONTEXT, FirstPosition, LivePosition, NextPosition, PreviousPosition},
-    move_list::MoveList,
-    position_panel::PositionPanel,
-    selection::{ClickOutcome, click_outcome, targets},
-    status::status_text,
-    time_controls,
+    AnalyzeGame, captured_row::CapturedRow, clock_face::ClockFace, game_setup::GameSetup,
+    status::status_text, time_controls,
 };
 
 /// How often the running clock is redrawn and checked for a flag.
@@ -40,7 +31,13 @@ enum Stage {
     Setup,
     Playing,
 }
-use crate::board::{BoardGrid, PromotionPrompt};
+use crate::{
+    board::{BoardGrid, BoardInteraction, PromotionPrompt},
+    history::{
+        CONTEXT, FirstPosition, GameHistory, LivePosition, MoveList, NavStep, NavigationBar,
+        NextPosition, PositionPanel, PreviousPosition,
+    },
+};
 
 /// The game being played, the position on the board, and what the player is in the middle of.
 pub struct PlayPage {
@@ -53,15 +50,8 @@ pub struct PlayPage {
     turn_started: Option<Instant>,
     /// Redraws the running clock; dropping it stops the ticking.
     _ticker: Option<Task<()>>,
-    selected: Option<Square>,
-    /// Black at the bottom.
-    flipped: bool,
-    /// A pawn waiting on the last rank while the player picks what it becomes.
-    pending_promotion: Option<(Square, Square)>,
-    /// Red squares and arrows drawn with the right button.
-    annotations: Annotations,
-    /// Where the right button went down, until it comes back up.
-    right_press: Option<Square>,
+    /// The picked-up piece, promotion choice, drawings and board orientation.
+    interaction: BoardInteraction,
     /// Keyboard focus, so the arrow keys reach this page.
     focus_handle: FocusHandle,
 }
@@ -75,11 +65,7 @@ impl PlayPage {
             clock: None,
             turn_started: None,
             _ticker: None,
-            selected: None,
-            flipped: false,
-            pending_promotion: None,
-            annotations: Annotations::default(),
-            right_press: None,
+            interaction: BoardInteraction::default(),
             focus_handle: cx.focus_handle(),
         }
     }
@@ -92,44 +78,30 @@ impl PlayPage {
         self.focus_handle.focus(window, cx);
     }
 
-    /// Moves can be made only on the live position of a game still going, with no picker open.
+    /// Moves can be made only on the live position of a game still going.
     fn can_play(&self) -> bool {
-        self.history.is_live() && !self.history.game().is_over() && self.pending_promotion.is_none()
+        self.history.is_live() && !self.history.game().is_over()
     }
 
-    /// A left-click wipes the drawings, as on chess.com, then plays or selects.
     fn click_square(&mut self, square: Square, cx: &mut Context<Self>) {
-        self.annotations.clear();
+        let mv = self
+            .interaction
+            .click(self.history.live(), square, self.can_play());
+        self.play_if_any(mv);
         cx.notify();
-        if self.can_play() {
-            let outcome = click_outcome(self.history.live(), self.selected, square);
-            self.apply(outcome);
-            cx.notify();
-        }
     }
 
-    /// A drop on a square the piece cannot reach puts it back.
     fn drop_piece(&mut self, from: Square, to: Square, cx: &mut Context<Self>) {
-        self.annotations.clear();
-        if self.can_play() {
-            match click_outcome(self.history.live(), Some(from), to) {
-                ClickOutcome::Select(_) => self.selected = None,
-                outcome @ (ClickOutcome::Play(_) | ClickOutcome::Promote { .. }) => {
-                    self.apply(outcome);
-                }
-            }
-            cx.notify();
-        }
+        let mv = self
+            .interaction
+            .drop(self.history.live(), from, to, self.can_play());
+        self.play_if_any(mv);
+        cx.notify();
     }
 
-    fn apply(&mut self, outcome: ClickOutcome) {
-        match outcome {
-            ClickOutcome::Select(selected) => self.selected = selected,
-            ClickOutcome::Play(mv) => self.play(mv),
-            ClickOutcome::Promote { from, to } => {
-                self.selected = Some(from);
-                self.pending_promotion = Some((from, to));
-            }
+    fn play_if_any(&mut self, mv: Option<Move>) {
+        if let Some(mv) = mv {
+            self.play(mv);
         }
     }
 
@@ -148,8 +120,8 @@ impl PlayPage {
         self.end_interaction(cx);
     }
 
-    /// Plays a move picked from the legal ones and puts the piece down; the mover's clock is
-    /// charged, and the opponent's starts unless the move ended the game.
+    /// Plays a move picked from the legal ones; the mover's clock is charged, and the
+    /// opponent's starts unless the move ended the game.
     fn play(&mut self, mv: Move) {
         let mover = self.side_to_move();
         self.charge_clock(mover, Clock::finish_turn);
@@ -157,8 +129,6 @@ impl PlayPage {
             .play(mv)
             .expect("moves come from the legal ones");
         self.turn_started = (!self.history.game().is_over()).then(Instant::now);
-        self.selected = None;
-        self.annotations.clear();
     }
 
     /// Applies the running turn's time to `side` with `charge`, if a clock is running.
@@ -216,26 +186,22 @@ impl PlayPage {
     }
 
     fn promote(&mut self, kind: PieceKind, cx: &mut Context<Self>) {
-        if let Some((from, to)) = self.pending_promotion.take() {
-            self.play(Move::promoting(from, to, kind));
-            cx.notify();
-        }
+        let mv = self.interaction.promote(kind);
+        self.play_if_any(mv);
+        cx.notify();
     }
 
     fn cancel_promotion(&mut self, cx: &mut Context<Self>) {
-        self.pending_promotion = None;
-        self.selected = None;
+        self.interaction.cancel_promotion();
         cx.notify();
     }
 
     fn right_down(&mut self, square: Square) {
-        self.right_press = Some(square);
+        self.interaction.right_down(square);
     }
 
-    /// Releasing where it was pressed marks the square; elsewhere, it draws an arrow.
     fn right_up(&mut self, square: Square, cx: &mut Context<Self>) {
-        if let Some(start) = self.right_press.take() {
-            self.annotations.release(start, square);
+        if self.interaction.right_up(square) {
             cx.notify();
         }
     }
@@ -275,8 +241,16 @@ impl PlayPage {
     }
 
     fn flip(&mut self, cx: &mut Context<Self>) {
-        self.flipped = !self.flipped;
+        self.interaction.flip();
         cx.notify();
+    }
+
+    /// Hands the game to the shell, which opens it on the analysis board.
+    fn analyze(&mut self, cx: &mut Context<Self>) {
+        cx.emit(AnalyzeGame {
+            game: self.history.game().clone(),
+            viewing: self.history.viewing(),
+        });
     }
 
     /// Back to the menu, keeping the last time control picked.
@@ -289,27 +263,24 @@ impl PlayPage {
 
     /// Puts down a picked-up piece, closes the promotion picker and wipes the drawings.
     fn end_interaction(&mut self, cx: &mut Context<Self>) {
-        self.selected = None;
-        self.pending_promotion = None;
-        self.annotations.clear();
-        self.right_press = None;
+        self.interaction.clear();
         cx.notify();
     }
 
     fn previous_position(&mut self, _: &PreviousPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(GameHistory::back, cx);
+        self.navigate(NavStep::Back, cx);
     }
 
     fn next_position(&mut self, _: &NextPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(GameHistory::forward, cx);
+        self.navigate(NavStep::Forward, cx);
     }
 
     fn first_position(&mut self, _: &FirstPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(GameHistory::jump_to_start, cx);
+        self.navigate(NavStep::Start, cx);
     }
 
     fn live_position(&mut self, _: &LivePosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(GameHistory::jump_to_live, cx);
+        self.navigate(NavStep::Live, cx);
     }
 
     fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -318,8 +289,8 @@ impl PlayPage {
     }
 
     /// Moves the board through the history; the picked-up piece is put down first.
-    fn navigate(&mut self, step: fn(&mut GameHistory), cx: &mut Context<Self>) {
-        step(&mut self.history);
+    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
+        self.history.step(step);
         self.end_interaction(cx);
     }
 
@@ -341,12 +312,13 @@ impl PlayPage {
             .child(self.actions(cx))
     }
 
-    /// Flip always; then New game once it is over, Accept/Decline for an offer, or Draw/Resign.
+    /// Flip always; then Analyze and New game once it is over, Accept/Decline for an offer, or
+    /// Draw/Resign.
     fn actions(&self, cx: &mut Context<Self>) -> Div {
         let game = self.history.game();
         let row = h_flex().gap_2().child(flip_button(cx));
         if game.is_over() {
-            row.child(new_game_button(cx))
+            row.child(analyze_button(cx)).child(new_game_button(cx))
         } else if self.has_offer_to_answer() {
             row.child(accept_draw_button(cx))
                 .child(decline_draw_button(cx))
@@ -358,75 +330,43 @@ impl PlayPage {
     }
 
     fn board(&self, page: WeakEntity<Self>) -> BoardGrid {
-        let shown = self.history.shown();
-        BoardGrid::new(*shown.board())
-            .flipped(self.flipped)
-            .selected(self.selected)
-            .targets(targets(shown, self.selected))
-            .last_move(self.history.shown_last_move())
-            .check(check_square(shown))
-            .draggable_side(self.can_play().then(|| self.side_to_move()))
+        let draggable = self
+            .interaction
+            .accepts_moves(self.can_play())
+            .then(|| self.side_to_move());
+        self.interaction
+            .grid(
+                self.history.shown(),
+                self.history.shown_last_move(),
+                draggable,
+            )
             .promotion(self.promotion_prompt(page.clone()))
-            .marks(self.annotations.marks().to_vec())
-            .arrows(self.annotations.arrows().to_vec())
             .on_right_button(right_down(page.clone()), right_up(page.clone()))
             .on_square_click(click_square(page.clone()))
             .on_piece_drop(drop_piece(page))
     }
 
     fn promotion_prompt(&self, page: WeakEntity<Self>) -> Option<PromotionPrompt> {
-        self.pending_promotion.map(|_| PromotionPrompt {
+        self.interaction.is_promoting().then(|| PromotionPrompt {
             side: self.side_to_move(),
             on_pick: Rc::new(pick_promotion(page.clone())),
             on_cancel: Rc::new(cancel_promotion(page)),
         })
     }
 
-    /// ⏮ ◀ ▶ ⏭ — the ends of each direction disable themselves.
-    fn navigation(&self, cx: &mut Context<Self>) -> Div {
-        let back = !self.history.can_go_back();
-        let forward = !self.history.can_go_forward();
-        h_flex()
-            .gap_2()
-            .child(nav_button(
-                "to-start",
-                IconName::ChevronsLeft,
-                "First position",
-                back,
-                GameHistory::jump_to_start,
-                cx,
-            ))
-            .child(nav_button(
-                "back",
-                IconName::ChevronLeft,
-                "Previous position",
-                back,
-                GameHistory::back,
-                cx,
-            ))
-            .child(nav_button(
-                "forward",
-                IconName::ChevronRight,
-                "Next position",
-                forward,
-                GameHistory::forward,
-                cx,
-            ))
-            .child(nav_button(
-                "to-live",
-                IconName::ChevronsRight,
-                "Current position",
-                forward,
-                GameHistory::jump_to_live,
-                cx,
-            ))
+    fn navigation(&self, page: WeakEntity<Self>) -> NavigationBar {
+        NavigationBar::new(
+            self.history.can_go_back(),
+            self.history.can_go_forward(),
+            step_history(page),
+        )
     }
 
-    /// Captured pieces, the navigation buttons, the move list, and the shown position's FEN.
-    fn side_column(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> Div {
+    /// The navigation buttons, the move list, and the shown position's FEN.
+    fn side_column(&self, page: WeakEntity<Self>) -> Div {
         v_flex()
             .gap_4()
-            .child(self.navigation(cx))
+            .child(self.navigation(page.clone()))
             .child(MoveList::new(
                 self.history.sans().to_vec(),
                 self.history.viewing(),
@@ -437,7 +377,7 @@ impl PlayPage {
 
     /// The board between two player bars: the side drawn at the top above it, the other below.
     fn board_column(&self, page: WeakEntity<Self>) -> Div {
-        let bottom = if self.flipped {
+        let bottom = if self.interaction.flipped() {
             Side::Black
         } else {
             Side::White
@@ -484,10 +424,12 @@ impl PlayPage {
             .child(self.header(cx))
             .child(board_area(
                 self.board_column(page.clone()),
-                self.side_column(page, cx),
+                self.side_column(page),
             ))
     }
 }
+
+impl EventEmitter<AnalyzeGame> for PlayPage {}
 
 impl Render for PlayPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -511,20 +453,20 @@ impl Render for PlayPage {
     }
 }
 
-/// The king's square while the side to move is in check.
-fn check_square(position: &Position) -> Option<Square> {
-    position
-        .is_check()
-        .then(|| position.board().king_of(position.side_to_move()))
-        .flatten()
-}
-
 fn flip_button(cx: &mut Context<PlayPage>) -> Button {
     Button::new("flip-board")
         .ghost()
         .icon(IconName::ArrowUpDown)
         .tooltip("Flip board")
         .on_click(cx.listener(|page, _, _, cx| page.flip(cx)))
+}
+
+fn analyze_button(cx: &mut Context<PlayPage>) -> Button {
+    Button::new("analyze-game")
+        .outline()
+        .icon(IconName::Microscope)
+        .label("Analyze")
+        .on_click(cx.listener(|page, _, _, cx| page.analyze(cx)))
 }
 
 fn new_game_button(cx: &mut Context<PlayPage>) -> Button {
@@ -563,22 +505,6 @@ fn decline_draw_button(cx: &mut Context<PlayPage>) -> Button {
         .outline()
         .label("Decline")
         .on_click(cx.listener(|page, _, _, cx| page.decline_draw(cx)))
-}
-
-fn nav_button(
-    id: &'static str,
-    icon: IconName,
-    tooltip: &'static str,
-    disabled: bool,
-    step: fn(&mut GameHistory),
-    cx: &mut Context<PlayPage>,
-) -> Button {
-    Button::new(id)
-        .ghost()
-        .icon(icon)
-        .tooltip(tooltip)
-        .disabled(disabled)
-        .on_click(cx.listener(move |page, _, _, cx| page.navigate(step, cx)))
 }
 
 /// Fills the space under the title: the board column on the left, the side column beside it.
@@ -620,6 +546,12 @@ fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
             }
         }
     })
+}
+
+fn step_history(page: WeakEntity<PlayPage>) -> impl Fn(NavStep, &mut Window, &mut App) + 'static {
+    move |step, _, cx| {
+        let _ = page.update(cx, |page, cx| page.navigate(step, cx));
+    }
 }
 
 fn select_move(page: WeakEntity<PlayPage>) -> impl Fn(usize, &mut Window, &mut App) + 'static {

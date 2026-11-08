@@ -1,5 +1,7 @@
 use chess_domain::{Game, GameError, Move, Position, Side};
 
+use super::NavStep;
+
 /// The game being played, and which of its positions the board is showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameHistory {
@@ -14,6 +16,20 @@ impl GameHistory {
             game: Game::new(),
             viewing: 0,
         }
+    }
+
+    /// A game shown at position `viewing` (0 is its start), clamped to its last position.
+    pub fn from_game(game: Game, viewing: usize) -> Self {
+        let last = game.positions().len() - 1;
+        Self {
+            game,
+            viewing: viewing.min(last),
+        }
+    }
+
+    /// A history that starts from any position, such as a pasted FEN.
+    pub fn from_position(position: Position) -> Self {
+        Self::from_game(Game::from_position(position), 0)
     }
 
     pub fn game(&self) -> &Game {
@@ -54,6 +70,24 @@ impl GameHistory {
         self.game.play(mv)?;
         self.jump_to_live();
         Ok(())
+    }
+
+    /// Plays `mv` from the position on the board; from an earlier one, the later moves are
+    /// dropped first, as on an analysis board.
+    pub fn play_from_shown(&mut self, mv: Move) -> Result<(), GameError> {
+        if !self.is_live() {
+            self.game = self.game.truncated(self.viewing);
+        }
+        self.play(mv)
+    }
+
+    pub fn step(&mut self, step: NavStep) {
+        match step {
+            NavStep::Start => self.jump_to_start(),
+            NavStep::Back => self.back(),
+            NavStep::Forward => self.forward(),
+            NavStep::Live => self.jump_to_live(),
+        }
     }
 
     pub fn resign(&mut self, side: Side) -> Result<(), GameError> {
@@ -176,6 +210,32 @@ mod tests {
         assert_eq!(history.shown().side_to_move(), Side::Black);
         history.jump_to_move(99);
         assert!(history.is_live());
+    }
+
+    #[test]
+    fn playing_from_an_earlier_position_drops_the_later_moves() {
+        let mut history = two_moves();
+        history.step(super::NavStep::Back);
+        history.play_from_shown(mv("c7", "c5")).expect("legal");
+        assert_eq!(history.sans(), ["e4", "c5"]);
+        assert!(history.is_live());
+    }
+
+    #[test]
+    fn playing_from_the_live_position_just_adds_the_move() {
+        let mut history = two_moves();
+        history.play_from_shown(mv("g1", "f3")).expect("legal");
+        assert_eq!(history.sans(), ["e4", "e5", "Nf3"]);
+    }
+
+    #[test]
+    fn a_game_can_be_opened_at_any_position() {
+        let history = GameHistory::from_game(two_moves().game().clone(), 1);
+        assert_eq!(history.viewing(), 1);
+        assert_eq!(
+            GameHistory::from_game(two_moves().game().clone(), 9).viewing(),
+            2
+        );
     }
 
     #[test]

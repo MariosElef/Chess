@@ -1,17 +1,12 @@
-use chess_domain::{Game, Outcome, Side};
+use chess_domain::{Game, Outcome};
+
+use crate::history::side_name;
 
 /// The line under the title: whose turn it is, a check or draw offer, or how the game ended.
 pub fn status_text(game: &Game) -> String {
     match game.outcome() {
         Some(outcome) => outcome_text(outcome),
         None => turn_text(game),
-    }
-}
-
-pub fn side_name(side: Side) -> &'static str {
-    match side {
-        Side::White => "White",
-        Side::Black => "Black",
     }
 }
 

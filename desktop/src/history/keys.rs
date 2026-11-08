@@ -1,7 +1,7 @@
 use gpui_kit::{App, KeyBinding};
 
 gpui_kit::actions!(
-    play,
+    history,
     [
         /// ←
         PreviousPosition,
@@ -14,8 +14,8 @@ gpui_kit::actions!(
     ]
 );
 
-/// The key context the Play page declares, so the arrows only move through a game while it is open.
-pub const CONTEXT: &str = "PlayPage";
+/// The key context every page with a game history declares, so the arrows move through that game.
+pub const CONTEXT: &str = "GameHistory";
 
 /// The arrow keys Lichess uses to move through a game.
 pub fn bind_keys(cx: &mut App) {

@@ -1,4 +1,4 @@
-use chess_domain::Position;
+use chess_domain::{Position, Side};
 use gpui_kit::{
     component::{
         ActiveTheme as _, clipboard::Clipboard, description_list::DescriptionList, h_flex,
@@ -6,8 +6,6 @@ use gpui_kit::{
     },
     *,
 };
-
-use super::status::side_name;
 
 /// The current position beside the board: its FEN to copy, and what each part of it means.
 #[derive(IntoElement)]
@@ -78,6 +76,13 @@ fn en_passant_value(position: &Position) -> String {
 /// Counted toward the fifty-move rule, a draw at 100.
 fn halfmove_value(position: &Position) -> String {
     format!("{} / 100", position.counters().halfmove_clock)
+}
+
+pub fn side_name(side: Side) -> &'static str {
+    match side {
+        Side::White => "White",
+        Side::Black => "Black",
+    }
 }
 
 #[cfg(test)]

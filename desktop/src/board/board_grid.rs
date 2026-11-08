@@ -28,6 +28,7 @@ pub struct BoardGrid {
     promotion: Option<PromotionPrompt>,
     marks: Vec<Square>,
     arrows: Vec<(Square, Square)>,
+    engine_arrow: Option<(Square, Square)>,
     on_square_click: Option<OnSquareClick>,
     on_piece_drop: Option<OnPieceDrop>,
     right_button: Option<RightButton>,
@@ -46,6 +47,7 @@ impl BoardGrid {
             promotion: None,
             marks: Vec::new(),
             arrows: Vec::new(),
+            engine_arrow: None,
             on_square_click: None,
             on_piece_drop: None,
             right_button: None,
@@ -61,6 +63,12 @@ impl BoardGrid {
     /// Arrows the player drew, from one square to another.
     pub fn arrows(mut self, arrows: Vec<(Square, Square)>) -> Self {
         self.arrows = arrows;
+        self
+    }
+
+    /// The engine's best move, drawn in its own colour under the player's arrows.
+    pub fn engine_arrow(mut self, arrow: Option<(Square, Square)>) -> Self {
+        self.engine_arrow = arrow;
         self
     }
 
@@ -173,17 +181,23 @@ impl BoardGrid {
 
     /// The arrows, painted over the squares without catching any clicks.
     fn arrow_layer(&self, colors: BoardColors) -> Canvas<()> {
-        let arrows: Vec<(Cell, Cell)> = self
-            .arrows
-            .iter()
-            .map(|&(from, to)| (self.cell(from), self.cell(to)))
-            .collect();
+        let engine: Vec<(Cell, Cell)> = self.cells(self.engine_arrow.iter());
+        let player: Vec<(Cell, Cell)> = self.cells(self.arrows.iter());
         canvas(
             |_, _, _| (),
-            move |bounds, (), window, _| paint_arrows(bounds, &arrows, colors.arrow, window),
+            move |bounds, (), window, _| {
+                paint_arrows(bounds, &engine, colors.engine_arrow, window);
+                paint_arrows(bounds, &player, colors.arrow, window);
+            },
         )
         .absolute()
         .inset_0()
+    }
+
+    fn cells<'a>(&self, arrows: impl Iterator<Item = &'a (Square, Square)>) -> Vec<(Cell, Cell)> {
+        arrows
+            .map(|&(from, to)| (self.cell(from), self.cell(to)))
+            .collect()
     }
 
     /// Where a square is drawn: its column from the left and row from the top.

@@ -42,7 +42,7 @@ impl RenderOnce for NavSidebar {
 }
 
 impl NavSidebar {
-    fn nav_items(&self) -> [SidebarMenuItem; 2] {
+    fn nav_items(&self) -> [SidebarMenuItem; 3] {
         Page::NAV.map(|page| {
             let on_select = Rc::clone(&self.on_select);
             SidebarMenuItem::new(page.label())

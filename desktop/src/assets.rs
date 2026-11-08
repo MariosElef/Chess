@@ -16,7 +16,8 @@ icon_assets!(
         ChevronsRight,
         Flag,
         Handshake,
-        ArrowUpDown
+        ArrowUpDown,
+        Microscope
     ]
 );
 
