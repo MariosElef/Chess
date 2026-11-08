@@ -247,3 +247,30 @@ async fn an_online_game_has_its_own_chat_for_the_two_players(db: Db) {
         "a game's chat is with the game, not in the list"
     );
 }
+
+#[sqlx::test]
+async fn both_players_of_a_game_can_close_their_accounts(db: Db) {
+    let server = server(db);
+    let ann = account(&server, "ann").await;
+    let bob = account(&server, "bob").await;
+    let mut ann_socket = connect(&server, &ann.0).await;
+    let mut bob_socket = connect(&server, &bob.0).await;
+    for socket in [&mut ann_socket, &mut bob_socket] {
+        socket
+            .send_json(
+                &json!({ "type": "seek", "initial_s": 180, "increment_s": 0, "rated": false }),
+            )
+            .await;
+    }
+    let game = next(&mut ann_socket, "game").await["game"].clone();
+    assert!(game["chat_id"].is_string(), "the game has its chat");
+    // The game's chat empties as each leaves; its game still points at it, so it stays.
+    for (token, _) in [&ann, &bob] {
+        server
+            .delete("/api/users/me")
+            .authorization_bearer(token)
+            .json(&json!({ "password": "correct horse" }))
+            .await
+            .assert_status(StatusCode::NO_CONTENT);
+    }
+}

@@ -7,7 +7,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::enums::play::PlayMode;
+use crate::{components::panel::SidePanel, enums::play::PlayMode};
 
 type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
 
@@ -45,15 +45,9 @@ impl RenderOnce for PlayPanel {
             .into_iter()
             .map(|mode| self.tab(mode, cx))
             .collect();
-        v_flex()
-            .w(px(420.))
-            .h_full()
-            .flex_shrink_0()
-            .rounded(cx.theme().radius)
-            .overflow_hidden()
-            .bg(cx.theme().group_box)
-            .child(h_flex().w_full().children(tabs))
-            .child(v_flex().px_5().py_3().gap_3().children(self.content))
+        SidePanel::new()
+            .header(h_flex().w_full().children(tabs))
+            .children(self.content)
     }
 }
 
@@ -93,16 +87,4 @@ fn mode_icon(mode: PlayMode) -> IconName {
         PlayMode::Bots => IconName::Bot,
         PlayMode::Local => IconName::Users,
     }
-}
-
-/// The page before a game: the board between its two bars on the left, the panel on the right.
-pub fn lobby(board_column: Div, panel: PlayPanel) -> Div {
-    h_flex()
-        .size_full()
-        .items_start()
-        .justify_center()
-        .gap_6()
-        .p_4()
-        .child(board_column)
-        .child(div().h_full().child(panel))
 }

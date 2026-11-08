@@ -9,7 +9,7 @@ use crate::{
     errors::AppError,
     extract::{Body, SignedIn},
     models::{
-        account::{CreateUserModel, GetStatsModel, GetUserModel},
+        account::{CloseAccountModel, CreateUserModel, GetStatsModel, GetUserModel},
         message::CreatedModel,
     },
     state::AppState,
@@ -18,7 +18,7 @@ use crate::{
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create))
-        .route("/me", get(me))
+        .route("/me", get(me).delete(close))
         .route("/me/stats", get(stats))
 }
 
@@ -49,4 +49,14 @@ async fn stats(
     signed_in: SignedIn,
 ) -> Result<Json<GetStatsModel>, AppError> {
     Ok(Json(state.stats.of(signed_in.user_id).await?))
+}
+
+/// Closes the signed-in account, once its password is typed again.
+async fn close(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Body(body): Body<CloseAccountModel>,
+) -> Result<StatusCode, AppError> {
+    state.users.close(signed_in.user_id, body.password).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

@@ -11,7 +11,9 @@ use crate::{
         account::{Session, SignIn, SignUp, Stats, User},
         chat::{ChatMessage, Conversation},
         play::LiveEvent,
-        puzzles::{AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, RatingRange, RushRecord},
+        puzzles::{
+            AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, PuzzleText, RatingRange, RushRecord,
+        },
         server::{Problem, ServerError},
         social::{FoundUser, Friends},
     },
@@ -92,8 +94,8 @@ impl ServerClient {
         );
         let request = self.http.client().get(self.url(&path)).bearer_auth(token);
         self.http.run(async move {
-            let wire: WirePuzzle = read_json(send(request).await?).await?;
-            wire.into_puzzle()
+            let text: PuzzleText = read_json(send(request).await?).await?;
+            text.read().map_err(ServerError::Unexpected)
         })
     }
 
@@ -134,7 +136,7 @@ impl ServerClient {
             .run(async move { read_json(send(request).await?).await })
     }
 
-    /// The puzzle rating and best rushes, for the Puzzles menu.
+    /// The puzzle rating, the best rushes ever and today, and the battle summary.
     pub fn puzzle_summary(
         &self,
         token: &str,
@@ -352,6 +354,23 @@ impl ServerClient {
         LiveSocket::open(&self.http, url, token.to_owned())
     }
 
+    /// Closes the signed-in account, with its password typed again.
+    pub fn close_account(
+        &self,
+        token: &str,
+        password: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let body = serde_json::json!({ "password": password });
+        let request = self
+            .http
+            .client()
+            .delete(self.url("/api/users/me"))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
     pub fn sign_out(&self, token: &str) -> impl Future<Output = Result<(), ServerError>> + use<> {
         let request = self
             .http
@@ -384,48 +403,6 @@ impl ServerClient {
 #[derive(Deserialize)]
 struct AttemptAnswer {
     rating: Option<PuzzleRating>,
-}
-
-/// A puzzle as the server sends it: the position and moves still as text.
-#[derive(Deserialize)]
-struct WirePuzzle {
-    id: String,
-    rating: u32,
-    plays: u32,
-    themes: Vec<String>,
-    fen: String,
-    last_move: Option<String>,
-    solution: Vec<String>,
-}
-
-impl WirePuzzle {
-    /// The position and moves read; a puzzle that does not parse is one this app cannot use.
-    fn into_puzzle(self) -> Result<Puzzle, ServerError> {
-        let unreadable =
-            |what: &str| ServerError::Unexpected(format!("puzzle {}: bad {what}", self.id));
-        let position = self.fen.parse().map_err(|_| unreadable("FEN"))?;
-        let last_move = self
-            .last_move
-            .as_deref()
-            .map(str::parse)
-            .transpose()
-            .map_err(|_| unreadable("last move"))?;
-        let solution = self
-            .solution
-            .iter()
-            .map(|mv| mv.parse())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| unreadable("solution"))?;
-        Ok(Puzzle {
-            id: self.id.clone(),
-            rating: self.rating,
-            plays: self.plays,
-            themes: self.themes.clone(),
-            position,
-            last_move,
-            solution,
-        })
-    }
 }
 
 /// Sends the request: a success, the server's problem, or why there was no answer.

@@ -1,23 +1,33 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    component::{
-        button::{Button, ButtonVariants},
-        h_flex,
-        label::Label,
-        slider::{SliderEvent, SliderState, SliderValue},
-        v_flex,
-    },
+    component::slider::{SliderEvent, SliderState, SliderValue},
     *,
 };
 
-use super::{practice_view::PracticeView, puzzle_request::TokenSource, rush_view::RushView};
+use super::{
+    battle_view::{BattleBegan, BattleEnded, BattleView},
+    practice_view::PracticeView,
+    puzzle_request::TokenSource,
+    rush_view::{RushSaved, RushView},
+};
 use crate::{
     clients::server::ServerClient,
-    components::puzzles::PuzzleMenu,
+    components::{
+        board::{BoardColumn, board_page},
+        panel::SidePanel,
+        puzzles::{PuzzleMenu, RushMenu},
+    },
     enums::puzzles::RushKind,
-    models::puzzles::{PuzzleSummary, RatingRange},
+    models::{
+        board::ShownPosition,
+        puzzles::{PuzzleSummary, RatingRange},
+    },
     services::puzzles::rating_line,
+    views::{
+        board::BoardView,
+        live::{LiveConnection, SessionSource},
+    },
 };
 
 /// The difficulty slider moves in steps of this many rating points.
@@ -28,11 +38,15 @@ const RANGE_STEP: f32 = 50.;
 enum Stage {
     Menu,
     Practice,
+    /// Puzzle Rush's panel: its scores and kinds, before a rush starts.
+    RushMenu,
     Rush,
+    /// Puzzle Battle's panel, or a battle being played.
+    Battle,
 }
 
-/// The Puzzles page: a menu with the puzzle rating, then Practice at a chosen difficulty or
-/// Puzzle Rush.
+/// The Puzzles page: a menu with the puzzle rating, then Practice at a chosen difficulty,
+/// Puzzle Rush or Puzzle Battle.
 pub struct PuzzlesView {
     stage: Stage,
     client: ServerClient,
@@ -44,14 +58,55 @@ pub struct PuzzlesView {
     practice: Entity<PracticeView>,
     rush: Entity<RushView>,
     _slider_changes: Subscription,
+    /// The board beside the menu, waiting on the starting position.
+    board: Entity<BoardView>,
+    /// The kind of Puzzle Rush picked in its panel.
+    rush_pick: RushKind,
+    /// Puzzle Battle: its panel, and the battle itself.
+    battle: Entity<BattleView>,
+    _battles: Subscription,
+    /// Its invitations change the rail's count, so the page redraws when their number does.
+    _battle_changes: Subscription,
+    invitations_seen: usize,
+    /// A battle over moves the wins and rating its panel shows.
+    _battle_ends: Subscription,
+    /// A rush's score saved moves the bests its panel shows.
+    _rush_saves: Subscription,
 }
 
 impl PuzzlesView {
     pub fn new(
         client: ServerClient,
         token: impl Fn(&App) -> Option<String> + 'static,
+        (live, session): (Entity<LiveConnection>, SessionSource),
         cx: &mut Context<Self>,
     ) -> Self {
+        let battle = cx.new(|cx| BattleView::new(live, session, cx));
+        let _battles = cx.subscribe(&battle, |view, _, BattleBegan, cx| {
+            // A rush going on elsewhere on the page ends, so its score is the one it had, and a
+            // practice puzzle stops redrawing its timer.
+            view.rush.update(cx, |rush, cx| rush.leave(cx));
+            view.practice.update(cx, |practice, cx| practice.leave(cx));
+            view.stage = Stage::Battle;
+            cx.notify();
+        });
+        // The battle redraws itself often while it runs; the page only for its invitations.
+        let _battle_changes = cx.observe(&battle, |view: &mut Self, battle, cx| {
+            let invitations = battle.read(cx).invitations();
+            if invitations != view.invitations_seen {
+                view.invitations_seen = invitations;
+                cx.notify();
+            }
+        });
+        let _battle_ends = cx.subscribe(&battle, |view, _, BattleEnded, cx| {
+            view.refresh_summary(cx);
+        });
+        let from_battle = cx.weak_entity();
+        battle.update(cx, |battle, _| {
+            battle.on_back(move |_, cx| {
+                let _ = from_battle.update(cx, |view, cx| view.back_to_menu(cx));
+            });
+        });
         let token: TokenSource = Rc::new(token);
         let range = RatingRange::DEFAULT;
         let slider = cx.new(|_| new_slider(range));
@@ -67,6 +122,19 @@ impl PuzzlesView {
             )
         });
         let rush = cx.new(|cx| RushView::new(client.clone(), Rc::clone(&token), cx));
+        let _rush_saves = cx.subscribe(&rush, |view, _, RushSaved, cx| view.refresh_summary(cx));
+        let board = cx.new(|cx| BoardView::new(|_| Some(ShownPosition::waiting()), cx));
+        let (from_practice, from_rush) = (cx.weak_entity(), cx.weak_entity());
+        practice.update(cx, |practice, _| {
+            practice.on_back(move |_, cx| {
+                let _ = from_practice.update(cx, |view, cx| view.back_to_menu(cx));
+            });
+        });
+        rush.update(cx, |rush, _| {
+            rush.on_back(move |_, cx| {
+                let _ = from_rush.update(cx, |view, cx| view.back_to_rush_menu(cx));
+            });
+        });
         Self {
             stage: Stage::Menu,
             client,
@@ -77,14 +145,32 @@ impl PuzzlesView {
             practice,
             rush,
             _slider_changes,
+            board,
+            rush_pick: RushKind::ThreeMinutes,
+            battle,
+            _battles,
+            _battle_changes,
+            invitations_seen: 0,
+            _battle_ends,
+            _rush_saves,
         }
     }
 
     /// The page came on screen: the menu's rating and best scores are brought up to date.
     pub fn opened(&mut self, cx: &mut Context<Self>) {
-        if self.stage == Stage::Menu {
-            self.refresh_summary(cx);
+        match self.stage {
+            Stage::Menu | Stage::RushMenu => self.refresh_summary(cx),
+            Stage::Battle => {
+                self.refresh_summary(cx);
+                self.battle.update(cx, |battle, cx| battle.opened(cx));
+            }
+            Stage::Practice | Stage::Rush => {}
         }
+    }
+
+    /// Battle invitations waiting for the player, for the rail's count.
+    pub fn invitations(&self, cx: &App) -> usize {
+        self.battle.read(cx).invitations()
     }
 
     fn refresh_summary(&mut self, cx: &mut Context<Self>) {
@@ -97,6 +183,8 @@ impl PuzzlesView {
                 // The page outlives the request unless the window is closing.
                 let _ = view.update(cx, |view, cx| {
                     view.summary = summary;
+                    view.battle
+                        .update(cx, |battle, cx| battle.set_summary(summary.battle, cx));
                     cx.notify();
                 });
             }
@@ -118,9 +206,20 @@ impl PuzzlesView {
         cx.notify();
     }
 
-    /// Back to the menu; a rush still going ends there and its score counts.
+    /// From a rush back to its panel, with its scores fetched again; a rush going on ends.
+    fn back_to_rush_menu(&mut self, cx: &mut Context<Self>) {
+        self.rush.update(cx, |rush, cx| rush.leave(cx));
+        self.stage = Stage::RushMenu;
+        self.refresh_summary(cx);
+        cx.notify();
+    }
+
+    /// Back to the menu: a rush still going ends and its score counts, Practice's clock stops,
+    /// and a search for a battle opponent is called off.
     fn back_to_menu(&mut self, cx: &mut Context<Self>) {
         self.rush.update(cx, |rush, cx| rush.leave(cx));
+        self.practice.update(cx, |practice, cx| practice.leave(cx));
+        self.battle.update(cx, |battle, cx| battle.closing(cx));
         self.stage = Stage::Menu;
         self.refresh_summary(cx);
         cx.notify();
@@ -140,55 +239,73 @@ impl PuzzlesView {
     }
 
     fn menu(&self, cx: &mut Context<Self>) -> PuzzleMenu {
-        let (practice_view, rush_view) = (cx.entity().downgrade(), cx.entity().downgrade());
+        let page = cx.entity().downgrade();
+        let (practice_view, rush_view, battle_view) = (page.clone(), page.clone(), page);
         PuzzleMenu::new(
             rating_line(&self.summary),
             (self.slider.clone(), self.range),
-            self.summary.best_rush,
         )
         .on_practice(move |_, cx| {
             let _ = practice_view.update(cx, |view, cx| view.open_practice(cx));
         })
-        .on_rush(move |kind, _, cx| {
-            let _ = rush_view.update(cx, |view, cx| view.open_rush(kind, cx));
+        .on_rush(move |_, cx| {
+            let _ = rush_view.update(cx, |view, cx| {
+                view.stage = Stage::RushMenu;
+                cx.notify();
+            });
         })
+        .on_battle(move |_, cx| {
+            let _ = battle_view.update(cx, |view, cx| view.open_battle(cx));
+        })
+    }
+
+    fn open_battle(&mut self, cx: &mut Context<Self>) {
+        self.stage = Stage::Battle;
+        self.battle.update(cx, |battle, cx| battle.opened(cx));
+        cx.notify();
+    }
+
+    fn rush_menu(&self, cx: &mut Context<Self>) -> RushMenu {
+        let page = cx.entity().downgrade();
+        let (back, pick, play) = (page.clone(), page.clone(), page);
+        RushMenu::new(
+            self.rush_pick,
+            (self.summary.best_rush, self.summary.best_today),
+            move |_, cx| {
+                let _ = back.update(cx, |view, cx| view.back_to_menu(cx));
+            },
+            move |kind, _, cx| {
+                let _ = pick.update(cx, |view, cx| {
+                    view.rush_pick = kind;
+                    cx.notify();
+                });
+            },
+            move |_, cx| {
+                let _ = play.update(cx, |view, cx| view.open_rush(view.rush_pick, cx));
+            },
+        )
     }
 
     fn content(&self, cx: &mut Context<Self>) -> AnyElement {
         match self.stage {
-            Stage::Menu => div()
-                .flex()
-                .justify_center()
-                .child(self.menu(cx))
-                .into_any_element(),
+            Stage::Menu => {
+                let board = BoardColumn::new(self.board.clone());
+                board_page(board, SidePanel::new().child(self.menu(cx))).into_any_element()
+            }
+            Stage::RushMenu => {
+                let board = BoardColumn::new(self.board.clone());
+                board_page(board, SidePanel::new().child(self.rush_menu(cx))).into_any_element()
+            }
             Stage::Practice => self.practice.clone().into_any_element(),
             Stage::Rush => self.rush.clone().into_any_element(),
+            Stage::Battle => self.battle.clone().into_any_element(),
         }
-    }
-
-    fn header(&self, cx: &mut Context<Self>) -> Div {
-        let back = (self.stage != Stage::Menu).then(|| {
-            Button::new("puzzles-menu")
-                .ghost()
-                .label("← Puzzles")
-                .on_click(cx.listener(|view, _, _, cx| view.back_to_menu(cx)))
-        });
-        h_flex()
-            .gap_4()
-            .items_center()
-            .child(Label::new("Puzzles").text_2xl())
-            .children(back)
     }
 }
 
 impl Render for PuzzlesView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .size_full()
-            .p_6()
-            .gap_4()
-            .child(self.header(cx))
-            .child(div().flex_1().min_h_0().child(self.content(cx)))
+        div().size_full().child(self.content(cx))
     }
 }
 
@@ -222,10 +339,16 @@ fn range_of(value: SliderValue) -> RatingRange {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{TestAppContext, VisualTestContext};
+    use std::rc::Rc;
+
+    use gpui_kit::{AppContext as _, TestAppContext, VisualTestContext};
 
     use super::{PuzzlesView, Stage};
-    use crate::testing::{puzzle_server, wait_until};
+    use crate::{
+        enums::puzzles::RushKind,
+        testing::{click, puzzle_server, wait_until},
+        views::live::{LiveConnection, SessionSource},
+    };
 
     fn stage(view: &gpui_kit::Entity<PuzzlesView>, cx: &mut VisualTestContext) -> Stage {
         view.update(cx, |view, _| view.stage)
@@ -236,7 +359,10 @@ mod tests {
         cx.executor().allow_parking();
         cx.update(gpui_kit::init);
         let (view, cx) = cx.add_window_view(|_, cx| {
-            PuzzlesView::new(puzzle_server(), |_| Some("abc".to_owned()), cx)
+            let client = puzzle_server();
+            let session: SessionSource = Rc::new(|_| None);
+            let live = cx.new(|_| LiveConnection::new(client.clone(), Rc::clone(&session)));
+            PuzzlesView::new(client, |_| Some("abc".to_owned()), (live, session), cx)
         });
         view.update(cx, |view, cx| view.opened(cx));
         wait_until(cx, |cx| {
@@ -246,7 +372,7 @@ mod tests {
         assert_eq!(best, Some(9));
         assert_eq!(stage(&view, cx), Stage::Menu);
 
-        view.update(cx, |view, cx| view.open_practice(cx));
+        click(cx, "start-practice");
         assert_eq!(stage(&view, cx), Stage::Practice);
         let shown = view.update(cx, |view, cx| view.practice.read(cx).player_rating());
         assert_eq!(
@@ -256,5 +382,15 @@ mod tests {
         );
         view.update(cx, |view, cx| view.back_to_menu(cx));
         assert_eq!(stage(&view, cx), Stage::Menu);
+
+        click(cx, "open-rush");
+        assert_eq!(stage(&view, cx), Stage::RushMenu);
+        click(cx, "rush-survival");
+        assert_eq!(
+            view.update(cx, |view, _| view.rush_pick),
+            RushKind::Survival
+        );
+        click(cx, "rush-play");
+        assert_eq!(stage(&view, cx), Stage::Rush);
     }
 }

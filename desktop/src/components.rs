@@ -3,6 +3,7 @@ pub mod account;
 pub mod analysis;
 pub mod board;
 pub mod history;
+pub mod panel;
 pub mod play;
 pub mod puzzles;
 pub mod settings;

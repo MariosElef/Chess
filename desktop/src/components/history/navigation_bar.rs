@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{
     assets::IconName,
     component::{
-        Disableable as _,
+        ActiveTheme as _, Disableable as _, Sizable as _,
         button::{Button, ButtonVariants},
         h_flex,
     },
@@ -50,13 +50,26 @@ impl NavigationBar {
 }
 
 impl RenderOnce for NavigationBar {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    /// Four large buttons sharing a strip the width of the panel.
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         h_flex()
-            .gap_2()
-            .child(self.button(NavStep::Start, !self.can_go_back))
-            .child(self.held(NavStep::Back, !self.can_go_back))
-            .child(self.held(NavStep::Forward, !self.can_go_forward))
-            .child(self.button(NavStep::Live, !self.can_go_forward))
+            .w_full()
+            .gap_1()
+            .p_1()
+            .rounded(px(8.))
+            .bg(cx.theme().muted)
+            .child(
+                div()
+                    .flex_1()
+                    .child(self.button(NavStep::Start, !self.can_go_back)),
+            )
+            .child(self.held(NavStep::Back, !self.can_go_back).flex_1())
+            .child(self.held(NavStep::Forward, !self.can_go_forward).flex_1())
+            .child(
+                div()
+                    .flex_1()
+                    .child(self.button(NavStep::Live, !self.can_go_forward)),
+            )
     }
 }
 
@@ -87,6 +100,8 @@ impl NavigationBar {
         let on_step = Rc::clone(&self.on_step);
         Button::new(step_id(step))
             .ghost()
+            .large()
+            .w_full()
             .icon(step_icon(step))
             .tooltip(step_tooltip(step))
             .disabled(disabled)

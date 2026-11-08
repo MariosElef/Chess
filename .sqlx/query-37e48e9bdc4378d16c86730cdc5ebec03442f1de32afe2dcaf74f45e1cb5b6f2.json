@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone with a request waiting to or from the player: their requests change once it closes.\nSELECT\n    CASE\n        WHEN friendships.user_a_id = $1 THEN friendships.user_b_id\n        ELSE friendships.user_a_id\n    END AS \"id!\"\nFROM social.friendships\nWHERE\n    (friendships.user_a_id = $1 OR friendships.user_b_id = $1)\n    AND friendships.status = 'pending'\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "37e48e9bdc4378d16c86730cdc5ebec03442f1de32afe2dcaf74f45e1cb5b6f2"
+}

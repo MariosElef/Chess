@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone who shares a chat with the player: they hear their chats changed once it closes.\nSELECT DISTINCT conversation_members.user_id\nFROM social.conversation_members\nWHERE\n    conversation_members.user_id <> $1\n    AND conversation_members.conversation_id IN (\n        SELECT conversation_members.conversation_id\n        FROM social.conversation_members\n        WHERE conversation_members.user_id = $1\n    )\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.conversation_members",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4d2c59138246bd293ab9ff4a55e1d99397b713d44ca311a183e861a17d05ce60"
+}

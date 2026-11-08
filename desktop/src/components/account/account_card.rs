@@ -149,6 +149,7 @@ pub struct SignedInCard {
     username: String,
     email: String,
     on_sign_out: OnClick,
+    on_delete: OnClick,
 }
 
 impl SignedInCard {
@@ -156,18 +157,20 @@ impl SignedInCard {
         username: String,
         email: String,
         on_sign_out: impl Fn(&mut Window, &mut App) + 'static,
+        on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             username,
             email,
             on_sign_out: Rc::new(on_sign_out),
+            on_delete: Rc::new(on_delete),
         }
     }
 }
 
 impl RenderOnce for SignedInCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let on_sign_out = self.on_sign_out;
+        let (on_sign_out, on_delete) = (self.on_sign_out, self.on_delete);
         card(cx)
             .child(
                 Label::new("Signed in")
@@ -186,6 +189,74 @@ impl RenderOnce for SignedInCard {
                     .w_full()
                     .label("Sign out")
                     .on_click(move |_, window, cx| on_sign_out(window, cx)),
+            )
+            .child(
+                Button::new("delete-account")
+                    .ghost()
+                    .w_full()
+                    .text_color(cx.theme().danger)
+                    .label("Delete account")
+                    .on_click(move |_, window, cx| on_delete(window, cx)),
+            )
+    }
+}
+
+/// Deleting the account, once the password is typed again: what goes, what stays for the
+/// other players, and the red button.
+#[derive(IntoElement)]
+pub struct CloseAccountCard {
+    password: FormField,
+    busy: bool,
+    on_confirm: OnClick,
+    on_cancel: OnClick,
+}
+
+impl CloseAccountCard {
+    pub fn new(
+        password: FormField,
+        busy: bool,
+        on_confirm: impl Fn(&mut Window, &mut App) + 'static,
+        on_cancel: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            password,
+            busy,
+            on_confirm: Rc::new(on_confirm),
+            on_cancel: Rc::new(on_cancel),
+        }
+    }
+}
+
+impl RenderOnce for CloseAccountCard {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let (on_confirm, on_cancel) = (self.on_confirm, self.on_cancel);
+        card(cx)
+            .child(Label::new("Delete your account?").text_xl())
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        "Your friends, chats, ratings and puzzle scores are deleted, and you \
+                         cannot sign in again. Your games stay for your opponents, under a \
+                         removed name.",
+                    ),
+            )
+            .child(self.password)
+            .child(
+                Button::new("confirm-delete-account")
+                    .danger()
+                    .w_full()
+                    .label("Delete my account")
+                    .loading(self.busy)
+                    .on_click(move |_, window, cx| on_confirm(window, cx)),
+            )
+            .child(
+                Button::new("cancel-delete-account")
+                    .ghost()
+                    .w_full()
+                    .label("Cancel")
+                    .on_click(move |_, window, cx| on_cancel(window, cx)),
             )
     }
 }

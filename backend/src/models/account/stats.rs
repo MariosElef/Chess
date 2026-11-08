@@ -32,6 +32,9 @@ pub struct PuzzleStatsModel {
     pub attempted: i64,
     pub solved: i64,
     pub best_rush: BestRushModel,
+    /// The Puzzle Battle rating, before the first rated battle `None`.
+    pub battle_rating: Option<i32>,
+    pub battle_provisional: bool,
 }
 
 /// A rating category with the player's rating in it, if they have one.

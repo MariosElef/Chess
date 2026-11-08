@@ -189,7 +189,11 @@ impl ChatsView {
                 | ServerMessage::Game { .. }
                 | ServerMessage::Error { .. }
                 | ServerMessage::FriendsChanged
-                | ServerMessage::Challenges { .. } => {}
+                | ServerMessage::Challenges { .. }
+                | ServerMessage::BattleSeeking
+                | ServerMessage::BattleSeekCancelled
+                | ServerMessage::Battle { .. }
+                | ServerMessage::BattleChallenges { .. } => {}
             },
         }
     }

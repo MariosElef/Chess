@@ -1,24 +1,21 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui_kit::{
-    component::{
-        ActiveTheme as _,
-        button::{Button, ButtonVariants},
-        h_flex,
-        label::Label,
-        v_flex,
-    },
+    assets::IconName,
+    component::{ActiveTheme as _, button::Button, h_flex, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
 
-use crate::{enums::puzzles::RushKind, models::puzzles::RushRecord};
+use super::status_card::status_card;
+use crate::{
+    components::panel::{StartButton, StatCard},
+    enums::puzzles::RushKind,
+    models::puzzles::RushRecord,
+    services::puzzles::STRIKES,
+};
 
-type OnAgain = Rc<dyn Fn(&mut Window, &mut App)>;
-type OnRetry = Rc<dyn Fn(&mut Window, &mut App)>;
-
-/// The mistakes a rush allows before it ends.
-const STRIKES: u32 = 3;
+type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// During a rush: the score, the clock and the strikes, and how the puzzle is going.
 #[derive(IntoElement)]
@@ -29,7 +26,7 @@ pub struct RushScore {
     status: String,
     status_good: bool,
     /// The next puzzle could not be fetched: why, and a way to ask again.
-    problem: Option<(String, OnRetry)>,
+    problem: Option<(String, OnClick)>,
 }
 
 impl RushScore {
@@ -54,7 +51,7 @@ impl RushScore {
         problem: Option<String>,
         on_retry: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
-        let on_retry: OnRetry = Rc::new(on_retry);
+        let on_retry: OnClick = Rc::new(on_retry);
         self.problem = problem.map(|problem| (problem, on_retry));
         self
     }
@@ -62,22 +59,31 @@ impl RushScore {
 
 impl RenderOnce for RushScore {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let status_color = if self.status_good {
-            cx.theme().success
-        } else {
-            cx.theme().foreground
-        };
-        panel(cx)
+        let theme = cx.theme();
+        let time = self
+            .time_left
+            .map_or_else(|| "∞".to_owned(), minutes_seconds);
+        panel()
             .child(
                 h_flex()
-                    .justify_between()
-                    .child(Label::new(self.score.to_string()).text_3xl())
-                    .when_some(self.time_left, |this, left| {
-                        this.child(Label::new(minutes_seconds(left)).text_xl())
-                    }),
+                    .gap_3()
+                    .child(StatCard::new(
+                        (IconName::Zap, theme.yellow),
+                        self.score.to_string(),
+                        "Score",
+                    ))
+                    .child(StatCard::new(
+                        (IconName::Timer, theme.green),
+                        time,
+                        "Time left",
+                    )),
             )
-            .child(strike_marks(self.strikes, cx))
-            .child(div().text_color(status_color).child(self.status))
+            .child(
+                h_flex()
+                    .justify_center()
+                    .child(strike_marks(self.strikes, cx)),
+            )
+            .child(status_card(&self.status, self.status_good, None, cx))
             .when_some(self.problem, |this, (problem, on_retry)| {
                 this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
                     .child(
@@ -98,7 +104,7 @@ pub struct RushResult {
     kind: RushKind,
     /// The server's best of this kind, once it has answered.
     record: Option<RushRecord>,
-    on_again: OnAgain,
+    on_again: OnClick,
 }
 
 impl RushResult {
@@ -120,36 +126,41 @@ impl RushResult {
 impl RenderOnce for RushResult {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let on_again = self.on_again;
-        panel(cx)
+        panel()
+            .items_center()
             .child(muted(&format!("{} rush over", self.kind.label()), cx))
-            .child(Label::new(format!("Score {}", self.score)).text_3xl())
+            .child(
+                div()
+                    .text_size(px(48.))
+                    .font_weight(FontWeight::EXTRA_BOLD)
+                    .child(self.score.to_string()),
+            )
             .when_some(self.record, |this, record| {
                 let line = if record.new_best {
                     "New best!".to_owned()
                 } else {
                     format!("Best {}", record.best)
                 };
-                this.child(div().text_color(cx.theme().success).child(line))
+                this.child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().success)
+                        .child(line),
+                )
             })
-            .child(
-                Button::new("rush-again")
-                    .primary()
-                    .w_full()
-                    .label("Play again")
-                    .on_click(move |_, window, cx| on_again(window, cx)),
-            )
+            .child(div().h_4())
+            .child(StartButton::new(
+                "rush-again",
+                "Play again",
+                move |window, cx| {
+                    on_again(window, cx);
+                },
+            ))
     }
 }
 
-fn panel(cx: &App) -> Div {
-    v_flex()
-        .w_80()
-        .flex_shrink_0()
-        .gap_4()
-        .p_4()
-        .rounded(cx.theme().radius)
-        .border_1()
-        .border_color(cx.theme().border)
+fn panel() -> Div {
+    v_flex().w_full().gap_4()
 }
 
 fn muted(text: &str, cx: &App) -> Div {
@@ -163,7 +174,8 @@ fn muted(text: &str, cx: &App) -> Div {
 fn strike_marks(strikes: u32, cx: &App) -> Div {
     h_flex()
         .gap_2()
-        .text_xl()
+        .text_2xl()
+        .font_weight(FontWeight::BOLD)
         .children((0..STRIKES).map(|index| {
             let color = if index < strikes {
                 cx.theme().danger

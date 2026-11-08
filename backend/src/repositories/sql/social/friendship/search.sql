@@ -12,6 +12,7 @@ LEFT JOIN social.friendships
         AND friendships.user_b_id = greatest($1, users.id)
 WHERE
     users.id <> $1
+    AND users.deleted_at IS NULL
     AND lower(users.username) LIKE '%' || $2 || '%' ESCAPE '\'
 ORDER BY lower(users.username) LIKE $2 || '%' DESC, lower(users.username)
 LIMIT $3

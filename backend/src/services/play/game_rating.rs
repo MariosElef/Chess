@@ -13,7 +13,20 @@ use crate::{
 pub async fn rate_game(
     db: &Db,
     game_id: Uuid,
-    (white, black): (Uuid, Uuid),
+    players: ((Uuid, Rating), (Uuid, Rating)),
+    category: &str,
+    winner: Option<Side>,
+) -> Result<RatingChanges, AppError> {
+    rate_pair(db, RatingSource::Game(game_id), players, category, winner).await
+}
+
+/// Moves two players' ratings in `category` after a contest between them, each against the
+/// other's rating from before it; `winner` names a side, white being the first player. Each
+/// player comes with their rating when the contest began.
+pub async fn rate_pair(
+    db: &Db,
+    source: RatingSource,
+    ((white, white_at_start), (black, black_at_start)): ((Uuid, Rating), (Uuid, Rating)),
     category: &str,
     winner: Option<Side>,
 ) -> Result<RatingChanges, AppError> {
@@ -24,6 +37,8 @@ pub async fn rate_game(
     } else {
         (black, white)
     };
+    // The players before their ratings, the order closing an account takes them in.
+    rating::lock_players(&mut tx, &[first, second]).await?;
     let first_rating = rating::get_for_update(&mut tx, first, category).await?;
     let second_rating = rating::get_for_update(&mut tx, second, category).await?;
     let (white_row, black_row) = if white < black {
@@ -31,8 +46,10 @@ pub async fn rate_game(
     } else {
         (second_rating, first_rating)
     };
-    let white_before = white_row.map_or(Rating::NEW, from_row);
-    let black_before = black_row.map_or(Rating::NEW, from_row);
+    // A rating gone since the start belongs to an account that closed: the other player is
+    // still rated against what it was.
+    let white_before = white_row.map_or(white_at_start, from_row);
+    let black_before = black_row.map_or(black_at_start, from_row);
     let (white_score, black_score) = scores(winner);
     let white_after = white_before.after(&[RatedResult {
         opponent: black_before,
@@ -42,7 +59,6 @@ pub async fn rate_game(
         opponent: white_before,
         score: black_score,
     }]);
-    let source = RatingSource::Game(game_id);
     rating::record_result(&mut tx, white, category, source, to_row(white_after)).await?;
     rating::record_result(&mut tx, black, category, source, to_row(black_after)).await?;
     tx.commit().await?;

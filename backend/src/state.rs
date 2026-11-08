@@ -4,6 +4,7 @@ use crate::{
     repositories::{
         database::{self, Db},
         play::game,
+        puzzles::battle,
     },
     services::{
         account::{SessionService, StatsService, UserService},
@@ -42,6 +43,10 @@ impl AppState {
                 "games left running by the last server closed as aborted"
             );
         }
+        let closed = battle::close_unfinished(&db).await?;
+        if closed > 0 {
+            tracing::info!(closed, "battles left running by the last server closed");
+        }
         let lichess = LichessClient::new(&config.lichess_url)?;
         Ok(Self::assemble(db, lichess))
     }
@@ -50,7 +55,7 @@ impl AppState {
     pub fn assemble(db: Db, lichess: LichessClient) -> Self {
         let play = PlayHub::new(db.clone());
         Self {
-            users: UserService::new(db.clone()),
+            users: UserService::new(db.clone(), play.clone()),
             stats: StatsService::new(db.clone()),
             sessions: SessionService::new(db.clone(), play.clone()),
             friends: FriendService::new(db.clone(), play.clone()),

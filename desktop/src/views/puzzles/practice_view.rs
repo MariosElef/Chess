@@ -1,7 +1,6 @@
-use gpui_kit::{
-    component::{h_flex, slider::SliderState, v_flex},
-    *,
-};
+use std::{rc::Rc, time::Duration};
+
+use gpui_kit::{component::slider::SliderState, *};
 
 use super::{
     puzzle_request::{TokenSource, report_attempt, request_puzzle},
@@ -9,14 +8,22 @@ use super::{
 };
 use crate::{
     clients::server::ServerClient,
-    components::puzzles::{PuzzlePanel, RangePicker},
-    enums::puzzles::PuzzleVerdict,
+    components::{
+        board::{BoardColumn, board_page},
+        panel::{OnBack, SidePanel},
+        puzzles::{PuzzlePanel, RangePicker},
+    },
+    enums::puzzles::{PuzzleState, PuzzleVerdict},
     models::{
         puzzles::{AttemptReport, Puzzle, PuzzleRating, RatingRange},
         server::ServerError,
     },
     services::{puzzles::rating_with_change, server::error_message},
+    views::ticker::start_ticker,
 };
+
+/// How often the puzzle's timer is redrawn.
+const TICK: Duration = Duration::from_millis(500);
 
 /// One puzzle at a time, from the difficulty range the player picks; a wrong move means
 /// trying again. The first try at each puzzle counts for the puzzle rating.
@@ -34,6 +41,12 @@ pub struct PracticeView {
     /// This puzzle's first try has been sent.
     reported: bool,
     _verdicts: Subscription,
+    /// Back to the menu, from the top of the side column.
+    on_back: OnBack,
+    /// Redraws the puzzle's timer while it is being solved; it stops when the puzzle is.
+    _ticker: Option<Task<()>>,
+    /// The next puzzle on its way; dropped when Practice is left.
+    _request: Option<Task<()>>,
 }
 
 impl PracticeView {
@@ -58,6 +71,9 @@ impl PracticeView {
             player_rating: None,
             reported: false,
             _verdicts,
+            on_back: Rc::new(|_, _| {}),
+            _ticker: None,
+            _request: None,
         }
     }
 
@@ -102,12 +118,10 @@ impl PracticeView {
             Ok(request) => {
                 self.loading = true;
                 self.problem = None;
-                cx.spawn(async move |view, cx| {
+                self._request = Some(cx.spawn(async move |view, cx| {
                     let result = request.await;
-                    // The page outlives the request unless the window is closing.
                     let _ = view.update(cx, |view, cx| view.loaded(result, cx));
-                })
-                .detach();
+                }));
             }
             Err(reason) => self.problem = Some(reason.to_owned()),
         }
@@ -120,6 +134,7 @@ impl PracticeView {
             Ok(puzzle) => {
                 self.reported = false;
                 self.solver.update(cx, |solver, cx| solver.load(puzzle, cx));
+                self._ticker = Some(start_ticker(TICK, cx, PracticeView::tick));
             }
             Err(error) => self.problem = Some(error_message(&error)),
         }
@@ -166,44 +181,71 @@ impl PracticeView {
         .detach();
     }
 
+    /// Redraws the timer while the puzzle is being solved; false once it is.
+    fn tick(&mut self, cx: &mut Context<Self>) -> bool {
+        let solving = self
+            .solver
+            .read(cx)
+            .run()
+            .is_some_and(|run| run.state() != PuzzleState::Solved);
+        if solving {
+            cx.notify();
+        }
+        solving
+    }
+
     fn panel(&self, cx: &mut Context<Self>) -> PuzzlePanel {
         let solver = self.solver.read(cx);
-        let (status, good) = match solver.status() {
+        let status = match solver.status() {
             Some(status) => status,
             None if self.loading => ("Finding a puzzle…".to_owned(), false),
             None => (String::new(), false),
         };
-        let puzzle = solver.run().map(|run| run.puzzle());
-        let rating = puzzle.map(|puzzle| puzzle.rating);
-        let themes = puzzle
-            .map(|puzzle| puzzle.themes.clone())
-            .unwrap_or_default();
+        let run = solver.run();
+        let puzzle = run.map(|run| run.puzzle());
+        let elapsed = run.map(|_| Duration::from_millis(solver.elapsed_ms().unsigned_abs().into()));
         let view = cx.entity().downgrade();
-        PuzzlePanel::new(rating, status, good, themes)
+        let on_back = Rc::clone(&self.on_back);
+        PuzzlePanel::new(status, run.map(|run| run.solver()))
+            .puzzle(
+                puzzle.map(|puzzle| puzzle.rating),
+                puzzle
+                    .map(|puzzle| puzzle.themes.clone())
+                    .unwrap_or_default(),
+            )
+            .elapsed(elapsed)
             .problem(self.problem.clone())
             .player_rating(self.player_rating.map(rating_with_change))
+            .difficulty(RangePicker::new(self.slider.clone(), self.range))
             .loading(self.loading)
             .on_next(move |_, cx| {
                 let _ = view.update(cx, |view, cx| view.next_puzzle(cx));
             })
+            .on_back(move |window, cx| on_back(window, cx))
+    }
+}
+
+impl PracticeView {
+    /// Practice is left: its timer stops ticking, a puzzle still on its way is not wanted, and
+    /// the one on the board goes, so coming back finds a new one rather than a stale one.
+    pub fn leave(&mut self, cx: &mut Context<Self>) {
+        self.solver.update(cx, |solver, cx| solver.clear(cx));
+        self._ticker = None;
+        self._request = None;
+        self.loading = false;
+    }
+
+    pub fn on_back(&mut self, on_back: impl Fn(&mut Window, &mut App) + 'static) {
+        self.on_back = Rc::new(on_back);
     }
 }
 
 impl Render for PracticeView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .size_full()
-            .items_start()
-            .justify_center()
-            .gap_6()
-            .child(div().h(relative(0.9)).child(self.solver.clone()))
-            .child(
-                v_flex()
-                    .w_80()
-                    .gap_4()
-                    .child(RangePicker::new(self.slider.clone(), self.range))
-                    .child(self.panel(cx)),
-            )
+        board_page(
+            BoardColumn::new(self.solver.clone()),
+            SidePanel::new().child(self.panel(cx)),
+        )
     }
 }
 

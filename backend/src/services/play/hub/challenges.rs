@@ -89,7 +89,7 @@ impl PlayHub {
     }
 
     /// The friend to challenge, or why they cannot be.
-    async fn challengeable(&self, player: &Player, to: Uuid) -> Result<Player, String> {
+    pub(super) async fn challengeable(&self, player: &Player, to: Uuid) -> Result<Player, String> {
         if to == player.id {
             return Err("You cannot challenge yourself".to_owned());
         }
@@ -249,7 +249,7 @@ impl PlayHub {
     }
 }
 
-fn user_ref(player: &Player) -> UserRef {
+pub(super) fn user_ref(player: &Player) -> UserRef {
     UserRef {
         id: player.id,
         username: player.username.clone(),

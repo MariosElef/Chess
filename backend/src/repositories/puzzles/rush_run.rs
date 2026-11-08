@@ -47,3 +47,17 @@ pub async fn bests(
     .fetch_all(db)
     .await
 }
+
+/// The player's best score of each kind played today, since midnight on the server.
+pub async fn bests_today(
+    db: impl PgExecutor<'_>,
+    user_id: Uuid,
+) -> Result<Vec<BestRushRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        BestRushRow,
+        "src/repositories/sql/puzzles/rush_run/bests_today.sql",
+        user_id
+    )
+    .fetch_all(db)
+    .await
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO puzzle.battles (id, first_id, second_id, rated)\nVALUES ($1, $2, $3, $4)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "192e593b5a9ae380b1376eb1e463e3812a03acce0f8b9f66e86ebcf8604e2fb3"
+}

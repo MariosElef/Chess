@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use chess_domain::{Move, Position};
+use chess_domain::Move;
 use gpui_kit::*;
 
 use crate::{
@@ -30,6 +30,8 @@ pub struct PuzzleSolver {
     last_verdict: Option<PuzzleVerdict>,
     /// When the puzzle appeared, for how long it took.
     loaded_at: Option<Instant>,
+    /// When it was solved: the time taken stops there.
+    solved_at: Option<Instant>,
     board: Entity<BoardView>,
     _board_moves: Subscription,
     /// The opponent's answer on its way; dropped with the puzzle.
@@ -58,6 +60,7 @@ impl PuzzleSolver {
             run: None,
             last_verdict: None,
             loaded_at: None,
+            solved_at: None,
             board,
             _board_moves,
             _answer: None,
@@ -71,6 +74,7 @@ impl PuzzleSolver {
         self.run = Some(run);
         self.last_verdict = None;
         self.loaded_at = Some(Instant::now());
+        self.solved_at = None;
         self._answer = None;
         self.board.update(cx, |board, cx| {
             board.reset(cx);
@@ -79,10 +83,12 @@ impl PuzzleSolver {
         cx.notify();
     }
 
-    /// An empty board, between puzzles.
+    /// No puzzle: the board back to the starting position, nothing to move, between puzzles.
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.run = None;
         self.last_verdict = None;
+        self.loaded_at = None;
+        self.solved_at = None;
         self._answer = None;
         self.board.update(cx, |board, cx| board.reset(cx));
         cx.notify();
@@ -92,10 +98,12 @@ impl PuzzleSolver {
         self.run.as_ref()
     }
 
-    /// Milliseconds since the puzzle appeared, for the attempt the server keeps.
+    /// Milliseconds from the puzzle appearing to now, or to its solving, for the attempt the
+    /// server keeps.
     pub fn elapsed_ms(&self) -> i32 {
+        let until = self.solved_at.unwrap_or_else(Instant::now);
         self.loaded_at.map_or(0, |loaded| {
-            i32::try_from(loaded.elapsed().as_millis()).unwrap_or(i32::MAX)
+            i32::try_from(until.saturating_duration_since(loaded).as_millis()).unwrap_or(i32::MAX)
         })
     }
 
@@ -133,6 +141,7 @@ impl PuzzleSolver {
                 self.answer_soon(cx);
             }
             PuzzleVerdict::Solved => {
+                self.solved_at = Some(Instant::now());
                 play_move_sound(&before, run.position(), mv, Sound::MoveSelf, false, cx);
                 self.board.update(cx, |board, _| board.drop_all_premoves());
             }
@@ -191,17 +200,7 @@ impl PuzzleSolver {
                 best_arrow: None,
                 outcome: None,
             },
-            None => ShownPosition {
-                position: Position::starting(),
-                last_move: None,
-                can_move: false,
-                premoves: false,
-                player: None,
-                engine_arrow: None,
-                badge: None,
-                best_arrow: None,
-                outcome: None,
-            },
+            None => ShownPosition::waiting(),
         }
     }
 }

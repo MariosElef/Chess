@@ -7,7 +7,7 @@ use super::{
     accuracy::{move_accuracy, side_accuracy},
     classify::{MoveFacts, classify},
     game_rating::{FEWEST_MOVES, estimated_rating},
-    opening_book::is_book,
+    opening_book::{is_book, warm_up},
     sacrifice::is_sacrifice,
 };
 use crate::{
@@ -22,8 +22,8 @@ const NEARLY_BEST: f64 = 0.02;
 
 /// A review under way: the game's positions, the engine's word on each so far, and those being
 /// searched, several at once by several engines. A finished position needs no search, its result
-/// being its value; nor do the positions of the opening table's moves, which are Book whatever
-/// the engine says.
+/// being its value. The opening table's moves are Book whatever the engine says, but their
+/// positions are searched too: the review's graph shows the game from its first move.
 #[derive(Debug, Clone)]
 pub struct ReviewRun {
     game: Game,
@@ -34,20 +34,8 @@ pub struct ReviewRun {
 impl ReviewRun {
     /// Builds the opening table the first time, which takes a moment: call it off the UI thread.
     pub fn new(game: &Game) -> Self {
-        let book = book_plies(game);
-        let evals = game
-            .positions()
-            .iter()
-            .enumerate()
-            .map(|(index, position)| {
-                // The position before each Book move but the last needs no search.
-                if index < book {
-                    Some(level())
-                } else {
-                    finished_eval(position)
-                }
-            })
-            .collect();
+        warm_up();
+        let evals = game.positions().iter().map(finished_eval).collect();
         Self {
             game: game.clone(),
             evals,
@@ -112,26 +100,6 @@ impl ReviewRun {
     }
 }
 
-/// How many of the game's first moves follow the opening table.
-fn book_plies(game: &Game) -> usize {
-    game.positions()
-        .iter()
-        .skip(1)
-        .take(BOOK_PLIES)
-        .take_while(|position| is_book(position))
-        .count()
-}
-
-/// The value a skipped position stands in with: even, and no best move.
-fn level() -> PositionEval {
-    PositionEval {
-        lines: vec![EngineLine {
-            first: None,
-            eval: Eval::Centipawns(0),
-        }],
-    }
-}
-
 /// A finished position's value is its result; any other still needs the engine.
 fn finished_eval(position: &Position) -> Option<PositionEval> {
     let eval = match position.status() {
@@ -190,10 +158,15 @@ fn review(game: &Game, evals: &[&PositionEval]) -> GameReview {
         let side = [Side::White, Side::Black][index];
         (own_moves(&moves, side) >= FEWEST_MOVES).then(|| estimated_rating(accuracy[index]))
     });
+    let shares = evals
+        .iter()
+        .map(|eval| eval.lines[0].eval.white_share())
+        .collect();
     GameReview {
         moves,
         accuracy,
         ratings,
+        shares,
     }
 }
 
@@ -333,17 +306,14 @@ mod tests {
     }
 
     #[test]
-    fn opening_moves_need_no_search_but_the_first_move_out_of_book_does() {
+    fn every_position_is_searched_from_the_first_so_the_graph_has_the_whole_game() {
         let mut game = Game::new();
         for uci in ["e2e4", "e7e5", "g1f3", "d8h4"] {
             game.play(mv(uci)).expect("legal");
         }
         let mut run = ReviewRun::new(&game);
         let (first, _) = run.next_position().expect("a position to search");
-        assert_eq!(
-            first, 3,
-            "e4, e5 and Nf3 are Book; the position before Qh4 is searched"
-        );
-        assert_eq!(run.known_from_start(), 3);
+        assert_eq!(first, 0, "the opening is searched too, from the start");
+        assert_eq!(run.known_from_start(), 0);
     }
 }

@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use super::{challenge::Challenge, live_game::GameSnapshot};
-use crate::models::chat::ChatMessage;
+use crate::models::{
+    chat::ChatMessage,
+    puzzles::{BattleChallenge, BattleSnapshot},
+};
 
 /// What the app sends over the live socket.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -50,6 +53,32 @@ pub enum ClientMessage {
     DeclineChallenge {
         challenge_id: String,
     },
+    /// Pair me with the next player who wants a Puzzle Battle.
+    SeekBattle {
+        rated: bool,
+    },
+    CancelBattleSeek,
+    /// The answer to the current puzzle of the battle: solved, or a mistake.
+    BattleAnswer {
+        battle_id: String,
+        solved: bool,
+    },
+    /// Invite a friend who is online to a battle.
+    ChallengeBattle {
+        user_id: String,
+        rated: bool,
+    },
+    AcceptBattle {
+        challenge_id: String,
+    },
+    /// Decline an invitation, or withdraw one sent.
+    DeclineBattle {
+        challenge_id: String,
+    },
+    /// Give up the battle: the other player wins.
+    ResignBattle {
+        battle_id: String,
+    },
 }
 
 /// What the server sends over the live socket.
@@ -81,6 +110,18 @@ pub enum ServerMessage {
     },
     /// A conversation was started, or someone joined or left one: fetch the list again.
     ConversationsChanged,
+    /// Waiting for a Puzzle Battle opponent.
+    BattleSeeking,
+    BattleSeekCancelled,
+    /// A battle the player is in, as it stands now.
+    Battle {
+        battle: Box<BattleSnapshot>,
+    },
+    /// The battle invitations waiting, each way.
+    BattleChallenges {
+        sent: Vec<BattleChallenge>,
+        received: Vec<BattleChallenge>,
+    },
 }
 
 /// What happens on the live socket, for the page: the connection coming and going, and the

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use super::strikes::STRIKES;
+
 use crate::{enums::puzzles::RushKind, models::puzzles::RatingRange};
 
 /// The first puzzle's rating; each one after it is this much harder.
@@ -10,8 +12,6 @@ const BAND_WIDTH: i32 = 100;
 /// The band asked for instead when its narrow one has no puzzle left that the player has not
 /// seen: near the top of the ratings, puzzles are few.
 const WIDE_BAND_WIDTH: i32 = 600;
-/// Mistakes that end a rush.
-const STRIKES: u32 = 3;
 
 /// One Puzzle Rush: how many puzzles were served, solved and missed. Each puzzle comes from a
 /// higher band than the last, so the rush starts easy and climbs.

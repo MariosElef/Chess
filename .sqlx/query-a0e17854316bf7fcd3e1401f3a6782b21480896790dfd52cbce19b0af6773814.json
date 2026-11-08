@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The row stays, so the games and battles that name it stay valid for the other players; it\n-- can never sign in again, and its email and username are free for anyone.\nUPDATE account.users\nSET\n    username = 'deleted_' || left(replace(users.id::text, '-', ''), 8),\n    email = users.id::text || '@deleted.invalid',\n    password_hash = '!',\n    deleted_at = now(),\n    updated_at = now()\nWHERE users.id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0e17854316bf7fcd3e1401f3a6782b21480896790dfd52cbce19b0af6773814"
+}

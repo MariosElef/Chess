@@ -37,4 +37,7 @@ pub struct GameReview {
     /// The rating each side played like, White's then Black's; `None` with too few moves of
     /// their own to go on.
     pub ratings: [Option<u32>; 2],
+    /// White's share of the evaluation at every position, from the start to the end, from 0
+    /// to 1: the review's graph.
+    pub shares: Vec<f64>,
 }

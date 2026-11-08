@@ -273,4 +273,5 @@ async fn the_best_rush_of_each_kind_is_kept(db: Db) {
     let shown = summary(&server, &token).await;
     assert_eq!(shown["best_rush"]["three_minutes"], 5);
     assert_eq!(shown["best_rush"]["five_minutes"], Value::Null);
+    assert_eq!(shown["best_today"]["three_minutes"], 5, "played today");
 }

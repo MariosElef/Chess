@@ -53,7 +53,7 @@ impl GameResult {
             Self::Stalemate => "stalemate",
             Self::DrawAgreement => "agreement",
             Self::InsufficientMaterial => "insufficient material",
-            Self::Repetition => "repetition",
+            Self::Repetition => "threefold repetition",
             Self::FiftyMove => "the fifty-move rule",
         }
     }

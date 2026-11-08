@@ -6,6 +6,7 @@ use chess_domain::{Game, Move, Outcome, Side, TimeControl};
 use crate::{
     enums::play::{GameResult, LiveStatus},
     models::play::{Challenge, GameSnapshot},
+    services::board::side_name,
 };
 
 /// The game the snapshot's moves make, played from the start; `None` if a move does not parse
@@ -57,7 +58,7 @@ pub fn result_line(snapshot: &GameSnapshot, me: Option<Side>) -> Option<String> 
         (None, _) => format!("Draw by {by}"),
         (Some(winner), Some(me)) if winner == me => format!("You won by {by}"),
         (Some(_), Some(_)) => format!("You lost by {by}"),
-        (Some(winner), None) => format!("{} won by {by}", side_word(winner)),
+        (Some(winner), None) => format!("{} won by {by}", side_name(winner)),
     };
     Some(line)
 }
@@ -108,13 +109,6 @@ pub fn rating_line(snapshot: &GameSnapshot, me: Side) -> Option<String> {
     };
     let before = player.rating?;
     Some(format!("Rating {} ({change:+})", before + change))
-}
-
-fn side_word(side: Side) -> &'static str {
-    match side {
-        Side::White => "White",
-        Side::Black => "Black",
-    }
 }
 
 #[cfg(test)]

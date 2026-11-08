@@ -18,9 +18,9 @@ pub fn rating_with_change(rating: PuzzleRating) -> String {
     }
 }
 
-/// `Best 12`, or nothing played yet.
-pub fn best_text(best: Option<i32>) -> String {
-    best.map_or_else(|| "No score yet".to_owned(), |best| format!("Best {best}"))
+/// A number, or `--` before there is one, as the Puzzle Rush and Puzzle Battle cards show it.
+pub fn score_text(best: Option<i32>) -> String {
+    best.map_or_else(|| "--".to_owned(), |best| best.to_string())
 }
 
 fn rating_text(rating: PuzzleRating) -> String {
@@ -30,7 +30,7 @@ fn rating_text(rating: PuzzleRating) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{best_text, rating_line, rating_with_change};
+    use super::{rating_line, rating_with_change, score_text};
     use crate::models::puzzles::{PuzzleRating, PuzzleSummary};
 
     fn rating(change: Option<i32>, provisional: bool) -> PuzzleRating {
@@ -61,6 +61,7 @@ mod tests {
             ..PuzzleSummary::default()
         };
         assert_eq!(rating_line(&rated), "Puzzle rating 1512");
-        assert_eq!(best_text(Some(12)), "Best 12");
+        assert_eq!(score_text(Some(12)), "12");
+        assert_eq!(score_text(None), "--");
     }
 }

@@ -217,3 +217,82 @@ async fn the_stats_show_every_mode_and_puzzles(db: Db) {
     assert_eq!(stats["puzzles"]["attempted"], 0);
     assert_eq!(stats["puzzles"]["rating"], Value::Null);
 }
+
+#[sqlx::test]
+async fn an_account_closes_with_its_password_and_frees_its_name(db: Db) {
+    let server = server(db);
+    sign_up(&server, "ann@example.com", "ann").await;
+    sign_up(&server, "bob@example.com", "bob").await;
+    let ann = sign_in(&server, "ann").await;
+    let bob = sign_in(&server, "bob").await;
+    let bob_id = server
+        .get("/api/users/me")
+        .authorization_bearer(&bob)
+        .await
+        .json::<Value>()["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned();
+    let ann_id = server
+        .get("/api/users/me")
+        .authorization_bearer(&ann)
+        .await
+        .json::<Value>()["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned();
+    server
+        .post("/api/social/friends/requests")
+        .authorization_bearer(&ann)
+        .json(&json!({ "user_id": bob_id }))
+        .await;
+    server
+        .post(&format!("/api/social/friends/requests/{ann_id}/accept"))
+        .authorization_bearer(&bob)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    server
+        .delete("/api/users/me")
+        .authorization_bearer(&ann)
+        .json(&json!({ "password": "not it" }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    server
+        .delete("/api/users/me")
+        .authorization_bearer(&ann)
+        .json(&json!({ "password": "correct horse" }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    server
+        .get("/api/users/me")
+        .authorization_bearer(&ann)
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    server
+        .post("/api/sessions")
+        .json(&json!({ "login": "ann", "password": "correct horse" }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    let friends: Value = server
+        .get("/api/social/friends")
+        .authorization_bearer(&bob)
+        .await
+        .json();
+    assert_eq!(friends["friends"], json!([]), "Bob's friend is gone");
+    sign_up(&server, "ann2@example.com", "ann").await;
+}
+
+#[sqlx::test]
+async fn a_guest_cannot_close_the_shared_account(db: Db) {
+    let server = server(db);
+    let session: Value = server.post("/api/sessions/guest").await.json();
+    let token = session["token"].as_str().expect("a token");
+    server
+        .delete("/api/users/me")
+        .authorization_bearer(token)
+        .json(&json!({ "password": "anything" }))
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+}

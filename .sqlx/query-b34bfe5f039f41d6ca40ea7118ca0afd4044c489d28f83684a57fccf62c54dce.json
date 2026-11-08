@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A closed account keeps no scores; one sent while it closes waits for it.\nINSERT INTO puzzle.rush_runs (id, user_id, kind, score)\nSELECT $1, $2, $3, $4\nFROM account.users\nWHERE users.id = $2 AND users.deleted_at IS NULL\nFOR SHARE\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b34bfe5f039f41d6ca40ea7118ca0afd4044c489d28f83684a57fccf62c54dce"
+}

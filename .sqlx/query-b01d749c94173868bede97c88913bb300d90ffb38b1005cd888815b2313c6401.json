@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Live battles are held in the server's memory: after a restart, the ones left running are over.\nUPDATE puzzle.battles\nSET finished_at = now()\nWHERE battles.finished_at IS NULL\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b01d749c94173868bede97c88913bb300d90ffb38b1005cd888815b2313c6401"
+}

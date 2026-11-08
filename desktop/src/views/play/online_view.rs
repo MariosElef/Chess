@@ -3,27 +3,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chess_domain::{Move, Position, Side, TimeControl};
+use chess_domain::{Move, Side, TimeControl};
 use gpui_kit::{
     assets::IconName,
-    component::{
-        ActiveTheme as _, Disableable as _,
-        button::{Button, ButtonVariants},
-        h_flex,
-        label::Label,
-        v_flex,
-    },
+    component::{ActiveTheme as _, h_flex, label::Label, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
 
+use super::game_controls::game_tile;
 use crate::{
     components::{
+        board::{BoardColumn, PLAYER_BAR, board_page, copy_fen},
         history::{MoveList, NavigationBar},
+        panel::{ChoiceTile, PanelHeader, SidePanel, action_bar},
         play::{
-            CapturedRow, ClockFace, GameSetup, OnlineOptions, PLAYER_BAR, PlayPanel, WaitingBar,
-            lobby,
+            CapturedRow, ClockFace, GameOverActions, GameOverCard, GameSetup, OnlineOptions,
+            PlayPanel, WaitingBar, with_card,
         },
+        shell::PLAY_PICTURE,
     },
     enums::{
         play::{LiveStatus, PlayMode},
@@ -38,25 +36,23 @@ use crate::{
         history::GameHistory,
         play::{
             ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, my_side, outcome_of,
-            rating_line, replay, result_line,
+            outcome_reason, rating_line, replay, result_line, result_title,
         },
     },
     views::{
-        board::BoardView,
+        board::{BoardView, flip_button},
         chat::ChatView,
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
         live::{LiveConnection, SessionSource},
         sound::{play_move_sound, play_sound},
+        ticker::{CLOCK_TICK, start_ticker},
     },
 };
 
 /// Switches the Play page to another way to play.
 type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
-
-/// How often the running clock is redrawn.
-const TICK: Duration = Duration::from_millis(100);
 
 /// An online game on the board: the server's last word on it, when it arrived, the history to
 /// browse, and the player's own move while the server has not yet confirmed it.
@@ -91,6 +87,8 @@ pub struct OnlineView {
     focus_handle: FocusHandle,
     /// The two players' chat, beside the moves; made when the game is first drawn.
     chat: Option<Entity<ChatView>>,
+    /// The end-of-game card was put away, to look at the board.
+    card_closed: bool,
     /// The player's rating in each speed, for their bar under the board.
     ratings: Vec<ModeStats>,
     /// The lobby's tabs: another way to play, which the Play page shows.
@@ -132,6 +130,7 @@ impl OnlineView {
             _ticker: None,
             focus_handle: cx.focus_handle(),
             chat: None,
+            card_closed: false,
             ratings: Vec::new(),
             on_mode: None,
         }
@@ -247,7 +246,11 @@ impl OnlineView {
             | ServerMessage::FriendsChanged
             | ServerMessage::Challenges { .. }
             | ServerMessage::ChatMessage { .. }
-            | ServerMessage::ConversationsChanged => {}
+            | ServerMessage::ConversationsChanged
+            | ServerMessage::BattleSeeking
+            | ServerMessage::BattleSeekCancelled
+            | ServerMessage::Battle { .. }
+            | ServerMessage::BattleChallenges { .. } => {}
         }
     }
 
@@ -271,6 +274,9 @@ impl OnlineView {
         };
         self.sound_for(previous.map(|live| &live.snapshot), &snapshot, me, cx);
         let new_game = previous.is_none();
+        if new_game {
+            self.card_closed = false;
+        }
         let clock_warning = previous.map_or_else(ClockWarning::default, |live| live.clock_warning);
         let finished = snapshot.status != LiveStatus::Ongoing;
         self.live = Some(LiveBoard {
@@ -293,7 +299,7 @@ impl OnlineView {
             self._ticker = None;
             self.board.update(cx, |board, _| board.drop_all_premoves());
         } else if self._ticker.is_none() {
-            self._ticker = Some(start_ticker(cx));
+            self._ticker = Some(start_ticker(CLOCK_TICK, cx, OnlineView::tick));
         }
         self.play_due_premove(cx);
     }
@@ -379,17 +385,7 @@ impl OnlineView {
     /// earlier one being looked at; in the lobby, the starting position.
     fn shown_position(&self) -> ShownPosition {
         let Some(live) = &self.live else {
-            return ShownPosition {
-                position: Position::starting(),
-                last_move: None,
-                can_move: false,
-                premoves: false,
-                player: None,
-                engine_arrow: None,
-                badge: None,
-                best_arrow: None,
-                outcome: None,
-            };
+            return ShownPosition::waiting();
         };
         let ongoing = live.snapshot.status == LiveStatus::Ongoing;
         let looking_live = live.history.is_live();
@@ -448,17 +444,21 @@ impl OnlineView {
     }
 
     /// Hands the game to the analysis board, at the position being looked at.
-    fn analyze(&mut self, cx: &mut Context<Self>) {
+    fn analyze(&mut self, review: bool, cx: &mut Context<Self>) {
         if let Some(live) = &self.live {
             cx.emit(AnalyzeGame {
                 game: live.history.game().clone(),
                 viewing: live.history.viewing(),
+                review,
+                outcome: outcome_of(&live.snapshot),
             });
         }
     }
 
+    /// Turns the board round; the players' bars follow it.
     fn flip(&mut self, cx: &mut Context<Self>) {
         self.board.update(cx, |board, cx| board.flip(cx));
+        cx.notify();
     }
 
     fn offer_draw(&mut self, cx: &mut Context<Self>) {
@@ -478,11 +478,69 @@ impl OnlineView {
         }
     }
 
+    /// The end-of-game card: who won and how, the rating change, and the game-over actions;
+    /// none for an aborted game, or once put away.
+    fn game_over_card(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Option<GameOverCard> {
+        let outcome = outcome_of(&live.snapshot).filter(|_| !self.card_closed)?;
+        let title = result_title(outcome.winner(), live.me, None);
+        let detail = live.me.and_then(|me| rating_line(&live.snapshot, me));
+        let close = cx.entity().downgrade();
+        let card = GameOverCard::new(
+            (title, outcome_reason(outcome).to_owned()),
+            self.game_over_actions(live, cx),
+            move |_, cx| {
+                let _ = close.update(cx, |view, cx| {
+                    view.card_closed = true;
+                    cx.notify();
+                });
+            },
+        )
+        .detail(detail);
+        Some(card)
+    }
+
+    /// Game Review, then a look without a review, back to the lobby, or another opponent at the
+    /// same time control.
+    fn game_over_actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> GameOverActions {
+        let control = TimeControl {
+            initial: Duration::from_secs(live.snapshot.initial_s.into()),
+            increment: Duration::from_secs(live.snapshot.increment_s.into()),
+        };
+        let page = cx.entity().downgrade();
+        let (review, fresh, again) = (page.clone(), page.clone(), page);
+        let look = review.clone();
+        GameOverActions::new(move |_, cx| {
+            let _ = review.update(cx, |view, cx| view.analyze(true, cx));
+        })
+        .choice("Analyze", IconName::Microscope, move |_, cx| {
+            let _ = look.update(cx, |view, cx| view.analyze(false, cx));
+        })
+        .choice("New game", IconName::Plus, move |_, cx| {
+            let _ = fresh.update(cx, |view, cx| view.leave_game(cx));
+        })
+        .when(live.me.is_some(), |actions| {
+            // Another opponent at the same time control, rated as this game was.
+            let rated = live.snapshot.rated;
+            actions.choice(control.label(), IconName::RotateCcw, move |_, cx| {
+                let _ = again.update(cx, |view, cx| {
+                    view.leave_game(cx);
+                    view.choice = control;
+                    view.rated = rated;
+                    view.seek(cx);
+                });
+            })
+        })
+    }
+
     /// From a finished game back to the lobby.
     fn leave_game(&mut self, cx: &mut Context<Self>) {
         self.live = None;
         self._ticker = None;
-        self.board.update(cx, |board, cx| board.reset(cx));
+        // The lobby's waiting board faces White, whichever side the game had the player on.
+        self.board.update(cx, |board, cx| {
+            board.reset(cx);
+            board.face(Side::White, cx);
+        });
         self.fetch_ratings(cx);
         cx.notify();
     }
@@ -553,13 +611,9 @@ impl OnlineView {
             None => me,
         };
         let clock = Some(self.choice.initial);
-        let column = v_flex()
-            .h_full()
-            .flex_shrink_0()
-            .gap_2()
-            .child(WaitingBar::new("Opponent").clock(clock))
-            .child(div().flex_1().min_h_0().child(self.board.clone()))
-            .child(WaitingBar::new(me).clock(clock));
+        let column = BoardColumn::new(self.board.clone())
+            .top(WaitingBar::new("Opponent").clock(clock))
+            .bottom(WaitingBar::new(me).clock(clock));
         let on_mode = self.on_mode.clone();
         let panel = PlayPanel::new(PlayMode::Online, move |mode, window, cx| {
             if let Some(on_mode) = &on_mode {
@@ -567,60 +621,51 @@ impl OnlineView {
             }
         })
         .child(setup);
-        lobby(column, panel)
+        board_page(column, panel)
     }
 
     fn game_view(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Div {
         let page = cx.entity().downgrade();
-        let me = live.me;
-        let bottom = me.unwrap_or(Side::White);
-        v_flex()
-            .size_full()
-            .gap_4()
+        let bottom = self.board.read(cx).bottom_side();
+        let card = self.game_over_card(live, cx);
+        let column = BoardColumn::new(with_card(self.board.clone(), card))
+            .top(self.player_bar(live, bottom.opponent()))
+            .bottom(self.player_bar(live, bottom))
+            .tool(flip_button("online-flip-board", cx, OnlineView::flip))
+            .tool(copy_fen(live.history.shown()));
+        let side = SidePanel::new()
+            .header(PanelHeader::new(PLAY_PICTURE, "Play Online"))
             .child(self.header(live, cx))
-            .child(
-                h_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .items_start()
-                    .justify_center()
-                    .gap_6()
-                    .child(
-                        v_flex()
-                            .h_full()
-                            .flex_shrink_0()
-                            .gap_2()
-                            .child(self.player_bar(live, bottom.opponent()))
-                            .child(div().flex_1().min_h_0().child(self.board.clone()))
-                            .child(self.player_bar(live, bottom)),
-                    )
-                    .child(
-                        v_flex()
-                            .w_80()
-                            .gap_4()
-                            .child(
-                                NavigationBar::new(
-                                    live.history.can_go_back(),
-                                    live.history.can_go_forward(),
-                                    step_history(page.clone()),
-                                )
-                                .on_hold(hold_step(page.clone())),
-                            )
-                            .child(MoveList::new(
-                                live.history.sans().to_vec(),
-                                live.history.viewing(),
-                                select_move(page),
-                            ))
-                            .children(
-                                self.chat
-                                    .clone()
-                                    .map(|chat| div().h(px(280.)).flex_shrink_0().child(chat)),
-                            ),
-                    ),
+            .child(MoveList::new(
+                live.history.sans().to_vec(),
+                live.history.viewing(),
+                select_move(page.clone()),
+            ))
+            .children(
+                self.chat
+                    .clone()
+                    .map(|chat| div().h(px(240.)).flex_shrink_0().child(chat)),
             )
+            .child(
+                NavigationBar::new(
+                    live.history.can_go_back(),
+                    live.history.can_go_forward(),
+                    step_history(page.clone()),
+                )
+                .on_hold(hold_step(page)),
+            )
+            .map(|this| {
+                // An aborted game has no result to review: it keeps the plain buttons.
+                if outcome_of(&live.snapshot).is_some() {
+                    this.child(self.game_over_actions(live, cx))
+                } else {
+                    this.child(action_bar(self.actions(live, cx)))
+                }
+            });
+        board_page(column, side)
     }
 
-    /// The status on the left, the game's buttons on the right.
+    /// How the game stands, at the top of the panel.
     fn header(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Div {
         let snapshot = &live.snapshot;
         let status = result_line(snapshot, live.me).unwrap_or_else(|| {
@@ -632,88 +677,80 @@ impl OnlineView {
             }
         });
         let rating = live.me.and_then(|me| rating_line(snapshot, me));
-        h_flex()
-            .justify_between()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(Label::new(status).text_lg())
-                    .when_some(rating, |this, rating| {
-                        this.child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(rating),
-                        )
-                    })
-                    .when_some(
-                        self.problem.clone().or_else(|| self.connection_line(cx)),
-                        |this, problem| {
-                            this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
-                        },
-                    ),
+        v_flex()
+            .gap_1()
+            .child(Label::new(status).text_lg())
+            .when_some(rating, |this, rating| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(rating),
+                )
+            })
+            .when_some(
+                self.problem.clone().or_else(|| self.connection_line(cx)),
+                |this, problem| {
+                    this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
+                },
             )
-            .child(self.actions(live, cx))
     }
 
-    /// New game once it is over; Accept and Decline for an offer; otherwise Draw and Resign.
-    fn actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Div {
-        let row = h_flex().gap_2();
+    /// Analyze and New game once a game with no result to review is over, as an aborted one;
+    /// Abort before both have moved; Accept and Decline for an offer; otherwise Draw and Resign.
+    fn actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let snapshot = &live.snapshot;
-        let row = row.child(flip_button(cx));
         if snapshot.status != LiveStatus::Ongoing {
-            return row
-                .child(
-                    Button::new("online-analyze")
-                        .outline()
-                        .icon(IconName::Microscope)
-                        .label("Analyze")
-                        .on_click(cx.listener(|view, _, _, cx| view.analyze(cx))),
+            return vec![
+                game_tile(("online-analyze", "Analyze"), false, cx, |view, cx| {
+                    view.analyze(false, cx);
+                })
+                .icon(IconName::Microscope),
+                game_tile(
+                    ("online-new-game", "New game"),
+                    false,
+                    cx,
+                    OnlineView::leave_game,
                 )
-                .child(
-                    Button::new("online-new-game")
-                        .primary()
-                        .label("New game")
-                        .on_click(cx.listener(|view, _, _, cx| view.leave_game(cx))),
-                );
+                .icon(IconName::Plus),
+            ];
         }
         if can_abort(snapshot) {
-            return row.child(
-                Button::new("online-abort")
-                    .outline()
-                    .label("Abort")
-                    .on_click(cx.listener(|view, _, _, cx| view.abort(cx))),
-            );
+            return vec![
+                game_tile(("online-abort", "Abort"), false, cx, OnlineView::abort)
+                    .icon(IconName::Close),
+            ];
         }
         let offer = snapshot.draw_offer.map(Side::from);
         if offer.is_some() && offer != live.me {
-            return row
-                .child(
-                    Button::new("online-accept-draw")
-                        .primary()
-                        .label("Accept draw")
-                        .on_click(cx.listener(|view, _, _, cx| view.answer_draw(true, cx))),
+            return vec![
+                game_tile(
+                    ("online-accept-draw", "Accept draw"),
+                    true,
+                    cx,
+                    |view, cx| {
+                        view.answer_draw(true, cx);
+                    },
                 )
-                .child(
-                    Button::new("online-decline-draw")
-                        .outline()
-                        .label("Decline")
-                        .on_click(cx.listener(|view, _, _, cx| view.answer_draw(false, cx))),
-                );
+                .icon(IconName::Check),
+                game_tile(("online-decline-draw", "Decline"), false, cx, |view, cx| {
+                    view.answer_draw(false, cx);
+                })
+                .icon(IconName::Close),
+            ];
         }
-        row.child(
-            Button::new("online-offer-draw")
-                .outline()
-                .label("Offer draw")
-                .disabled(offer.is_some())
-                .on_click(cx.listener(|view, _, _, cx| view.offer_draw(cx))),
-        )
-        .child(
-            Button::new("online-resign")
-                .outline()
-                .label("Resign")
-                .on_click(cx.listener(|view, _, _, cx| view.resign(cx))),
-        )
+        vec![
+            game_tile(
+                ("online-offer-draw", "Draw"),
+                false,
+                cx,
+                OnlineView::offer_draw,
+            )
+            .glyph("½")
+            .disabled(offer.is_some()),
+            game_tile(("online-resign", "Resign"), false, cx, OnlineView::resign)
+                .icon(IconName::Flag),
+        ]
     }
 
     /// A player's name and rating, what they have taken, and their clock.
@@ -801,29 +838,8 @@ impl Render for OnlineView {
     }
 }
 
-fn flip_button(cx: &mut Context<OnlineView>) -> Button {
-    Button::new("online-flip-board")
-        .ghost()
-        .icon(IconName::ArrowUpDown)
-        .tooltip("Flip board")
-        .on_click(cx.listener(|view, _, _, cx| view.flip(cx)))
-}
-
 fn seconds(duration: Duration) -> u32 {
     u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
-}
-
-/// Wakes every tick while the game is going on.
-fn start_ticker(cx: &mut Context<OnlineView>) -> Task<()> {
-    cx.spawn(async move |view, cx| {
-        loop {
-            cx.background_executor().timer(TICK).await;
-            let keep_going = view.update(cx, |view, cx| view.tick(cx)).unwrap_or(false);
-            if !keep_going {
-                break;
-            }
-        }
-    })
 }
 
 #[cfg(test)]
@@ -986,6 +1002,24 @@ mod tests {
             cx.update(|_, cx| played_sounds(cx)).last(),
             Some(&Sound::GameEnd)
         );
+
+        // The panel's Game Review, once the game is over, sends the game to be reviewed.
+        let reviewed = Rc::new(std::cell::Cell::new(false));
+        let heard = Rc::clone(&reviewed);
+        cx.update(|_, cx| {
+            cx.subscribe(&view, move |_, event: &AnalyzeGame, _| {
+                heard.set(event.review)
+            })
+            .detach();
+        });
+        click(cx, "game-review");
+        assert!(reviewed.get(), "Game Review asks for a review");
+        click(cx, "close-game-over");
+        cx.run_until_parked();
+        assert!(
+            cx.debug_bounds("game-over").is_none(),
+            "the cross puts it away"
+        );
     }
 
     #[gpui_kit::test]
@@ -1037,7 +1071,7 @@ mod tests {
             cx.subscribe(&view, move |_, _: &AnalyzeGame, _| heard.set(true))
                 .detach();
         });
-        view.update(cx, |view, cx| view.analyze(cx));
+        view.update(cx, |view, cx| view.analyze(false, cx));
         assert!(analyzed.get(), "the game went to the analysis board");
     }
 }

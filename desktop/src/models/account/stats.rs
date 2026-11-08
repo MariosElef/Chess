@@ -33,4 +33,6 @@ pub struct PuzzleStats {
     pub attempted: u32,
     pub solved: u32,
     pub best_rush: BestRush,
+    pub battle_rating: Option<i32>,
+    pub battle_provisional: bool,
 }

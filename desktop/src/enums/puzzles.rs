@@ -21,6 +21,23 @@ pub enum PuzzleVerdict {
     Wrong,
 }
 
+/// Where a Puzzle Battle stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleStatus {
+    Ongoing,
+    Finished,
+}
+
+/// How a Puzzle Battle ended, for the player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleResult {
+    Won,
+    Lost,
+    Drawn,
+}
+
 /// How long a Puzzle Rush lasts, as on chess.com.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RushKind {

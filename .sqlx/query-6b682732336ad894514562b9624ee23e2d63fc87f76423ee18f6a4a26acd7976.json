@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Groups and game chats the player started live on for their other members.\nUPDATE social.conversations\nSET created_by_id = NULL\nWHERE conversations.created_by_id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6b682732336ad894514562b9624ee23e2d63fc87f76423ee18f6a4a26acd7976"
+}

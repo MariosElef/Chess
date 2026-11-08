@@ -27,6 +27,23 @@ impl RushKind {
     }
 }
 
+/// Where a battle stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleStatus {
+    Ongoing,
+    Finished,
+}
+
+/// How a battle ended, for one of its players.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleResult {
+    Won,
+    Lost,
+    Drawn,
+}
+
 #[cfg(test)]
 mod tests {
     use super::RushKind;

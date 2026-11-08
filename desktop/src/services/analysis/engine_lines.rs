@@ -22,6 +22,15 @@ pub fn line_view(info: &SearchInfo, analysed: &Position) -> LineView {
     }
 }
 
+/// Whether the evaluation favours Black: below zero, or a mate Black delivers. Its chip is
+/// drawn dark then, and light for White.
+pub fn favours_black(eval: Eval) -> bool {
+    match eval {
+        Eval::Centipawns(centipawns) => centipawns < 0,
+        Eval::Mate { winner, .. } => winner == Side::Black,
+    }
+}
+
 /// Nodes per second, short: `850 kn/s`, `1.2 Mn/s`.
 pub fn format_nps(nps: u64) -> String {
     if nps >= 1_000_000 {

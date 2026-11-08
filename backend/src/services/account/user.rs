@@ -6,19 +6,28 @@ use super::{
 };
 use crate::{
     errors::{AppError, ChessCode, Fields},
-    models::account::{CreateUserModel, GetUserModel, NewUser},
-    repositories::{account::user, database::Db},
+    models::{
+        account::{CreateUserModel, GetUserModel, NewUser},
+        play::messages::ServerMessage,
+    },
+    repositories::{
+        account::{closure, session, user},
+        database::Db,
+        social::friendship,
+    },
+    services::play::PlayHub,
 };
 
-/// Accounts: signing up and reading one's own.
+/// Accounts: signing up, reading one's own, and closing it.
 #[derive(Clone)]
 pub struct UserService {
     db: Db,
+    play: PlayHub,
 }
 
 impl UserService {
-    pub fn new(db: Db) -> Self {
-        Self { db }
+    pub fn new(db: Db, play: PlayHub) -> Self {
+        Self { db, play }
     }
 
     /// Checks every field, refuses a taken email or username, then stores the account.
@@ -50,6 +59,50 @@ impl UserService {
             .await?
             .ok_or(ChessCode::SignInRequired)?;
         Ok(response)
+    }
+
+    /// Closes the account, once its password is typed again: signed out everywhere, its
+    /// friends, chats, ratings and puzzles gone. Its games and battles stay for the other
+    /// players, under a scrubbed name. A shared guest cannot be closed.
+    pub async fn close(&self, user_id: Uuid, password: String) -> Result<(), AppError> {
+        let check = closure::password_hash(&self.db, user_id)
+            .await?
+            .ok_or(ChessCode::SignInRequired)?;
+        if check.guest {
+            return Err(ChessCode::GuestCannotClose.into());
+        }
+        if !password::verify(password, Some(check.password_hash)).await? {
+            return Err(ChessCode::InvalidCredentials.into());
+        }
+        let mut told = friendship::friend_ids(&self.db, user_id).await?;
+        told.extend(closure::request_partners(&self.db, user_id).await?);
+        told.extend(closure::fellow_members(&self.db, user_id).await?);
+        told.sort_unstable();
+        told.dedup();
+        let mut tx = self.db.begin().await?;
+        closure::lock_user(&mut tx, user_id).await?;
+        closure::forget_friendships(&mut tx, user_id).await?;
+        closure::forget_challenges(&mut tx, user_id).await?;
+        closure::forget_direct_chats(&mut tx, user_id).await?;
+        closure::forget_messages(&mut tx, user_id).await?;
+        closure::forget_memberships(&mut tx, user_id).await?;
+        closure::forget_empty_groups(&mut tx).await?;
+        closure::forget_conversations_started(&mut tx, user_id).await?;
+        closure::forget_ratings(&mut tx, user_id).await?;
+        closure::forget_rating_history(&mut tx, user_id).await?;
+        closure::forget_puzzle_attempts(&mut tx, user_id).await?;
+        closure::forget_rush_runs(&mut tx, user_id).await?;
+        session::revoke_all_of_user(&mut *tx, user_id).await?;
+        closure::close(&mut tx, user_id).await?;
+        tx.commit().await?;
+        // The live side lets go of them too: searches, invitations, games, battles and sockets.
+        self.play.forget_player(user_id);
+        // Their friends' lists and everyone's chats lost them: they fetch both again.
+        for other in told {
+            self.play.send(other, ServerMessage::FriendsChanged);
+            self.play.send(other, ServerMessage::ConversationsChanged);
+        }
+        Ok(())
     }
 
     async fn refuse_taken(&self, email: &str, username: &str) -> Result<(), AppError> {

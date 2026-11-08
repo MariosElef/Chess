@@ -1,17 +1,14 @@
 use std::time::Duration;
 
 use chess_domain::{
-    Game, GameStatus, Move, Position, Side, Square,
+    Game, GameStatus, Move, Outcome, Position, Side, Square,
     engine::{Command, Eval, SearchInfo, UciMessage},
 };
 use gpui_kit::{
     assets::IconName,
     component::{
-        Disableable as _,
-        button::{Button, ButtonVariants},
-        h_flex,
+        ActiveTheme as _,
         input::{InputEvent, TextareaState},
-        label::Label,
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -21,8 +18,13 @@ use gpui_kit::{
 use crate::{
     clients::engine::{Engine, device_cores, locate_stockfish},
     components::{
-        analysis::{EnginePanel, EvalBar, FenInput, ReviewPanel, ShownVerdict},
-        history::{MoveList, NavigationBar, PositionPanel},
+        analysis::{
+            EnginePanel, EvalBar, EvalGraph, FenInput, REVIEW_PICTURE, ReviewPanel, ShownVerdict,
+        },
+        board::{BoardColumn, board_page, copy_fen},
+        history::{MoveList, NavigationBar},
+        panel::{ChoiceTile, PanelHeader, SidePanel, StartButton},
+        shell::ANALYSIS_PICTURE,
     },
     enums::{
         analysis::{EngineStatus, MoveClass},
@@ -41,11 +43,12 @@ use crate::{
         history::GameHistory,
     },
     views::{
-        board::BoardView,
+        board::{BoardView, flip_button},
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
         sound::{play_move_sound, play_sound},
+        ticker::start_ticker,
     },
 };
 
@@ -79,7 +82,8 @@ struct Reviewer {
     _replay: Task<()>,
 }
 
-/// Why the engine is not running although it is switched on.
+/// Why the engine is not running: it is not installed, or it stopped and could not be started
+/// again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EngineProblem {
     NotFound,
@@ -100,10 +104,16 @@ pub struct AnalysisPage {
     enabled: bool,
     shown: bool,
     problem: Option<EngineProblem>,
+    /// The engine stopped once and was started again; stopping again gives up on it.
+    restarted: bool,
+    /// The last review stopped before it finished: its engines died or would not start.
+    review_problem: bool,
     /// The best lines of the current search, by MultiPV index.
     lines: [Option<SearchInfo>; LINES],
     /// The position the current lines belong to.
     analysed: Option<Position>,
+    /// How the loaded game ended where it was played, when the moves alone do not say.
+    ended: Option<Outcome>,
     /// The game reviewed, while it is the game on the board.
     review: Option<GameReview>,
     /// The review getting ready: the opening table being read before the engines start.
@@ -144,11 +154,15 @@ impl AnalysisPage {
             engine: None,
             queue: None,
             settings,
-            enabled: true,
+            // Off until asked for: the engine works the computer hard.
+            enabled: false,
             shown: false,
             problem: None,
+            restarted: false,
+            review_problem: false,
             lines: Default::default(),
             analysed: None,
+            ended: None,
             review: None,
             review_start: None,
             reviewer: None,
@@ -171,10 +185,17 @@ impl AnalysisPage {
         self.sync_engine(cx);
     }
 
-    /// Opens a game from Play, at the position it was showing.
-    pub fn load_game(&mut self, game: &Game, viewing: usize, cx: &mut Context<Self>) {
+    /// Opens a game from Play at the position it was showing, with how it ended when the moves
+    /// alone do not say.
+    pub fn load_game(
+        &mut self,
+        game: &Game,
+        (viewing, ended): (usize, Option<Outcome>),
+        cx: &mut Context<Self>,
+    ) {
         let reopened = game.truncated(game.moves().len());
         self.history = GameHistory::from_game(reopened, viewing);
+        self.ended = ended;
         self.clear_review();
         self.after_navigation(cx);
     }
@@ -185,8 +206,10 @@ impl AnalysisPage {
             return;
         }
         self.settings = settings;
+        // Its listener goes with it, so the old engine's exit is not taken for a crash.
         self.engine = None;
         self.queue = None;
+        self._engine_task = None;
         self.sync_engine(cx);
         cx.notify();
     }
@@ -194,6 +217,7 @@ impl AnalysisPage {
     /// Back to the starting position with no moves.
     fn reset_board(&mut self, cx: &mut Context<Self>) {
         self.history = GameHistory::new();
+        self.ended = None;
         self.clear_review();
         self.after_navigation(cx);
     }
@@ -211,6 +235,7 @@ impl AnalysisPage {
         self.enabled = on;
         if on {
             self.problem = None;
+            self.restarted = false;
         }
         self.sync_engine(cx);
         cx.notify();
@@ -288,17 +313,33 @@ impl AnalysisPage {
         }
     }
 
-    /// The engine crashed or could not be written to: drop it and say so.
+    /// The engine crashed or could not be written to: dropped, its lines with it, and started
+    /// again the next time it is wanted. A second failure in a row gives up, and the switch
+    /// shows it off.
     fn engine_failed(&mut self) {
         self.engine = None;
         self.queue = None;
-        self.problem = Some(EngineProblem::Stopped);
+        self.lines = Default::default();
+        self.analysed = None;
+        if self.restarted {
+            self.problem = Some(EngineProblem::Stopped);
+            self.enabled = false;
+        } else {
+            self.restarted = true;
+        }
     }
 
     fn on_engine_event(&mut self, event: EngineEvent, cx: &mut Context<Self>) {
         match event {
             EngineEvent::Message(message) => self.on_message(message),
-            EngineEvent::Stopped => self.engine_failed(),
+            EngineEvent::Stopped => {
+                // An engine already dropped, after a command could not be sent, ends here too:
+                // that failure was counted then.
+                if self.engine.is_some() {
+                    self.engine_failed();
+                }
+                self.sync_engine(cx);
+            }
         }
         cx.notify();
     }
@@ -310,8 +351,13 @@ impl AnalysisPage {
         let commands = match message {
             UciMessage::UciOk => queue.on_uciok(),
             UciMessage::ReadyOk => queue.on_readyok(),
-            UciMessage::BestMove(_) => queue.on_bestmove(),
+            UciMessage::BestMove(_) => {
+                // It searched: a later stop is a new failure, not the same one again.
+                self.restarted = false;
+                queue.on_bestmove()
+            }
             UciMessage::Info(info) => {
+                self.restarted = false;
                 if queue.accepts_info() {
                     self.store_line(info);
                 }
@@ -345,6 +391,11 @@ impl AnalysisPage {
         self.after_position_change(cx);
     }
 
+    /// How the game ended: by the rules, or as it ended where it was played.
+    fn game_outcome(&self) -> Option<Outcome> {
+        self.history.game().outcome().or(self.ended)
+    }
+
     /// What the board shows: the position being looked at, with the engine's best move.
     fn shown_position(&self) -> ShownPosition {
         ShownPosition {
@@ -358,7 +409,7 @@ impl AnalysisPage {
             outcome: self
                 .history
                 .is_live()
-                .then(|| self.history.game().outcome())
+                .then(|| self.game_outcome())
                 .flatten(),
             badge: self.badge(),
         }
@@ -369,6 +420,8 @@ impl AnalysisPage {
     /// repetition, say) takes no more moves.
     fn play_move(&mut self, mv: Move, cx: &mut Context<Self>) {
         if self.play_with_sound(mv, cx) {
+            // Another move makes it another game, which has not ended the same way.
+            self.ended = None;
             self.clear_review();
             self.run_premoves(cx);
             self.after_position_change(cx);
@@ -432,6 +485,7 @@ impl AnalysisPage {
                     Pasted::Position(position) => GameHistory::from_position(position),
                     Pasted::Game(game) => GameHistory::from_game(game, 0),
                 };
+                self.ended = None;
                 self.clear_review();
                 self.fen_error = None;
                 self.fen_input
@@ -492,6 +546,9 @@ impl AnalysisPage {
     }
 
     fn running_status(&self) -> EngineStatus {
+        if self.is_reviewing() {
+            return EngineStatus::PausedForReview;
+        }
         if self.history.shown().status() != GameStatus::Ongoing {
             return EngineStatus::Finished;
         }
@@ -519,30 +576,26 @@ impl AnalysisPage {
             .collect()
     }
 
-    /// The eval bar on the left of the board, both a little shorter than the space they have.
-    fn board_column(&self, cx: &App) -> Div {
-        h_flex()
-            .h(relative(0.9))
-            .flex_shrink_0()
-            .items_stretch()
-            .gap_2()
-            .child(EvalBar::new(self.eval(), self.board.read(cx).flipped()))
-            .child(div().h_full().child(self.board.clone()))
+    /// The eval bar on the left of the board, in the column every page's board has.
+    fn board_column(&self, cx: &mut Context<Self>) -> BoardColumn {
+        BoardColumn::new(self.board.clone())
+            .left_strip(EvalBar::new(self.eval(), self.board.read(cx).flipped()))
+            .tool(flip_button("analysis-flip-board", cx, AnalysisPage::flip))
+            .tool(copy_fen(self.history.shown()))
     }
 
-    /// The engine, the history, a FEN field, and the shown position's FEN.
-    fn side_column(&self, page: WeakEntity<Self>) -> Div {
-        v_flex()
-            .w_80()
-            .flex_shrink_0()
-            .gap_4()
-            .children(self.review_panel())
+    /// The review, the engine, the moves and the field to load a game.
+    fn side_column(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> SidePanel {
+        SidePanel::new()
+            .header(PanelHeader::new(ANALYSIS_PICTURE, "Analysis"))
+            .child(self.header(cx))
             .child(EnginePanel::new(
-                self.enabled,
+                self.enabled && self.problem.is_none(),
                 self.engine_status(),
                 self.line_views(),
                 toggle_engine(page.clone()),
             ))
+            .child(self.middle(page.clone(), cx))
             .child(
                 NavigationBar::new(
                     self.history.can_go_back(),
@@ -551,29 +604,49 @@ impl AnalysisPage {
                 )
                 .on_hold(hold_step(page.clone())),
             )
-            .child(
-                MoveList::new(
-                    self.history.sans().to_vec(),
-                    self.history.viewing(),
-                    select_move(page.clone()),
-                )
-                .classes(self.review_classes()),
-            )
             .child(FenInput::new(
                 self.fen_input.clone(),
                 self.fen_error.clone(),
                 load_fen(page),
             ))
-            .child(PositionPanel::new(*self.history.shown()))
     }
 
-    /// Starts a review of the game on the board: the opening table is read off this thread,
+    /// Between the fixed top and bottom: the moves, scrolling; once reviewed, the review over
+    /// them, scrolling together.
+    fn middle(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> AnyElement {
+        let moves = MoveList::new(
+            self.history.sans().to_vec(),
+            self.history.viewing(),
+            select_move(page),
+        )
+        .classes(self.review_classes());
+        match self.review_panel(cx) {
+            None => moves.into_any_element(),
+            Some(review) => div()
+                .id("analysis-middle")
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_3()
+                        .child(review)
+                        .child(moves.unbounded()),
+                )
+                .into_any_element(),
+        }
+    }
+
+    /// Starts a review of the game on the board: the opening table is built off this thread,
     /// then a few engines of its own search the game's positions. Live analysis pauses until it
     /// is done.
-    fn start_review(&mut self, cx: &mut Context<Self>) {
+    pub fn start_review(&mut self, cx: &mut Context<Self>) {
         if self.history.sans().is_empty() || self.is_reviewing() {
             return;
         }
+        self.review_problem = false;
         if locate_stockfish().is_none() {
             self.problem = Some(EngineProblem::NotFound);
             cx.notify();
@@ -600,7 +673,7 @@ impl AnalysisPage {
     fn begin_review(&mut self, run: ReviewRun, cx: &mut Context<Self>) {
         self.review_start = None;
         if let Some(review) = run.finish() {
-            // Nothing to search: every move followed the opening table or ended the game.
+            // Nothing to search: every position was already known, as a finished one is.
             self.complete_review(review, cx);
             return;
         }
@@ -610,10 +683,12 @@ impl AnalysisPage {
             return;
         };
         let mut workers = Vec::new();
-        for index in 0..review_engines(device_cores()) {
+        for _ in 0..review_engines(device_cores()) {
             let Ok((engine, events)) = Engine::spawn(&path) else {
                 break;
             };
+            // Its place among the workers that started: its messages are routed by it.
+            let index = workers.len();
             let settings = EngineSettings {
                 threads: 1,
                 hash_mb: REVIEW_HASH_MB,
@@ -635,14 +710,16 @@ impl AnalysisPage {
             }
         }
         if workers.is_empty() {
-            self.problem = Some(EngineProblem::Stopped);
+            self.review_problem = true;
+            // Live analysis waited for the review: with none to run, it comes back.
+            self.sync_engine(cx);
             cx.notify();
             return;
         }
         self.reviewer = Some(Reviewer {
             workers,
             run,
-            _replay: start_replay(cx),
+            _replay: start_ticker(REPLAY_STEP, cx, AnalysisPage::replay_step),
         });
         self.show_position(0, cx);
     }
@@ -665,11 +742,11 @@ impl AnalysisPage {
         match message {
             UciMessage::UciOk => {
                 let commands = worker.queue.on_uciok();
-                self.send_review(index, &commands);
+                self.send_review(index, &commands, cx);
             }
             UciMessage::ReadyOk => {
                 let commands = worker.queue.on_readyok();
-                self.send_review(index, &commands);
+                self.send_review(index, &commands, cx);
                 self.give_work(index, cx);
             }
             UciMessage::Info(info) => {
@@ -684,7 +761,7 @@ impl AnalysisPage {
                 if let Some(position) = worker.searching.take() {
                     reviewer.run.store(position, &lines);
                 }
-                self.send_review(index, &commands);
+                self.send_review(index, &commands, cx);
                 self.give_work(index, cx);
             }
             UciMessage::Other => {}
@@ -709,7 +786,7 @@ impl AnalysisPage {
         };
         worker.searching = Some(position);
         let commands = worker.queue.request(fen);
-        self.send_review(index, &commands);
+        self.send_review(index, &commands, cx);
     }
 
     /// The review is ready: the engines go, live analysis comes back, and the board starts
@@ -747,7 +824,7 @@ impl AnalysisPage {
         );
     }
 
-    fn send_review(&mut self, index: usize, commands: &[Command]) {
+    fn send_review(&mut self, index: usize, commands: &[Command], cx: &mut Context<Self>) {
         let Some(worker) = self
             .reviewer
             .as_mut()
@@ -759,21 +836,22 @@ impl AnalysisPage {
             .iter()
             .any(|command| worker.engine.send(command).is_err())
         {
-            self.reviewer = None;
-            self.problem = Some(EngineProblem::Stopped);
+            self.review_failed(cx);
         }
     }
 
-    /// One of the review's engines died: the review is dropped and the engine panel says so.
+    /// One of the review's engines died or could not be written to: the review is dropped, its
+    /// button says so, and live analysis comes back.
     fn review_failed(&mut self, cx: &mut Context<Self>) {
         self.reviewer = None;
-        self.problem = Some(EngineProblem::Stopped);
+        self.review_problem = true;
         self.sync_engine(cx);
     }
 
     /// A review belongs to one game: any change to the game, or a new one, drops it and any
     /// review still running.
     fn clear_review(&mut self) {
+        self.review_problem = false;
         self.review = None;
         self.review_start = None;
         self.reviewer = None;
@@ -812,7 +890,7 @@ impl AnalysisPage {
         Some((mv.to, class))
     }
 
-    fn review_panel(&self) -> Option<ReviewPanel> {
+    fn review_panel(&self, cx: &mut Context<Self>) -> Option<ReviewPanel> {
         let review = self.review.as_ref()?;
         let counts = MoveClass::ALL
             .into_iter()
@@ -823,12 +901,19 @@ impl AnalysisPage {
                     class_count(review, Side::Black, class),
                 )
             })
-            .filter(|(_, white, black)| white + black > 0)
             .collect();
+        let page = cx.entity().downgrade();
+        let graph = EvalGraph::new(
+            review.shares.clone(),
+            self.history.viewing(),
+            move |position, _, cx| {
+                let _ = page.update(cx, |page, cx| page.show_position(position, cx));
+            },
+        );
         Some(ReviewPanel::new(
             (review.accuracy, review.ratings),
             counts,
-            self.shown_verdict(),
+            (self.shown_verdict(), graph),
         ))
     }
 
@@ -847,37 +932,46 @@ impl AnalysisPage {
         })
     }
 
-    /// Review, or how far a running review has got.
-    fn review_button(&self, cx: &mut Context<Self>) -> Button {
+    /// Game Review, large and green with its star; it counts the positions while it runs.
+    fn review_button(&self, cx: &mut Context<Self>) -> StartButton {
         let label = match (&self.reviewer, self.is_reviewing()) {
             (Some(reviewer), _) => {
                 let (done, total) = reviewer.run.progress();
                 format!("Reviewing {done}/{total}")
             }
             (None, true) => "Reviewing…".to_owned(),
-            (None, false) => "Review".to_owned(),
+            (None, false) => "Game Review".to_owned(),
         };
-        Button::new("review-game")
-            .primary()
-            .icon(IconName::Sparkles)
-            .label(label)
-            .loading(self.is_reviewing())
-            .disabled(self.is_reviewing())
-            .on_click(cx.listener(|page, _, _, cx| page.start_review(cx)))
+        let page = cx.entity().downgrade();
+        StartButton::new("review-game", label, move |_, cx| {
+            let _ = page.update(cx, |page, cx| page.start_review(cx));
+        })
+        .picture(REVIEW_PICTURE)
+        .busy(self.is_reviewing())
     }
 
+    /// At the top of the panel: Game Review until the game has been reviewed, why the last
+    /// review stopped if it did, and Reset board.
     fn header(&self, cx: &mut Context<Self>) -> Div {
-        h_flex()
-            .justify_between()
-            .child(Label::new("Analysis").text_2xl())
+        let reset = cx.entity().downgrade();
+        let reviewable = !self.history.sans().is_empty() && self.review.is_none();
+        v_flex()
+            .gap_2()
+            .when(reviewable, |this| this.child(self.review_button(cx)))
+            .when(self.review_problem, |this| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().danger)
+                        .child("The review stopped: try again"),
+                )
+            })
             .child(
-                h_flex()
-                    .gap_2()
-                    .when(!self.history.sans().is_empty(), |this| {
-                        this.child(self.review_button(cx))
-                    })
-                    .child(flip_button(cx))
-                    .child(reset_button(cx)),
+                ChoiceTile::new("reset-board", "Reset board", false, move |_, cx| {
+                    let _ = reset.update(cx, |page, cx| page.reset_board(cx));
+                })
+                .icon(IconName::RefreshCw)
+                .height(px(40.)),
             )
     }
 }
@@ -906,19 +1000,10 @@ impl Render for AnalysisPage {
                 cx.listener(|page, _, window, cx| page.focus(window, cx)),
             )
             .size_full()
-            .p_6()
-            .gap_4()
-            .child(self.header(cx))
-            .child(
-                h_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .items_start()
-                    .justify_center()
-                    .gap_6()
-                    .child(self.board_column(cx))
-                    .child(self.side_column(page)),
-            )
+            .child(board_page(
+                self.board_column(cx),
+                self.side_column(page, cx),
+            ))
     }
 }
 
@@ -938,37 +1023,6 @@ fn listen_review(
             }
         }
     })
-}
-
-/// Steps the board forward while the review runs.
-fn start_replay(cx: &mut Context<AnalysisPage>) -> Task<()> {
-    cx.spawn(async move |page, cx| {
-        loop {
-            cx.background_executor().timer(REPLAY_STEP).await;
-            let going = page
-                .update(cx, |page, cx| page.replay_step(cx))
-                .unwrap_or(false);
-            if !going {
-                break;
-            }
-        }
-    })
-}
-
-fn flip_button(cx: &mut Context<AnalysisPage>) -> Button {
-    Button::new("analysis-flip-board")
-        .ghost()
-        .icon(IconName::ArrowUpDown)
-        .tooltip("Flip board")
-        .on_click(cx.listener(|page, _, _, cx| page.flip(cx)))
-}
-
-fn reset_button(cx: &mut Context<AnalysisPage>) -> Button {
-    Button::new("reset-board")
-        .outline()
-        .icon(IconName::RefreshCw)
-        .label("Reset board")
-        .on_click(cx.listener(|page, _, _, cx| page.reset_board(cx)))
 }
 
 /// Enter in the FEN field loads it, like the Load button.
@@ -1143,7 +1197,7 @@ mod tests {
     fn holding_forward_keeps_stepping_until_let_go(cx: &mut TestAppContext) {
         let (page, cx) = opened(cx);
         page.update(cx, |page, cx| {
-            page.load_game(&fools_mate(), 0, cx);
+            page.load_game(&fools_mate(), (0, None), cx);
         });
         let forward = centre_of(cx, "held-nav-forward");
         cx.simulate_mouse_down(forward, MouseButton::Left, Modifiers::none());
@@ -1256,7 +1310,7 @@ mod tests {
         let (page, cx) = opened(cx);
         cx.update(|_, cx| record_sounds(cx));
         page.update(cx, |page, cx| {
-            page.load_game(&fools_mate(), 4, cx);
+            page.load_game(&fools_mate(), (4, None), cx);
             page.start_review(cx);
         });
         for _ in 0..3000 {
@@ -1308,5 +1362,37 @@ mod tests {
             );
             assert!(shown.engine_arrow.is_none(), "one arrow at a time");
         });
+    }
+
+    #[gpui_kit::test]
+    fn a_resigned_game_keeps_its_ending_until_the_board_changes(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        let mut game = Game::new();
+        for (from, to) in [("e2", "e4"), ("e7", "e5")] {
+            let mv = Move::new(
+                from.parse().expect("a square"),
+                to.parse().expect("a square"),
+            );
+            game.play(mv).expect("legal");
+        }
+        let resigned = Some(chess_domain::Outcome::Resignation {
+            winner: chess_domain::Side::White,
+        });
+        page.update(cx, |page, cx| page.load_game(&game, (2, resigned), cx));
+        let shown = page.read_with(cx, |page, _| page.shown_position().outcome);
+        assert_eq!(shown, resigned, "the kings wear it on the final position");
+        page.update(cx, |page, cx| page.reset_board(cx));
+        let shown = page.read_with(cx, |page, _| page.shown_position().outcome);
+        assert_eq!(shown, None, "a new board has not ended");
+    }
+
+    #[gpui_kit::test]
+    fn a_failed_review_message_goes_once_the_board_changes(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        page.update(cx, |page, cx| {
+            page.review_problem = true;
+            page.reset_board(cx);
+        });
+        assert!(!page.read_with(cx, |page, _| page.review_problem));
     }
 }

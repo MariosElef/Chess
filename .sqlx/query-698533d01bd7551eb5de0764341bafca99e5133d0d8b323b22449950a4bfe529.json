@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- What closing an account checks: its password, and that it is not a shared guest.\nSELECT\n    users.password_hash,\n    users.guest_number IS NOT NULL AS \"guest!\"\nFROM account.users\nWHERE users.id = $1 AND users.deleted_at IS NULL\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "password_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "password_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "guest!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "698533d01bd7551eb5de0764341bafca99e5133d0d8b323b22449950a4bfe529"
+}

@@ -9,6 +9,7 @@ use crate::components::{
     analysis::{review_icon, review_icon_paths},
     board::{PIECE_IMAGES, end_picture, end_picture_paths},
     play::{bot_picture, bot_picture_paths, speed_picture_bytes, speed_picture_paths},
+    puzzles::{puzzle_picture, puzzle_picture_paths},
     shell::{nav_picture, nav_picture_paths},
 };
 
@@ -20,20 +21,26 @@ icon_assets!(
         ChevronsLeft,
         ChevronsRight,
         Flag,
-        Handshake,
         ArrowUpDown,
         Microscope,
         Users,
         UserPlus,
         Swords,
-        Sparkles,
         LogIn,
-        LogOut
+        LogOut,
+        Zap,
+        Timer,
+        Trophy,
+        Signal,
+        RotateCcw,
+        Fish,
+        Upload
     ]
 );
 
-/// The kit's default icons, the Lucide icons only this app uses, the piece images, the game
-/// review's icons, and the rail's and the speeds' pictures.
+/// The kit's default icons, the Lucide icons only this app uses, the piece images, and the
+/// app's pictures: the review's icons, the rail's, the speeds', the bots', the end-of-game
+/// badges and the Puzzles page's own.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {
@@ -46,6 +53,7 @@ impl AssetSource for AppAssets {
             .or_else(|| speed_picture_bytes(path))
             .or_else(|| bot_picture(path))
             .or_else(|| end_picture(path))
+            .or_else(|| puzzle_picture(path))
         {
             return Ok(Some(Cow::Borrowed(icon)));
         }
@@ -67,6 +75,7 @@ impl AssetSource for AppAssets {
                 .chain(speed_picture_paths())
                 .chain(bot_picture_paths())
                 .chain(end_picture_paths())
+                .chain(puzzle_picture_paths())
                 .filter(|icon| icon.starts_with(path))
                 .map(SharedString::from),
         );
@@ -112,6 +121,7 @@ mod tests {
             "end/winner.png",
             "end/checkmate_black.png",
             "end/timeout_white.png",
+            "puzzles/battle.svg",
         ] {
             let served = AppAssets.load(path).expect("loading never fails");
             assert!(served.is_some_and(|bytes| !bytes.is_empty()), "{path}");

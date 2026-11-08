@@ -1,52 +1,42 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    component::{
-        ActiveTheme as _,
-        button::{Button, ButtonVariants},
-        h_flex,
-        label::Label,
-        slider::SliderState,
-        v_flex,
-    },
+    component::{ActiveTheme as _, h_flex, slider::SliderState, v_flex},
     *,
 };
 
-use super::range_picker::RangePicker;
+use super::{puzzle_pictures::BATTLE_PICTURE, range_picker::RangePicker, rush_menu::RUSH_PICTURE};
 use crate::{
-    enums::puzzles::RushKind,
-    models::puzzles::{BestRush, RatingRange},
-    services::puzzles::best_text,
+    components::{
+        panel::{MenuTile, StartButton},
+        shell::PUZZLES_PICTURE,
+    },
+    models::puzzles::RatingRange,
 };
 
-type OnPractice = Rc<dyn Fn(&mut Window, &mut App)>;
-type OnRush = Rc<dyn Fn(RushKind, &mut Window, &mut App)>;
+type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The Puzzles menu: the puzzle rating, Practice at a chosen difficulty, and the three kinds
-/// of Puzzle Rush with the best score of each.
+/// The Puzzles panel: the puzzle rating, Practice at a chosen difficulty, and the ways into
+/// Puzzle Rush and Puzzle Battle.
 #[derive(IntoElement)]
 pub struct PuzzleMenu {
     rating_line: String,
     slider: Entity<SliderState>,
     range: RatingRange,
-    best: BestRush,
-    on_practice: OnPractice,
-    on_rush: OnRush,
+    on_practice: OnClick,
+    on_rush: OnClick,
+    on_battle: OnClick,
 }
 
 impl PuzzleMenu {
-    pub fn new(
-        rating_line: String,
-        (slider, range): (Entity<SliderState>, RatingRange),
-        best: BestRush,
-    ) -> Self {
+    pub fn new(rating_line: String, (slider, range): (Entity<SliderState>, RatingRange)) -> Self {
         Self {
             rating_line,
             slider,
             range,
-            best,
             on_practice: Rc::new(|_, _| {}),
-            on_rush: Rc::new(|_, _, _| {}),
+            on_rush: Rc::new(|_, _| {}),
+            on_battle: Rc::new(|_, _| {}),
         }
     }
 
@@ -55,77 +45,65 @@ impl PuzzleMenu {
         self
     }
 
-    pub fn on_rush(mut self, handler: impl Fn(RushKind, &mut Window, &mut App) + 'static) -> Self {
+    pub fn on_rush(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_rush = Rc::new(handler);
+        self
+    }
+
+    pub fn on_battle(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_battle = Rc::new(handler);
         self
     }
 }
 
 impl RenderOnce for PuzzleMenu {
+    /// As chess.com lays it out: the heading with the rating, the difficulty and Solve
+    /// Puzzles, then a tile for each other way to play.
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (on_practice, on_rush, best) = (self.on_practice, self.on_rush, self.best);
+        let (on_practice, on_rush, on_battle) = (self.on_practice, self.on_rush, self.on_battle);
         v_flex()
-            .w_96()
-            .gap_5()
-            .p_6()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().border)
-            .child(muted(self.rating_line, cx))
+            .w_full()
+            .gap_3()
+            .child(heading(self.rating_line, cx))
+            .child(RangePicker::new(self.slider, self.range))
+            .child(StartButton::new(
+                "start-practice",
+                "Solve Puzzles",
+                move |window, cx| on_practice(window, cx),
+            ))
             .child(
-                section(
-                    "Practice",
-                    "One puzzle at a time, at the difficulty you choose.",
-                    cx,
-                )
-                .child(RangePicker::new(self.slider, self.range))
-                .child(
-                    Button::new("start-practice")
-                        .primary()
-                        .w_full()
-                        .label("Start practice")
-                        .on_click(move |_, window, cx| on_practice(window, cx)),
-                ),
+                MenuTile::new("open-rush", "Puzzle Rush", move |window, cx| {
+                    on_rush(window, cx)
+                })
+                .picture(RUSH_PICTURE),
             )
             .child(
-                section(
-                    "Puzzle Rush",
-                    "As many as you can, ever harder; three mistakes end it.",
-                    cx,
-                )
-                .children(RushKind::ALL.map(|kind| {
-                    let on_rush = Rc::clone(&on_rush);
-                    h_flex()
-                        .justify_between()
-                        .child(
-                            v_flex()
-                                .child(Label::new(kind.label()))
-                                .child(muted(best_text(best_of(best, kind)), cx)),
-                        )
-                        .child(
-                            Button::new(kind.key())
-                                .outline()
-                                .label("Start")
-                                .on_click(move |_, window, cx| on_rush(kind, window, cx)),
-                        )
-                })),
+                MenuTile::new("open-battle", "Puzzle Battle", move |window, cx| {
+                    on_battle(window, cx)
+                })
+                .picture(BATTLE_PICTURE),
             )
     }
 }
 
-fn best_of(best: BestRush, kind: RushKind) -> Option<i32> {
-    match kind {
-        RushKind::ThreeMinutes => best.three_minutes,
-        RushKind::FiveMinutes => best.five_minutes,
-        RushKind::Survival => best.survival,
-    }
-}
-
-fn section(title: &'static str, description: &'static str, cx: &App) -> Div {
+/// The puzzles picture and the page's name, large, with the player's rating under them.
+fn heading(rating_line: String, cx: &App) -> Div {
     v_flex()
-        .gap_3()
-        .child(Label::new(title).text_lg())
-        .child(muted(description.to_owned(), cx))
+        .items_center()
+        .gap_1()
+        .py_3()
+        .child(
+            h_flex()
+                .gap_3()
+                .child(img(PUZZLES_PICTURE).size_10())
+                .child(
+                    div()
+                        .text_3xl()
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .child("Puzzles"),
+                ),
+        )
+        .child(muted(rating_line, cx))
 }
 
 fn muted(text: String, cx: &App) -> Div {

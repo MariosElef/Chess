@@ -11,3 +11,4 @@ pub mod settings;
 pub mod shell;
 pub mod social;
 pub mod sound;
+pub mod ticker;

@@ -2,19 +2,20 @@ use anyhow::anyhow;
 use chess_domain::{Move, Position};
 use uuid::Uuid;
 
-use super::rating::{PUZZLE_CATEGORY, from_row, shown};
+use super::rating::{BATTLE_CATEGORY, PUZZLE_CATEGORY, from_row, shown};
 use crate::{
     clients::lichess::LichessClient,
     enums::puzzles::RushKind,
     errors::{AppError, ChessCode, FieldError, Fields},
     models::puzzles::{
+        battle::BattleSummaryModel,
         puzzle::{GetPuzzleModel, PuzzleQuery, PuzzleRow},
         rush::BestRushRow,
         summary::{BestRushModel, GetPuzzleSummaryModel},
     },
     repositories::{
         database::Db,
-        puzzles::{puzzle, rush_run},
+        puzzles::{battle, puzzle, rush_run},
         rating,
     },
 };
@@ -22,6 +23,10 @@ use crate::{
 /// The widest range a player may ask for, and what a missing end means.
 const LOWEST_RATING: i32 = 400;
 const HIGHEST_RATING: i32 = 3200;
+/// A battle's ladder: how many puzzles, the first one's rating, and how much harder each next.
+const LADDER_LENGTH: usize = 40;
+const LADDER_START: i32 = 600;
+const LADDER_STEP: i32 = 40;
 /// Puzzle ids are Lichess's: five letters and digits.
 const ID_ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
@@ -74,7 +79,8 @@ impl PuzzleService {
         Ok(puzzle::first_from(&self.db, range, (min, ""), user_id).await?)
     }
 
-    /// The puzzle rating and best rushes for the Puzzles menu; a guest keeps neither.
+    /// The puzzle rating and best rushes, ever and today, for the Puzzles menu; a guest keeps
+    /// none of them.
     pub async fn summary(
         &self,
         user_id: Uuid,
@@ -85,16 +91,28 @@ impl PuzzleService {
                 guest,
                 rating: None,
                 best_rush: BestRushModel::default(),
+                best_today: BestRushModel::default(),
+                battle: BattleSummaryModel::default(),
             });
         }
         let rating = rating::get(&self.db, user_id, PUZZLE_CATEGORY)
             .await?
             .map(|row| shown(from_row(row), None));
         let bests = rush_run::bests(&self.db, user_id).await?;
+        let today = rush_run::bests_today(&self.db, user_id).await?;
+        let battle_rating = rating::get(&self.db, user_id, BATTLE_CATEGORY)
+            .await?
+            .map(|row| shown(from_row(row), None));
+        let wins_this_month = battle::wins_this_month(&self.db, user_id).await?;
         let response = GetPuzzleSummaryModel {
             guest,
             rating,
             best_rush: best_rush(bests),
+            best_today: best_rush(today),
+            battle: BattleSummaryModel {
+                rating: battle_rating,
+                wins_this_month,
+            },
         };
         Ok(response)
     }
@@ -177,6 +195,32 @@ fn opened(row: PuzzleRow) -> Result<GetPuzzleModel, AppError> {
         themes: row.themes,
     };
     Ok(response)
+}
+
+/// A battle's puzzles, the same for both players: from easy, a little harder each one, so no
+/// one ever runs out in three minutes. Needs the imported database.
+pub async fn battle_ladder(db: &Db) -> Result<Vec<GetPuzzleModel>, AppError> {
+    let mut ladder = Vec::with_capacity(LADDER_LENGTH);
+    for step in 0..LADDER_LENGTH {
+        let target = LADDER_START + LADDER_STEP * i32::try_from(step).unwrap_or(i32::MAX);
+        let range = (target - LADDER_STEP, target + LADDER_STEP);
+        let from = (rand::random_range(range.0..=range.1), random_id_start());
+        // Nobody's attempts are left out: a nil player has none.
+        let row = match puzzle::first_from(db, range, (from.0, &from.1), Uuid::nil()).await? {
+            Some(row) => Some(row),
+            None => puzzle::first_from(db, range, (range.0, ""), Uuid::nil()).await?,
+        };
+        // Steps next to each other overlap: a puzzle already on the ladder is not used twice.
+        if let Some(row) =
+            row.filter(|row| !ladder.iter().any(|kept: &GetPuzzleModel| kept.id == row.id))
+        {
+            ladder.push(opened(row)?);
+        }
+    }
+    if ladder.is_empty() {
+        return Err(ChessCode::NoPuzzleInRange.into());
+    }
+    Ok(ladder)
 }
 
 /// Lichess's five steps are measured against about 1500: the step nearest the range's middle.

@@ -36,7 +36,7 @@ async fn next(
     Ok(Json(response))
 }
 
-/// The puzzle rating and best rushes, for the Puzzles menu.
+/// The puzzle rating, the best rushes ever and today, and the battle rating, for the Puzzles menu.
 async fn summary(
     State(state): State<AppState>,
     signed_in: SignedIn,

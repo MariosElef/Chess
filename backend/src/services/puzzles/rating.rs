@@ -6,6 +6,8 @@ use crate::{models::puzzles::rating::PuzzleRatingModel, services::rating::whole}
 
 /// Puzzle ratings are kept in this category of `play.ratings`.
 pub const PUZZLE_CATEGORY: &str = "puzzle";
+/// The category Puzzle Battle's rating moves in.
+pub const BATTLE_CATEGORY: &str = "puzzle_battle";
 
 /// Rounded for the player; `before` gives the change the last result made.
 pub fn shown(rating: Rating, before: Option<Rating>) -> PuzzleRatingModel {

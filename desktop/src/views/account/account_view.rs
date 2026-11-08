@@ -11,14 +11,14 @@ use gpui_kit::{
 use crate::{
     clients::{server::ServerClient, settings::SessionTokenFile},
     components::account::{
-        AccountCard, FormField, GuestCard, SignedInCard, StatsPanel, WaitingCard,
+        AccountCard, CloseAccountCard, FormField, GuestCard, SignedInCard, StatsPanel, WaitingCard,
     },
     enums::account::AccountForm,
     models::{
         account::{AccountChanged, FormProblems, Session, SignIn, SignUp, Stats, User},
         server::ServerError,
     },
-    services::account::form_problems,
+    services::{account::form_problems, server::error_message},
 };
 
 /// Signing in, creating an account, and signing out; it keeps the session for the whole app.
@@ -38,6 +38,9 @@ pub struct AccountView {
     restoring: bool,
     /// Enter in any field submits the form.
     _enter_presses: Vec<Subscription>,
+    /// Deleting the account: its password field, why the last try failed, and a request on
+    /// its way; `None` until Delete account is pressed.
+    closing: Option<Closing>,
     /// The signed-in player's ratings and results, once fetched.
     stats: Option<Stats>,
 }
@@ -73,6 +76,7 @@ impl AccountView {
             restoring: false,
             _enter_presses,
             stats: None,
+            closing: None,
         };
         view.restore(window, cx);
         view
@@ -240,14 +244,23 @@ impl AccountView {
         let Some(session) = self.session.take() else {
             return;
         };
-        self.stats = None;
-        let _ = self.tokens.forget();
         let request = self.client.sign_out(&session.token);
         cx.spawn(async move |_, _| {
             // Signed out here already; the server's answer changes nothing.
             let _ = request.await;
         })
         .detach();
+        self.forget_session(cx);
+    }
+
+    /// No one signed in any more: what was theirs goes, the saved token too, and the sign-in
+    /// form comes back.
+    fn forget_session(&mut self, cx: &mut Context<Self>) {
+        self.session = None;
+        self.stats = None;
+        self.closing = None;
+        // A failed delete of the saved token only means a sign-in screen at next launch.
+        let _ = self.tokens.forget();
         self.form = AccountForm::SignIn;
         cx.emit(AccountChanged);
         cx.notify();
@@ -304,15 +317,26 @@ impl AccountView {
             )
             .into_any_element();
         }
+        if self.session.is_some()
+            && let Some(card) = self.close_card(cx)
+        {
+            return card.into_any_element();
+        }
         match &self.session {
-            Some(session) => SignedInCard::new(
-                session.user.username.clone(),
-                session.user.email.clone(),
-                move |_, cx| {
-                    let _ = view.update(cx, |view, cx| view.sign_out(cx));
-                },
-            )
-            .into_any_element(),
+            Some(session) => {
+                let open = view.clone();
+                SignedInCard::new(
+                    session.user.username.clone(),
+                    session.user.email.clone(),
+                    move |_, cx| {
+                        let _ = view.update(cx, |view, cx| view.sign_out(cx));
+                    },
+                    move |window, cx| {
+                        let _ = open.update(cx, |view, cx| view.open_closing(window, cx));
+                    },
+                )
+                .into_any_element()
+            }
             None => {
                 let (switch_view, guest_view) = (view.clone(), view.clone());
                 AccountCard::new(
@@ -337,6 +361,84 @@ impl AccountView {
 }
 
 impl AccountView {
+    /// Delete account was pressed: the confirmation asks for the password.
+    fn open_closing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(token) = self.token() else {
+            return;
+        };
+        let password = text_field("Your password", true, window, cx);
+        let _enter = cx.subscribe_in(&password, window, confirm_on_enter);
+        self.closing = Some(Closing {
+            password,
+            token,
+            problem: None,
+            busy: false,
+            _enter,
+        });
+        cx.notify();
+    }
+
+    /// The confirmation, while the account is being deleted.
+    fn close_card(&self, cx: &mut Context<Self>) -> Option<CloseAccountCard> {
+        let closing = self.closing.as_ref()?;
+        let view = cx.entity().downgrade();
+        let cancel = view.clone();
+        let card = CloseAccountCard::new(
+            FormField::new(
+                "Password",
+                closing.password.clone(),
+                closing.problem.clone(),
+            )
+            .password(),
+            closing.busy,
+            move |_, cx| {
+                let _ = view.update(cx, |view, cx| view.confirm_closing(cx));
+            },
+            move |_, cx| {
+                let _ = cancel.update(cx, |view, cx| {
+                    view.closing = None;
+                    cx.notify();
+                });
+            },
+        );
+        Some(card)
+    }
+
+    /// Sends the password; once the server has closed the account, it is signed out here too.
+    fn confirm_closing(&mut self, cx: &mut Context<Self>) {
+        let Some(closing) = self.closing.as_mut().filter(|closing| !closing.busy) else {
+            return;
+        };
+        let token = closing.token.clone();
+        let password = closing.password.read(cx).value().to_string();
+        closing.busy = true;
+        let request = self.client.close_account(&token, &password);
+        cx.spawn(async move |view, cx| {
+            let result = request.await;
+            let _ = view.update(cx, |view, cx| view.closed(&token, result, cx));
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// The server's answer for the account signed in as `token`; if someone else has signed in
+    /// since, it is not theirs to act on.
+    fn closed(&mut self, token: &str, result: Result<(), ServerError>, cx: &mut Context<Self>) {
+        if self.token().as_deref() != Some(token) {
+            return;
+        }
+        match result {
+            Ok(()) => self.forget_session(cx),
+            Err(error) => {
+                if let Some(closing) = self.closing.as_mut() {
+                    closing.busy = false;
+                    closing.problem = Some(error_message(&error));
+                }
+            }
+        }
+        cx.notify();
+    }
+
     /// The Account page inside the app; before it opens, a welcome above the forms.
     fn heading(&self, cx: &App) -> Div {
         if self.is_admitted() {
@@ -371,6 +473,18 @@ impl Render for AccountView {
     }
 }
 
+/// The account being deleted: the password typed again, why the last try failed, and whether a
+/// request is on its way.
+struct Closing {
+    password: Entity<InputState>,
+    /// The session being closed: an answer for any other is ignored.
+    token: String,
+    problem: Option<String>,
+    busy: bool,
+    /// Enter in the field confirms, as in the other forms.
+    _enter: Subscription,
+}
+
 /// A one-line field; a password one hides what is typed.
 fn text_field(
     placeholder: &'static str,
@@ -401,6 +515,19 @@ fn submit_on_enter(
     }
 }
 
+/// Enter in the password field deletes the account, like the red button.
+fn confirm_on_enter(
+    view: &mut AccountView,
+    _: &Entity<InputState>,
+    event: &InputEvent,
+    _: &mut Window,
+    cx: &mut Context<AccountView>,
+) {
+    if let InputEvent::PressEnter { .. } = event {
+        view.confirm_closing(cx);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{env, process, thread, time::Duration};
@@ -408,7 +535,7 @@ mod tests {
     use axum::{
         Json, Router,
         http::StatusCode,
-        routing::{get, post},
+        routing::{delete, get, post},
     };
     use gpui_kit::{Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
@@ -459,14 +586,15 @@ mod tests {
                             "puzzles": {
                                 "rating": 1650, "provisional": true, "best": 1700,
                                 "attempted": 4, "solved": 3,
-                                "best_rush": { "three_minutes": 12, "five_minutes": null, "survival": null }
+                                "best_rush": { "three_minutes": 12, "five_minutes": null, "survival": null },
+                                "battle_rating": 1520, "battle_provisional": false
                             }
                         }))
                     }),
                 )
                 .route(
                     "/api/users/me",
-                    get(|| async {
+                    delete(|| async { StatusCode::NO_CONTENT }).get(|| async {
                         // A real server takes a moment: long enough to see the wait.
                         tokio::time::sleep(Duration::from_millis(300)).await;
                         Json(json!({
@@ -581,5 +709,52 @@ mod tests {
             Some("Mario")
         );
         tokens.forget().expect("cleaned up");
+    }
+
+    #[gpui_kit::test]
+    fn deleting_the_account_asks_for_the_password_then_signs_out(cx: &mut TestAppContext) {
+        let (view, tokens, cx) = opened(cx, "account-delete");
+        view.update_in(cx, |view, window, cx| {
+            view.login
+                .update(cx, |input, cx| input.set_value("mario", window, cx));
+            view.password
+                .update(cx, |input, cx| input.set_value("correct horse", window, cx));
+            view.submit(window, cx);
+        });
+        wait_for(&view, cx, AccountView::is_admitted);
+
+        view.update_in(cx, |view, window, cx| view.open_closing(window, cx));
+        view.update_in(cx, |view, window, cx| {
+            let field = view
+                .closing
+                .as_ref()
+                .expect("the confirmation")
+                .password
+                .clone();
+            field.update(cx, |input, cx| input.set_value("correct horse", window, cx));
+            view.confirm_closing(cx);
+        });
+        wait_for(&view, cx, |view| !view.is_admitted());
+        assert_eq!(tokens.load(), None, "the saved token goes with the account");
+        assert!(view.update(cx, |view, _| view.closing.is_none()));
+    }
+
+    #[gpui_kit::test]
+    fn signing_out_puts_the_delete_confirmation_away(cx: &mut TestAppContext) {
+        let (view, _, cx) = opened(cx, "account-delete-sign-out");
+        view.update_in(cx, |view, window, cx| {
+            view.login
+                .update(cx, |input, cx| input.set_value("mario", window, cx));
+            view.password
+                .update(cx, |input, cx| input.set_value("correct horse", window, cx));
+            view.submit(window, cx);
+        });
+        wait_for(&view, cx, AccountView::is_admitted);
+        view.update_in(cx, |view, window, cx| view.open_closing(window, cx));
+        view.update(cx, |view, cx| view.sign_out(cx));
+        assert!(
+            view.update(cx, |view, _| view.closing.is_none()),
+            "the next player does not land on it"
+        );
     }
 }

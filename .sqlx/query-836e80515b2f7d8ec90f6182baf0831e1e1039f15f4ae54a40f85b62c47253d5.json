@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A group the player was the last member of has no one left to read it. A game's chat stays\n-- even when empty: its game keeps pointing at it.\nDELETE FROM social.conversations\nWHERE\n    conversations.kind = 'group'\n    AND NOT EXISTS (\n        SELECT 1\n        FROM social.conversation_members\n        WHERE conversation_members.conversation_id = conversations.id\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "836e80515b2f7d8ec90f6182baf0831e1e1039f15f4ae54a40f85b62c47253d5"
+}

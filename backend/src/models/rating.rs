@@ -8,9 +8,10 @@ pub struct RatingRow {
     pub volatility: f64,
 }
 
-/// What moved a rating, for its history: a game or a puzzle attempt, never both.
+/// What moved a rating, for its history: a game, a puzzle attempt or a puzzle battle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RatingSource {
     Game(Uuid),
     PuzzleAttempt(Uuid),
+    Battle(Uuid),
 }

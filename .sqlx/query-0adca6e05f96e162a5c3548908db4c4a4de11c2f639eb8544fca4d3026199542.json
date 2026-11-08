@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- Players whose name contains $2 (lowercase, LIKE-escaped), names starting with it first;\n-- never $1. With the friendship to $1, if any.\nSELECT\n    users.id AS user_id,\n    users.username,\n    friendships.status AS \"status?\",\n    friendships.requester_id AS \"requester_id?\"\nFROM account.users\nLEFT JOIN social.friendships\n    ON\n        friendships.user_a_id = least($1, users.id)\n        AND friendships.user_b_id = greatest($1, users.id)\nWHERE\n    users.id <> $1\n    AND lower(users.username) LIKE '%' || $2 || '%' ESCAPE '\\'\nORDER BY lower(users.username) LIKE $2 || '%' DESC, lower(users.username)\nLIMIT $3\n",
+  "query": "-- Players whose name contains $2 (lowercase, LIKE-escaped), names starting with it first;\n-- never $1. With the friendship to $1, if any.\nSELECT\n    users.id AS user_id,\n    users.username,\n    friendships.status AS \"status?\",\n    friendships.requester_id AS \"requester_id?\"\nFROM account.users\nLEFT JOIN social.friendships\n    ON\n        friendships.user_a_id = least($1, users.id)\n        AND friendships.user_b_id = greatest($1, users.id)\nWHERE\n    users.id <> $1\n    AND users.deleted_at IS NULL\n    AND lower(users.username) LIKE '%' || $2 || '%' ESCAPE '\\'\nORDER BY lower(users.username) LIKE $2 || '%' DESC, lower(users.username)\nLIMIT $3\n",
   "describe": {
     "columns": [
       {
@@ -62,5 +62,5 @@
       false
     ]
   },
-  "hash": "dc2205f6cc07104c735074ab65b42ea54a4067795a1948c4e40fa501b332d4c7"
+  "hash": "0adca6e05f96e162a5c3548908db4c4a4de11c2f639eb8544fca4d3026199542"
 }

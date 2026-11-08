@@ -1,6 +1,9 @@
-use std::time::{Duration, Instant};
+use std::{
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
-use gpui_kit::{component::h_flex, *};
+use gpui_kit::*;
 
 use super::{
     puzzle_request::{TokenSource, report_attempt, request_puzzle},
@@ -8,7 +11,11 @@ use super::{
 };
 use crate::{
     clients::server::ServerClient,
-    components::puzzles::{RushResult, RushScore},
+    components::{
+        board::{BoardColumn, board_page},
+        panel::{OnBack, PanelTitle, SidePanel},
+        puzzles::{RUSH_PICTURE, RushResult, RushScore},
+    },
     enums::{
         puzzles::{PuzzleVerdict, RushKind},
         sound::Sound,
@@ -21,7 +28,7 @@ use crate::{
         puzzles::RushRun,
         server::{error_message, is_problem},
     },
-    views::sound::play_sound,
+    views::{sound::play_sound, ticker::start_ticker},
 };
 
 /// How often the rush clock is redrawn and checked.
@@ -30,6 +37,10 @@ const TICK: Duration = Duration::from_millis(200);
 const NO_NEW_PUZZLE: &str = "/problems/no-puzzle-in-range";
 /// A solved puzzle stays on the board this long before the next one, so its last move is seen.
 const NEXT_DELAY: Duration = Duration::from_millis(300);
+
+/// A rush's score reached the server: the Rush panel's bests are fetched again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RushSaved;
 
 /// Puzzle Rush: ever harder puzzles until three mistakes, or the clock, end it. The next
 /// puzzle is fetched while the current one is solved.
@@ -45,6 +56,8 @@ pub struct RushView {
     upcoming: Option<Puzzle>,
     /// A fetch is on its way.
     fetching: bool,
+    /// The puzzle on its way; a new rush drops the last one's.
+    _fetch: Option<Task<()>>,
     /// The board is waiting for the fetch on its way.
     waiting: bool,
     /// The narrow band was empty, so the next fetch asks the wide one.
@@ -55,7 +68,11 @@ pub struct RushView {
     _ticker: Option<Task<()>>,
     _next: Option<Task<()>>,
     _verdicts: Subscription,
+    /// Back to the Rush panel, from the arrow at the top of the side column.
+    on_back: OnBack,
 }
+
+impl EventEmitter<RushSaved> for RushView {}
 
 impl RushView {
     pub fn new(client: ServerClient, token: TokenSource, cx: &mut Context<Self>) -> Self {
@@ -72,6 +89,7 @@ impl RushView {
             over: false,
             upcoming: None,
             fetching: false,
+            _fetch: None,
             waiting: false,
             widened: false,
             problem: None,
@@ -79,6 +97,7 @@ impl RushView {
             _ticker: None,
             _next: None,
             _verdicts,
+            on_back: Rc::new(|_, _| {}),
         }
     }
 
@@ -107,6 +126,8 @@ impl RushView {
         self._ticker = None;
         self.waiting = true;
         self.widened = false;
+        self.fetching = false;
+        self._fetch = None;
         self.solver.update(cx, |solver, cx| solver.clear(cx));
         self.fetch_next(cx);
         play_sound(Sound::GameStart, cx);
@@ -134,12 +155,10 @@ impl RushView {
         match request_puzzle(&self.client, &self.token, band, cx) {
             Ok(request) => {
                 self.fetching = true;
-                cx.spawn(async move |view, cx| {
+                self._fetch = Some(cx.spawn(async move |view, cx| {
                     let result = request.await;
-                    // The page outlives the request unless the window is closing.
                     let _ = view.update(cx, |view, cx| view.fetched(result, cx));
-                })
-                .detach();
+                }));
             }
             Err(reason) => self.problem = Some(reason.to_owned()),
         }
@@ -185,7 +204,7 @@ impl RushView {
         }
         if self.started.is_none() {
             self.started = Some(Instant::now());
-            self._ticker = Some(start_ticker(cx));
+            self._ticker = Some(start_ticker(TICK, cx, RushView::tick));
         }
         self.solver.update(cx, |solver, cx| solver.load(puzzle, cx));
         self.fetch_next(cx);
@@ -296,6 +315,7 @@ impl RushView {
             if let Ok(record) = request.await {
                 let _ = view.update(cx, |view, cx| {
                     view.record = Some(record);
+                    cx.emit(RushSaved);
                     cx.notify();
                 });
             }
@@ -334,29 +354,22 @@ impl RushView {
     }
 }
 
-impl Render for RushView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .size_full()
-            .items_start()
-            .justify_center()
-            .gap_6()
-            .child(div().h(relative(0.9)).child(self.solver.clone()))
-            .child(self.panel(cx))
+impl RushView {
+    pub fn on_back(&mut self, on_back: impl Fn(&mut Window, &mut App) + 'static) {
+        self.on_back = Rc::new(on_back);
     }
 }
 
-/// Wakes every tick until the rush is over or the page is gone.
-fn start_ticker(cx: &mut Context<RushView>) -> Task<()> {
-    cx.spawn(async move |view, cx| {
-        loop {
-            cx.background_executor().timer(TICK).await;
-            let keep_going = view.update(cx, |view, cx| view.tick(cx)).unwrap_or(false);
-            if !keep_going {
-                break;
-            }
-        }
-    })
+impl Render for RushView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let on_back = Rc::clone(&self.on_back);
+        let title = PanelTitle::new(RUSH_PICTURE, "Puzzle Rush")
+            .on_back(move |window, cx| on_back(window, cx));
+        board_page(
+            BoardColumn::new(self.solver.clone()),
+            SidePanel::new().child(title).child(self.panel(cx)),
+        )
+    }
 }
 
 #[cfg(test)]

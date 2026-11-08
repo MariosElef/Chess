@@ -24,3 +24,20 @@ pub struct ShownPosition {
     /// How the game ended, while its final position is shown: the kings wear it.
     pub outcome: Option<Outcome>,
 }
+
+impl ShownPosition {
+    /// The starting position, waiting for a game or a puzzle: nothing moves on it yet.
+    pub fn waiting() -> Self {
+        Self {
+            position: Position::starting(),
+            last_move: None,
+            can_move: false,
+            premoves: false,
+            player: None,
+            engine_arrow: None,
+            best_arrow: None,
+            badge: None,
+            outcome: None,
+        }
+    }
+}

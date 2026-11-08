@@ -1,5 +1,6 @@
 mod game_rating;
 mod hub;
+mod live_battle;
 mod live_game;
 mod pairing;
 

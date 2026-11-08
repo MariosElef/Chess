@@ -275,7 +275,11 @@ impl SocialView {
             | ServerMessage::Seeking { .. }
             | ServerMessage::SeekCancelled
             | ServerMessage::ChatMessage { .. }
-            | ServerMessage::ConversationsChanged => {}
+            | ServerMessage::ConversationsChanged
+            | ServerMessage::BattleSeeking
+            | ServerMessage::BattleSeekCancelled
+            | ServerMessage::Battle { .. }
+            | ServerMessage::BattleChallenges { .. } => {}
         }
     }
 

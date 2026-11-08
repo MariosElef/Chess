@@ -82,6 +82,15 @@ impl BoardView {
         self.interaction.flipped()
     }
 
+    /// The side playing from the bottom of the board.
+    pub fn bottom_side(&self) -> Side {
+        if self.flipped() {
+            Side::Black
+        } else {
+            Side::White
+        }
+    }
+
     /// Turns the board so `side` plays from the bottom.
     pub fn face(&mut self, side: Side, cx: &mut Context<Self>) {
         if self.interaction.flipped() != (side == Side::Black) {

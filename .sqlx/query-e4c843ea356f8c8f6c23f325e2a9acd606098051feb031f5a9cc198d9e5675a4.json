@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A direct chat is the pair's alone: it goes with its members and messages.\nDELETE FROM social.conversations\nWHERE\n    conversations.kind = 'direct'\n    AND conversations.id IN (\n        SELECT conversation_members.conversation_id\n        FROM social.conversation_members\n        WHERE conversation_members.user_id = $1\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4c843ea356f8c8f6c23f325e2a9acd606098051feb031f5a9cc198d9e5675a4"
+}

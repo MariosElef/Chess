@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{challenge::ChallengeModel, game::GameSnapshot};
-use crate::models::chat::message::ChatMessageModel;
+use crate::models::{
+    chat::message::ChatMessageModel,
+    puzzles::battle::{BattleChallengeModel, BattleSnapshot},
+};
 
 /// What the app sends over the live socket.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -52,6 +55,33 @@ pub enum ClientMessage {
     DeclineChallenge {
         challenge_id: Uuid,
     },
+    /// Pair me with the next player who wants a Puzzle Battle, rated or not.
+    SeekBattle {
+        rated: bool,
+    },
+    CancelBattleSeek,
+    /// The player's answer to their current puzzle in the battle: solved, or a mistake.
+    BattleAnswer {
+        battle_id: Uuid,
+        solved: bool,
+    },
+    /// Invite a friend who is online to a Puzzle Battle.
+    ChallengeBattle {
+        user_id: Uuid,
+        rated: bool,
+    },
+    /// Accept a battle invitation.
+    AcceptBattle {
+        challenge_id: Uuid,
+    },
+    /// Decline a battle invitation, or withdraw one sent.
+    DeclineBattle {
+        challenge_id: Uuid,
+    },
+    /// Give up a battle being played: the other player wins.
+    ResignBattle {
+        battle_id: Uuid,
+    },
 }
 
 /// What the server sends over the live socket.
@@ -86,4 +116,16 @@ pub enum ServerMessage {
     },
     /// A conversation was started, or someone joined or left one: fetch the list again.
     ConversationsChanged,
+    /// Waiting for a Puzzle Battle opponent.
+    BattleSeeking,
+    BattleSeekCancelled,
+    /// A battle the player is in, as it stands now.
+    Battle {
+        battle: BattleSnapshot,
+    },
+    /// The battle invitations waiting, each way, whenever they change.
+    BattleChallenges {
+        sent: Vec<BattleChallengeModel>,
+        received: Vec<BattleChallengeModel>,
+    },
 }

@@ -1,11 +1,14 @@
 use chess_domain::Category;
 use gpui_kit::{component::h_flex, prelude::FluentBuilder as _, *};
 
+/// Bullet's lightning: also Puzzle Rush's picture.
+pub const BULLET_PICTURE: &str = "speed/bullet.png";
+
 /// The speeds' pictures: each one's asset path and its bytes.
 const PICTURES: [(Category, &str, &[u8]); 4] = [
     (
         Category::Bullet,
-        "speed/bullet.png",
+        BULLET_PICTURE,
         include_bytes!("../../../assets/speed/bullet.png"),
     ),
     (

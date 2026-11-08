@@ -1,4 +1,5 @@
 mod bot_player;
+mod game_controls;
 mod online_view;
 mod play_page;
 

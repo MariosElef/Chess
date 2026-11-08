@@ -1,20 +1,27 @@
 use crate::enums::shell::Page;
 
+/// The Play page's picture: on the rail and on its panels' title strips.
+pub const PLAY_PICTURE: &str = "nav/play.png";
+/// The Puzzles page's picture: on the rail, its menus and the account's puzzle rating.
+pub const PUZZLES_PICTURE: &str = "nav/puzzles.png";
+/// The Analysis page's picture: on the rail and on its panel's title strip.
+pub const ANALYSIS_PICTURE: &str = "nav/analyse.png";
+
 /// The rail's pictures: each page's asset path and its bytes.
 const PICTURES: [(Page, &str, &[u8]); 4] = [
     (
         Page::Play,
-        "nav/play.png",
+        PLAY_PICTURE,
         include_bytes!("../../../assets/nav/play.png"),
     ),
     (
         Page::Puzzles,
-        "nav/puzzles.png",
+        PUZZLES_PICTURE,
         include_bytes!("../../../assets/nav/puzzles.png"),
     ),
     (
         Page::Analyze,
-        "nav/analyse.png",
+        ANALYSIS_PICTURE,
         include_bytes!("../../../assets/nav/analyse.png"),
     ),
     (

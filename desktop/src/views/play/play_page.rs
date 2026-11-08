@@ -4,9 +4,7 @@ use chess_domain::{Clock, Move, Side, TimeControl};
 use gpui_kit::{
     assets::IconName,
     component::{
-        ActiveTheme as _, Disableable as _,
-        button::{Button, ButtonVariants},
-        h_flex,
+        ActiveTheme as _, h_flex,
         label::Label,
         slider::{SliderEvent, SliderState},
         v_flex,
@@ -15,26 +13,18 @@ use gpui_kit::{
     *,
 };
 
-/// How often the running clock is redrawn and checked for a flag.
-const TICK: Duration = Duration::from_millis(100);
-/// What a premove costs on the clock: a second, as the clock shows it (5:02 becomes 5:01). A
-/// side with less than this cannot play one.
-const PREMOVE_COST: Duration = Duration::from_secs(1);
-
-/// The page shows the new-game menu until a game starts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Stage {
-    Setup,
-    Playing,
-}
+use super::game_controls::game_tile;
 use crate::{
     clients::engine::{Engine, locate_stockfish},
     components::{
-        history::{MoveList, NavigationBar, PositionPanel},
+        board::{BoardColumn, PLAYER_BAR, board_page, copy_fen},
+        history::{MoveList, NavigationBar},
+        panel::{ChoiceTile, PanelHeader, SidePanel, action_bar},
         play::{
-            BotOptions, BotPicker, CapturedRow, ClockFace, GameSetup, PLAYER_BAR, PlayPanel,
-            WaitingBar, lobby,
+            BotOptions, BotPicker, CapturedRow, ClockFace, GameOverActions, GameOverCard,
+            GameSetup, PlayPanel, WaitingBar, with_card,
         },
+        shell::PLAY_PICTURE,
     },
     enums::{
         play::{ColourChoice, PlayMode},
@@ -47,23 +37,36 @@ use crate::{
     services::{
         history::GameHistory,
         play::{
-            BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, player_side,
-            status_text, think_time,
+            BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, outcome_reason,
+            player_side, result_title, status_text, think_time,
         },
     },
     views::{
-        board::BoardView,
+        board::{BoardView, flip_button},
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
         play::{BotEvent, BotPlayer, OnlineView},
         sound::{play_move_sound, play_sound},
+        ticker::{CLOCK_TICK, start_ticker},
     },
 };
+
+/// What a premove costs on the clock: a second, as the clock shows it (5:02 becomes 5:01). A
+/// side with less than this cannot play one.
+const PREMOVE_COST: Duration = Duration::from_secs(1);
+
+/// The page shows the new-game menu until a game starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    Setup,
+    Playing,
+}
 
 /// A game against a bot: who it is, the side it plays, and its engine.
 struct BotGame {
     bot: Bot,
+    /// The bot's side, not the player's.
     side: Side,
     player: Entity<BotPlayer>,
     _moves: Subscription,
@@ -105,11 +108,19 @@ pub struct PlayPage {
     versus: Option<BotGame>,
     /// Keyboard focus, so the arrow keys reach this page.
     focus_handle: FocusHandle,
+    /// The end-of-game card was put away, to look at the board.
+    card_closed: bool,
 }
 
 impl PlayPage {
     pub fn new(online: Entity<OnlineView>, cx: &mut Context<Self>) -> Self {
-        let _online_changes = cx.observe(&online, |_, _, cx| cx.notify());
+        // An online game taking the page sets a local one aside: its clock would run unseen.
+        let _online_changes = cx.observe(&online, |page, online, cx| {
+            if online.read(cx).in_game() && page.stage == Stage::Playing {
+                page.new_game(cx);
+            }
+            cx.notify();
+        });
         let _online_analyze = cx.subscribe(&online, |_, _, event: &AnalyzeGame, cx| {
             cx.emit(event.clone());
         });
@@ -159,6 +170,7 @@ impl PlayPage {
             bot_problem: None,
             versus: None,
             focus_handle: cx.focus_handle(),
+            card_closed: false,
         }
     }
 
@@ -199,17 +211,7 @@ impl PlayPage {
     /// position of a game still going.
     fn shown_position(&self) -> ShownPosition {
         if self.stage == Stage::Setup {
-            return ShownPosition {
-                position: chess_domain::Position::starting(),
-                last_move: None,
-                can_move: false,
-                premoves: false,
-                player: None,
-                engine_arrow: None,
-                badge: None,
-                best_arrow: None,
-                outcome: None,
-            };
+            return ShownPosition::waiting();
         }
         // Worked out once: it looks at every legal move and every earlier position.
         let outcome = self.history.game().outcome();
@@ -235,15 +237,26 @@ impl PlayPage {
     /// Leaves the menu with a fresh game and, for a timed game, a ticking clock; against a bot,
     /// once its engine has started.
     fn start_game(&mut self, cx: &mut Context<Self>) {
-        self.versus = None;
-        if self.mode == PlayMode::Bots && !self.start_bot(cx) {
-            cx.notify();
-            return;
+        if self.mode == PlayMode::Bots {
+            // A bot that will not start sends the player back to the bot menu, with why.
+            if !self.start_bot(cx) {
+                let problem = self.bot_problem.take();
+                self.new_game(cx);
+                self.bot_problem = problem;
+                return;
+            }
+        } else {
+            self.versus = None;
+            self.bot_problem = None;
         }
         self.history = GameHistory::new();
+        self.card_closed = false;
         self.clock = self.setup_choice.map(Clock::new);
         self.turn_started = None;
-        self._ticker = self.clock.is_some().then(|| start_ticker(cx));
+        self._ticker = self
+            .clock
+            .is_some()
+            .then(|| start_ticker(CLOCK_TICK, cx, PlayPage::tick));
         self.stage = Stage::Playing;
         self.clock_warning = ClockWarning::default();
         self.end_interaction(cx);
@@ -504,21 +517,76 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// Hands the game to the shell, which opens it on the analysis board.
-    fn analyze(&mut self, cx: &mut Context<Self>) {
+    /// Hands the game to the shell, which opens it on the analysis board; with `review`, it is
+    /// reviewed there at once.
+    fn analyze(&mut self, review: bool, cx: &mut Context<Self>) {
         cx.emit(AnalyzeGame {
             game: self.history.game().clone(),
             viewing: self.history.viewing(),
+            review,
+            outcome: self.history.game().outcome(),
         });
+    }
+
+    /// The end-of-game card, while the game is over and the card has not been put away.
+    fn game_over_card(&self, cx: &mut Context<Self>) -> Option<GameOverCard> {
+        let outcome = self
+            .history
+            .game()
+            .outcome()
+            .filter(|_| !self.card_closed)?;
+        // The side kept is the bot's; the player has the other.
+        let me = self.versus.as_ref().map(|game| game.side.opponent());
+        let opponent = self.versus.as_ref().map(|game| game.bot.name);
+        let title = result_title(outcome.winner(), me, opponent);
+        let close = cx.entity().downgrade();
+        let card = GameOverCard::new(
+            (title, outcome_reason(outcome).to_owned()),
+            self.game_over_actions(cx),
+            move |_, cx| {
+                let _ = close.update(cx, |page, cx| {
+                    page.card_closed = true;
+                    cx.notify();
+                });
+            },
+        );
+        Some(card)
+    }
+
+    /// Game Review, then a new game, the same one again, or a look at it without a review.
+    fn game_over_actions(&self, cx: &mut Context<Self>) -> GameOverActions {
+        let new_label = if self.versus.is_some() {
+            "New Bot"
+        } else {
+            "New game"
+        };
+        let page = cx.entity().downgrade();
+        let (review, look, fresh, again) = (page.clone(), page.clone(), page.clone(), page);
+        GameOverActions::new(move |_, cx| {
+            let _ = review.update(cx, |page, cx| page.analyze(true, cx));
+        })
+        .choice(new_label, IconName::Plus, move |_, cx| {
+            let _ = fresh.update(cx, |page, cx| page.new_game(cx));
+        })
+        .choice("Rematch", IconName::RotateCcw, move |_, cx| {
+            let _ = again.update(cx, |page, cx| page.start_game(cx));
+        })
+        .choice("Analyze", IconName::Microscope, move |_, cx| {
+            let _ = look.update(cx, |page, cx| page.analyze(false, cx));
+        })
     }
 
     /// Back to the menu, keeping the last time control picked.
     fn new_game(&mut self, cx: &mut Context<Self>) {
         self.versus = None;
+        self.bot_problem = None;
         self._ticker = None;
         self.turn_started = None;
         self.stage = Stage::Setup;
         self.end_interaction(cx);
+        // The waiting board faces White, whichever side the last game had the player on.
+        self.board
+            .update(cx, |board, cx| board.face(Side::White, cx));
     }
 
     /// Puts down a picked-up piece, closes the promotion picker, wipes the drawings and drops
@@ -533,40 +601,31 @@ impl PlayPage {
         self.history.game().draw_offer() == Some(self.side_to_move().opponent())
     }
 
-    /// The title and status on the left; the game's buttons on the right.
-    fn header(&self, cx: &mut Context<Self>) -> Div {
-        h_flex()
-            .justify_between()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(Label::new("Play").text_2xl())
-                    .child(Label::new(status_text(self.history.game())).text_lg())
-                    .when_some(self.bot_problem.clone(), |this, problem| {
-                        this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
-                    }),
-            )
-            .child(self.actions(cx))
+    /// How the game stands, at the top of the panel.
+    fn status(&self, cx: &mut Context<Self>) -> Div {
+        v_flex()
+            .gap_1()
+            .child(Label::new(status_text(self.history.game())).text_lg())
+            .when_some(self.bot_problem.clone(), |this, problem| {
+                this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
+            })
     }
 
-    /// Flip always; then Analyze and New game once it is over, Accept/Decline for an offer, or
-    /// Draw/Resign.
-    fn actions(&self, cx: &mut Context<Self>) -> Div {
+    /// While the game is on: Accept/Decline for an offer, or Draw/Resign. Once it is over, the
+    /// panel offers Game Review instead. Flip is beside the board.
+    fn actions(&self, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let game = self.history.game();
-        let row = h_flex().gap_2().child(flip_button(cx));
-        if game.is_over() {
-            row.child(analyze_button(cx)).child(new_game_button(cx))
-        } else if self.versus.is_some() {
+        let mut buttons = Vec::new();
+        if self.versus.is_some() {
             // A bot makes no offers and takes none.
-            row.child(resign_button(cx))
+            buttons.push(resign_button(cx));
         } else if self.has_offer_to_answer() {
-            row.child(accept_draw_button(cx))
-                .child(decline_draw_button(cx))
+            buttons.extend([accept_draw_button(cx), decline_draw_button(cx)]);
         } else {
             let already_offered = game.draw_offer() == Some(self.side_to_move());
-            row.child(offer_draw_button(already_offered, cx))
-                .child(resign_button(cx))
+            buttons.extend([offer_draw_button(already_offered, cx), resign_button(cx)]);
         }
+        buttons
     }
 
     fn navigation(&self, page: WeakEntity<Self>) -> NavigationBar {
@@ -578,33 +637,39 @@ impl PlayPage {
         .on_hold(hold_step(page))
     }
 
-    /// The navigation buttons, the move list, and the shown position's FEN.
-    fn side_column(&self, page: WeakEntity<Self>) -> Div {
-        v_flex()
-            .gap_4()
-            .child(self.navigation(page.clone()))
+    /// The panel beside the board: the status, the moves, the arrows and the game's buttons.
+    fn side_column(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> SidePanel {
+        let title = if self.versus.is_some() {
+            "Play Bots"
+        } else {
+            "Play"
+        };
+        SidePanel::new()
+            .header(PanelHeader::new(PLAY_PICTURE, title))
+            .child(self.status(cx))
             .child(MoveList::new(
                 self.history.sans().to_vec(),
                 self.history.viewing(),
-                select_move(page),
+                select_move(page.clone()),
             ))
-            .child(PositionPanel::new(*self.history.shown()))
+            .child(self.navigation(page))
+            .map(|this| {
+                if self.history.game().is_over() {
+                    this.child(self.game_over_actions(cx))
+                } else {
+                    this.child(action_bar(self.actions(cx)))
+                }
+            })
     }
 
     /// The board between two player bars: the side drawn at the top above it, the other below.
-    fn board_column(&self, cx: &App) -> Div {
-        let bottom = if self.board.read(cx).flipped() {
-            Side::Black
-        } else {
-            Side::White
-        };
-        v_flex()
-            .h_full()
-            .flex_shrink_0()
-            .gap_2()
-            .child(self.player_bar(bottom.opponent()))
-            .child(div().flex_1().min_h_0().child(self.board.clone()))
-            .child(self.player_bar(bottom))
+    fn board_column(&self, cx: &mut Context<Self>) -> BoardColumn {
+        let bottom = self.board.read(cx).bottom_side();
+        BoardColumn::new(with_card(self.board.clone(), self.game_over_card(cx)))
+            .top(self.player_bar(bottom.opponent()))
+            .bottom(self.player_bar(bottom))
+            .tool(flip_button("flip-board", cx, PlayPage::flip))
+            .tool(copy_fen(self.history.shown()))
     }
 
     /// One side's captured pieces and, in a timed game, its clock; against a bot, who plays it.
@@ -662,12 +727,12 @@ impl PlayPage {
         let panel = PlayPanel::new(self.mode, choose_mode(page))
             .children(picker)
             .child(setup);
-        lobby(self.waiting_column(), panel)
+        board_page(self.waiting_column(), panel)
     }
 
     /// Before the game: the opponent above the board, the player below, each with the clock
     /// they will start on.
-    fn waiting_column(&self) -> Div {
+    fn waiting_column(&self) -> BoardColumn {
         let clock = self.setup_choice.map(|control| control.initial);
         let (top, bottom) = if self.mode == PlayMode::Bots {
             let bot = self.picked_bot();
@@ -677,13 +742,9 @@ impl PlayPage {
         } else {
             (WaitingBar::new("Black"), WaitingBar::new("White"))
         };
-        v_flex()
-            .h_full()
-            .flex_shrink_0()
-            .gap_2()
-            .child(top.clock(clock))
-            .child(div().flex_1().min_h_0().child(self.board.clone()))
-            .child(bottom.clock(clock))
+        BoardColumn::new(self.board.clone())
+            .top(top.clock(clock))
+            .bottom(bottom.clock(clock))
     }
 
     fn bot_picker(&self, page: WeakEntity<Self>) -> BotPicker {
@@ -713,12 +774,7 @@ impl PlayPage {
     }
 
     fn game_view(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> Div {
-        v_flex()
-            .size_full()
-            .p_4()
-            .gap_4()
-            .child(self.header(cx))
-            .child(board_area(self.board_column(cx), self.side_column(page)))
+        board_page(self.board_column(cx), self.side_column(page, cx))
     }
 }
 
@@ -749,78 +805,46 @@ impl Render for PlayPage {
                 cx.listener(|page, _, window, cx| page.focus(window, cx)),
             )
             .size_full()
-            .child(match self.stage {
-                _ if self.shows_online(cx) => self.online_view(),
-                Stage::Setup => self.setup_view(page),
-                Stage::Playing => self.game_view(page, cx),
+            .child(if self.shows_online(cx) {
+                self.online_view()
+            } else {
+                match self.stage {
+                    Stage::Setup => self.setup_view(page),
+                    Stage::Playing => self.game_view(page, cx),
+                }
             })
     }
 }
 
-fn flip_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("flip-board")
-        .ghost()
-        .icon(IconName::ArrowUpDown)
-        .tooltip("Flip board")
-        .on_click(cx.listener(|page, _, _, cx| page.flip(cx)))
-}
-
-fn analyze_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("analyze-game")
-        .outline()
-        .icon(IconName::Microscope)
-        .label("Analyze")
-        .on_click(cx.listener(|page, _, _, cx| page.analyze(cx)))
-}
-
-fn new_game_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("new-game")
-        .primary()
-        .label("New game")
-        .on_click(cx.listener(|page, _, _, cx| page.new_game(cx)))
-}
-
-fn offer_draw_button(already_offered: bool, cx: &mut Context<PlayPage>) -> Button {
-    Button::new("offer-draw")
-        .outline()
-        .icon(IconName::Handshake)
-        .label("Offer draw")
+fn offer_draw_button(already_offered: bool, cx: &mut Context<PlayPage>) -> ChoiceTile {
+    game_tile(("offer-draw", "Draw"), false, cx, PlayPage::offer_draw)
+        .glyph("½")
         .disabled(already_offered)
-        .on_click(cx.listener(|page, _, _, cx| page.offer_draw(cx)))
 }
 
-fn resign_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("resign")
-        .outline()
-        .icon(IconName::Flag)
-        .label("Resign")
-        .on_click(cx.listener(|page, _, _, cx| page.resign(cx)))
+fn resign_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
+    game_tile(("resign", "Resign"), false, cx, PlayPage::resign).icon(IconName::Flag)
 }
 
-fn accept_draw_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("accept-draw")
-        .primary()
-        .label("Accept draw")
-        .on_click(cx.listener(|page, _, _, cx| page.accept_draw(cx)))
+/// Ringed in green: the offer waits on it.
+fn accept_draw_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
+    game_tile(
+        ("accept-draw", "Accept draw"),
+        true,
+        cx,
+        PlayPage::accept_draw,
+    )
+    .icon(IconName::Check)
 }
 
-fn decline_draw_button(cx: &mut Context<PlayPage>) -> Button {
-    Button::new("decline-draw")
-        .outline()
-        .label("Decline")
-        .on_click(cx.listener(|page, _, _, cx| page.decline_draw(cx)))
-}
-
-/// Fills the space under the title: the board column on the left, the side column beside it.
-fn board_area(board_column: Div, side: Div) -> Div {
-    h_flex()
-        .flex_1()
-        .min_h_0()
-        .items_start()
-        .justify_center()
-        .gap_6()
-        .child(board_column)
-        .child(side)
+fn decline_draw_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
+    game_tile(
+        ("decline-draw", "Decline"),
+        false,
+        cx,
+        PlayPage::decline_draw,
+    )
+    .icon(IconName::Close)
 }
 
 // The page outlives what it renders; a failed update means the window is closing.
@@ -877,19 +901,6 @@ fn rating_of(point: f32) -> u32 {
     )]
     let rating = point.round() as u32;
     rating
-}
-
-/// Wakes every tick until the game is over or the page is gone.
-fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
-    cx.spawn(async move |page, cx| {
-        loop {
-            cx.background_executor().timer(TICK).await;
-            let keep_going = page.update(cx, |page, cx| page.tick(cx)).unwrap_or(false);
-            if !keep_going {
-                break;
-            }
-        }
-    })
 }
 
 #[cfg(test)]

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A closed account keeps no rating: a game or battle ending after it closed records nothing, and\n-- one ending while it closes waits for it.\nINSERT INTO play.ratings (user_id, category_id, rating, deviation, volatility, games_played)\nSELECT $1, $2, $3, $4, $5, 1\nFROM account.users\nWHERE users.id = $1 AND users.deleted_at IS NULL\nFOR SHARE\nON CONFLICT (user_id, category_id) DO UPDATE SET\n    rating = excluded.rating,\n    deviation = excluded.deviation,\n    volatility = excluded.volatility,\n    games_played = ratings.games_played + 1,\n    updated_at = now()\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Float8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ee82ba0cbfc3e6ae3e7725b4c41db9226dd3fe2846d39929e549d7a48f12985"
+}

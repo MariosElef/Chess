@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The players' rows, shared and in id order, before their ratings: closing an account takes\n-- its row before its ratings too, so the two never wait on each other.\nSELECT users.id\nFROM account.users\nWHERE users.id = ANY($1)\nORDER BY users.id\nFOR SHARE\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2536f277fb02ddf83b00ea03c9044c61a305d26847edf0f2a795fdab2e9a28b5"
+}

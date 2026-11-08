@@ -1,3 +1,4 @@
+mod battle_view;
 mod practice_view;
 mod puzzle_request;
 mod puzzle_solver;

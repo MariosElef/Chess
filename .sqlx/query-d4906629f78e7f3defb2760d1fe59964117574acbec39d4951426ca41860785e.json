@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM puzzle.rush_runs\nWHERE rush_runs.user_id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d4906629f78e7f3defb2760d1fe59964117574acbec39d4951426ca41860785e"
+}

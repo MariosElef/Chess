@@ -89,7 +89,9 @@ pub fn puzzle_server() -> crate::clients::server::ServerClient {
                     Json(json!({
                         "guest": false,
                         "rating": { "rating": 1500, "deviation": 300, "provisional": true },
-                        "best_rush": { "three_minutes": 9, "five_minutes": null, "survival": null }
+                        "best_rush": { "three_minutes": 9, "five_minutes": null, "survival": null },
+                        "best_today": { "three_minutes": 4, "five_minutes": null, "survival": null },
+                        "battle": { "rating": null, "wins_this_month": 2 }
                     }))
                 }),
             ),

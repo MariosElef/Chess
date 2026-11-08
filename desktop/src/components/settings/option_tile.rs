@@ -10,7 +10,7 @@ pub type OnChoose = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// One choice shown as a picture with its name under it; the chosen one is outlined.
 #[derive(IntoElement)]
-pub struct ChoiceTile {
+pub struct OptionTile {
     id: ElementId,
     /// `group-index`, for tests to find the tile.
     selector: String,
@@ -20,7 +20,7 @@ pub struct ChoiceTile {
     on_choose: OnChoose,
 }
 
-impl ChoiceTile {
+impl OptionTile {
     /// `group` and `index` name the tile, for its id and the test selector `group-index`.
     pub fn new(
         group: &'static str,
@@ -45,7 +45,7 @@ impl ChoiceTile {
     }
 }
 
-impl RenderOnce for ChoiceTile {
+impl RenderOnce for OptionTile {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let on_choose = self.on_choose;
         let selector = self.selector;

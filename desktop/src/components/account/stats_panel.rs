@@ -6,6 +6,7 @@ use gpui_kit::{
 
 use crate::{
     components::play::speed_label,
+    components::shell::PUZZLES_PICTURE,
     models::account::{ModeStats, PuzzleStats, Stats},
     services::account::{category_of, rating_text, solved_share},
 };
@@ -92,7 +93,7 @@ fn puzzle_tile(puzzles: PuzzleStats, cx: &App) -> Div {
             h_flex()
                 .gap_1p5()
                 .text_sm()
-                .child(img("nav/puzzles.png").size_4().flex_shrink_0())
+                .child(img(PUZZLES_PICTURE).size_4().flex_shrink_0())
                 .child("Puzzles"),
         )
         .child(big_number(rating_text(puzzles.rating, puzzles.provisional)))
@@ -101,6 +102,13 @@ fn puzzle_tile(puzzles: PuzzleStats, cx: &App) -> Div {
         })
         .child(small_line(solved, cx))
         .child(small_line(format!("Puzzle Rush best: {best_rush}"), cx))
+        .child(small_line(
+            format!(
+                "Puzzle Battle rating: {}",
+                rating_text(puzzles.battle_rating, puzzles.battle_provisional)
+            ),
+            cx,
+        ))
 }
 
 fn tile(cx: &App) -> Div {

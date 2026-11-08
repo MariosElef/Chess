@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use chess_domain::{Clock, Game, Move, Side, TimeControl};
+use chess_domain::{Clock, Game, Move, Rating, Side, TimeControl};
 use tokio::{
     sync::mpsc,
     time::{Instant, sleep_until},
@@ -57,7 +57,7 @@ pub enum GameCommand {
 }
 
 /// A game as it starts: who plays which side, and how.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GameStart {
     pub id: Uuid,
     pub white: PlayerModel,
@@ -68,6 +68,8 @@ pub struct GameStart {
     pub category: String,
     /// The two players' chat.
     pub chat_id: Uuid,
+    /// White's and Black's ratings as the game began, for rating it if one closes meanwhile.
+    pub ratings: (Rating, Rating),
 }
 
 /// Runs the game on a task of its own, which alone holds its board and clock; the commands
@@ -268,7 +270,10 @@ impl LiveGame {
             return;
         };
         if self.start.rated {
-            let players = (self.start.white.id, self.start.black.id);
+            let players = (
+                (self.start.white.id, self.start.ratings.0),
+                (self.start.black.id, self.start.ratings.1),
+            );
             match rate_game(
                 &self.db,
                 self.start.id,

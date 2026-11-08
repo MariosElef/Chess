@@ -10,13 +10,13 @@ use crate::{
     },
     repositories::{account::stats, database::Db, puzzles::rush_run},
     services::{
-        puzzles::puzzle::best_rush,
+        puzzles::{
+            puzzle::best_rush,
+            rating::{BATTLE_CATEGORY, PUZZLE_CATEGORY},
+        },
         rating::{from_row, whole},
     },
 };
-
-/// The rating category puzzles move in; every other one is a game mode.
-const PUZZLE_CATEGORY: &str = "puzzle";
 
 /// The player's ratings in every mode and in puzzles, with their games and attempts.
 #[derive(Clone)]
@@ -41,6 +41,8 @@ impl StatsService {
             attempted: counts.attempted,
             solved: counts.solved,
             best_rush: best_rush(bests),
+            battle_rating: None,
+            battle_provisional: false,
         };
         let mut modes = Vec::new();
         for row in ratings {
@@ -50,6 +52,9 @@ impl StatsService {
                 puzzles.rating = rating;
                 puzzles.provisional = provisional;
                 puzzles.best = best;
+            } else if row.category == BATTLE_CATEGORY {
+                puzzles.battle_rating = rating;
+                puzzles.battle_provisional = provisional;
             } else {
                 modes.push(mode(row.category, (rating, provisional, best), &results));
             }

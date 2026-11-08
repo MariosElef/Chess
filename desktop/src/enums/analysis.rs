@@ -11,6 +11,8 @@ pub enum EngineStatus {
     },
     /// The position is over: nothing to search.
     Finished,
+    /// A review is running and has the computer: live analysis waits for it.
+    PausedForReview,
     NotFound,
     Stopped,
 }
@@ -97,7 +99,7 @@ impl MoveClass {
     }
 
     /// The icon's asset path.
-    pub fn icon_path(self) -> &'static str {
+    pub const fn icon_path(self) -> &'static str {
         match self {
             Self::Brilliant => "review/brilliant.png",
             Self::Great => "review/great.png",

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex, PoisonError,
         atomic::{AtomicU64, Ordering},
@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+mod battles;
 mod challenges;
 mod presence;
 
@@ -14,7 +15,10 @@ use chess_domain::{Position, Rating, TimeControl};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use self::challenges::PendingChallenge;
+use self::{
+    battles::{BattleEntry, BattleSeek, PendingBattle},
+    challenges::PendingChallenge,
+};
 use super::{
     live_game::{GameCommand, GameStart, spawn_game},
     pairing::{Seek, cancel, queue, take_match},
@@ -54,6 +58,13 @@ struct HubInner {
     games: Mutex<HashMap<Uuid, LiveEntry>>,
     seeks: Mutex<Vec<Seek>>,
     challenges: Mutex<Vec<PendingChallenge>>,
+    battle_seeks: Mutex<Vec<BattleSeek>>,
+    battle_challenges: Mutex<Vec<PendingBattle>>,
+    battles: Mutex<HashMap<Uuid, BattleEntry>>,
+    /// Players whose battle is being set up: its puzzles picked, its row stored.
+    battles_starting: Mutex<HashSet<Uuid>>,
+    /// Closed accounts: anything still on its way from one of their sockets is ignored.
+    closed: Mutex<HashSet<Uuid>>,
 }
 
 /// One open socket's queue of messages to send.
@@ -84,18 +95,28 @@ impl PlayHub {
                 games: Mutex::new(HashMap::new()),
                 seeks: Mutex::new(Vec::new()),
                 challenges: Mutex::new(Vec::new()),
+                battle_seeks: Mutex::new(Vec::new()),
+                battle_challenges: Mutex::new(Vec::new()),
+                battles: Mutex::new(HashMap::new()),
+                battles_starting: Mutex::new(HashSet::new()),
+                closed: Mutex::new(HashSet::new()),
             }),
         }
     }
 
-    /// A new socket for `player`; their games in progress and challenges are sent to it
-    /// straight away, so reconnecting puts them back where they were. Their friends hear they
-    /// came online.
+    /// A new socket for `player`; their games and battle in progress and their challenges and
+    /// battle invitations are sent to it straight away, so reconnecting puts them back where
+    /// they were. Their friends hear they came online.
     pub fn connect(&self, player: &Player) -> Connection {
         let (sender, messages) = mpsc::channel(OUTBOX_SIZE);
         let id = self.inner.next_connection.fetch_add(1, Ordering::Relaxed);
         let first = {
             let mut connections = lock(&self.inner.connections);
+            // Checked under the connections lock that closing takes too: a socket opening as its
+            // account closes either is shut by it or finds it closed and has its outbox dropped.
+            if self.is_closed(player.id) {
+                return Connection { id, messages };
+            }
             let outboxes = connections.entry(player.id).or_default();
             outboxes.push(Outbox { id, sender });
             outboxes.len() == 1
@@ -105,6 +126,8 @@ impl PlayHub {
             let _ = commands.try_send(GameCommand::Snapshot { player: player.id });
         }
         self.send_challenges(player.id);
+        self.resend_battle(player.id);
+        self.send_battle_challenges(player.id);
         if first {
             self.tell_friends(player);
         }
@@ -130,8 +153,8 @@ impl PlayHub {
         present
     }
 
-    /// A socket closed; with the player's last one gone, their seek and challenges go too, and
-    /// their friends hear they left.
+    /// A socket closed; with the player's last one gone, their seeks and invitations, for games
+    /// and battles, go too, and their friends hear they left.
     pub fn disconnect(&self, player: &Player, connection_id: u64) {
         let gone = {
             let mut connections = lock(&self.inner.connections);
@@ -146,11 +169,15 @@ impl PlayHub {
         if gone {
             cancel(&mut lock(&self.inner.seeks), player);
             self.drop_challenges_of(player.id);
+            self.drop_battle_wishes_of(player.id);
             self.tell_friends(player);
         }
     }
 
     pub async fn handle(&self, player: &Player, message: ClientMessage) {
+        if self.is_closed(player.id) {
+            return;
+        }
         match message {
             ClientMessage::Seek {
                 initial_s,
@@ -205,6 +232,23 @@ impl PlayHub {
             }
             ClientMessage::DeclineChallenge { challenge_id } => {
                 self.decline_challenge(player, challenge_id);
+            }
+            ClientMessage::SeekBattle { rated } => self.seek_battle(player, rated).await,
+            ClientMessage::CancelBattleSeek => self.cancel_battle_seek(player.id),
+            ClientMessage::BattleAnswer { battle_id, solved } => {
+                self.battle_answer(player, battle_id, solved).await;
+            }
+            ClientMessage::ChallengeBattle { user_id, rated } => {
+                self.challenge_battle(player, user_id, rated).await;
+            }
+            ClientMessage::AcceptBattle { challenge_id } => {
+                self.accept_battle(player, challenge_id).await;
+            }
+            ClientMessage::DeclineBattle { challenge_id } => {
+                self.decline_battle(player, challenge_id);
+            }
+            ClientMessage::ResignBattle { battle_id } => {
+                self.resign_battle(player, battle_id).await;
             }
         }
     }
@@ -262,7 +306,8 @@ impl PlayHub {
     }
 
     /// Two players meet, from seeks or a challenge: colours are drawn, any seeks and
-    /// challenges of theirs go, the game is stored and its task starts. The game's id, unless it could not start.
+    /// challenges of theirs go, the game is stored and its task starts. The game's id, unless
+    /// it could not start.
     async fn start_game(
         &self,
         (first, second): (&Player, &Player),
@@ -279,6 +324,12 @@ impl PlayHub {
             cancel(&mut seeks, white);
             cancel(&mut seeks, black);
         }
+        if [white.id, black.id].iter().any(|id| self.is_closed(*id)) {
+            for player in [white.id, black.id] {
+                self.refuse(player, "The game could not start: your opponent has left");
+            }
+            return None;
+        }
         let category = control.category().name().to_lowercase();
         let Some(chat_id) = self.start_game_chat([white.id, black.id]).await else {
             for player in [white.id, black.id] {
@@ -286,10 +337,13 @@ impl PlayHub {
             }
             return None;
         };
+        let (white_model, white_rating) = self.at_board(white, &category).await;
+        let (black_model, black_rating) = self.at_board(black, &category).await;
         let start = GameStart {
             id: Uuid::now_v7(),
-            white: self.at_board(white, &category).await,
-            black: self.at_board(black, &category).await,
+            white: white_model,
+            black: black_model,
+            ratings: (white_rating, black_rating),
             rated,
             control,
             category,
@@ -315,7 +369,17 @@ impl PlayHub {
         }
         let players = [white.id, black.id];
         let commands = spawn_game(start, self.clone(), self.inner.db.clone());
-        lock(&self.inner.games).insert(new_game.id, LiveEntry { players, commands });
+        lock(&self.inner.games).insert(
+            new_game.id,
+            LiveEntry {
+                players,
+                commands: commands.clone(),
+            },
+        );
+        // A player whose account closed while the game was being stored resigns it at once.
+        for player in players.into_iter().filter(|id| self.is_closed(*id)) {
+            let _ = commands.try_send(GameCommand::Resign { player });
+        }
         // Both are playing now, so nothing else they had waiting can start.
         self.drop_challenges_of(white.id);
         self.drop_challenges_of(black.id);
@@ -351,19 +415,15 @@ impl PlayHub {
 
     /// The player as their opponent sees them: with their rating in the category, or none for
     /// a guest. A player without one yet shows the starting rating.
-    async fn at_board(&self, player: &Player, category: &str) -> PlayerModel {
-        let rating = if player.guest {
-            None
-        } else {
-            let stored = rating::get(&self.inner.db, player.id, category).await;
-            let current = stored.ok().flatten().map_or(Rating::NEW, from_row);
-            Some(whole(current.rating))
-        };
-        PlayerModel {
+    async fn at_board(&self, player: &Player, category: &str) -> (PlayerModel, Rating) {
+        let stored = rating::get(&self.inner.db, player.id, category).await;
+        let current = stored.ok().flatten().map_or(Rating::NEW, from_row);
+        let model = PlayerModel {
             id: player.id,
             username: player.username.clone(),
-            rating,
-        }
+            rating: (!player.guest).then(|| whole(current.rating)),
+        };
+        (model, current)
     }
 
     /// Hands the command to the game, if the player is in it.
@@ -379,6 +439,30 @@ impl PlayHub {
             }
             None => self.refuse(player.id, "That game is not being played"),
         }
+    }
+
+    /// A closed account's last word: its seeks and invitations go, its games and battle are
+    /// resigned, every socket it has open is shut, and anything still on its way from one is
+    /// ignored.
+    pub fn forget_player(&self, player: Uuid) {
+        {
+            let mut connections = lock(&self.inner.connections);
+            lock(&self.inner.closed).insert(player);
+            connections.remove(&player);
+        }
+        lock(&self.inner.seeks).retain(|seek| seek.player.id != player);
+        self.drop_challenges_of(player);
+        self.drop_battle_wishes_of(player);
+        for commands in self.games_of(player) {
+            // A game already over has its result.
+            let _ = commands.try_send(GameCommand::Resign { player });
+        }
+        self.resign_battles_of(player);
+    }
+
+    /// Whether the player's account has closed since the hub started.
+    fn is_closed(&self, player: Uuid) -> bool {
+        lock(&self.inner.closed).contains(&player)
     }
 
     fn games_of(&self, player: Uuid) -> Vec<mpsc::Sender<GameCommand>> {

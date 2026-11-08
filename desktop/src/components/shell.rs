@@ -5,5 +5,7 @@ mod nav_rail;
 
 pub use account_menu::{AccountMenu, MenuPerson};
 pub use app_header::{AppHeader, WINDOW_BUTTONS_AT};
-pub use nav_pictures::{nav_picture, nav_picture_paths};
+pub use nav_pictures::{
+    ANALYSIS_PICTURE, PLAY_PICTURE, PUZZLES_PICTURE, nav_picture, nav_picture_paths,
+};
 pub use nav_rail::NavRail;

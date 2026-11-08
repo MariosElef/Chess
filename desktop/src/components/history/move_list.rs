@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::enums::analysis::MoveClass;
 
 use gpui_kit::{
-    component::{ActiveTheme as _, h_flex, label::Label, v_flex},
+    component::{ActiveTheme as _, h_flex, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
@@ -18,6 +18,9 @@ pub struct MoveList {
     viewing: usize,
     /// Each move's class once the game is reviewed; empty otherwise.
     classes: Vec<MoveClass>,
+    /// Every move shown at its full height, for a list inside a scroll of its own; otherwise it
+    /// fills the room it has and scrolls.
+    unbounded: bool,
     on_select: OnSelect,
 }
 
@@ -31,8 +34,15 @@ impl MoveList {
             sans,
             viewing,
             classes: Vec::new(),
+            unbounded: false,
             on_select: Rc::new(on_select),
         }
+    }
+
+    /// Shows every move at full height, inside a scroll that holds more than the list.
+    pub fn unbounded(mut self) -> Self {
+        self.unbounded = true;
+        self
     }
 
     /// Shows each move's review icon beside it.
@@ -44,16 +54,15 @@ impl MoveList {
 
 impl RenderOnce for MoveList {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        // It takes the room its panel has, and scrolls inside it, unless its panel scrolls it.
         v_flex()
             .id("move-list")
             .w_full()
-            .max_h(rems(16.))
-            .overflow_y_scroll()
-            .p_2()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().muted)
+            .when(!self.unbounded, |this| {
+                this.flex_1().min_h(rems(10.)).overflow_y_scroll()
+            })
             .text_sm()
-            .when(self.sans.is_empty(), |this| this.child(empty_text()))
+            .when(self.sans.is_empty(), |this| this.child(empty_text(cx)))
             .children(self.rows(cx))
     }
 }
@@ -62,17 +71,25 @@ impl MoveList {
     fn rows(&self, cx: &App) -> Vec<Div> {
         move_rows(&self.sans)
             .into_iter()
-            .map(|row| self.row(row, cx))
+            .enumerate()
+            .map(|(place, row)| self.row(row, place % 2 == 1, cx))
             .collect()
     }
 
-    fn row(&self, row: MoveRow<'_>, cx: &App) -> Div {
+    /// A numbered row, every other one on a faint stripe.
+    fn row(&self, row: MoveRow<'_>, striped: bool, cx: &App) -> Div {
         h_flex()
+            .w_full()
+            .px_2()
+            .py_0p5()
             .gap_2()
+            .rounded(px(4.))
+            .when(striped, |this| this.bg(cx.theme().muted.opacity(0.5)))
             .child(number_cell(row.number, cx))
             .child(self.move_cell(row.white, cx))
-            .when_some(row.black, |this, black| {
-                this.child(self.move_cell(black, cx))
+            .child(match row.black {
+                Some(black) => self.move_cell(black, cx).into_any_element(),
+                None => div().flex_1().into_any_element(),
             })
     }
 
@@ -90,9 +107,11 @@ impl MoveList {
             .rounded(cx.theme().radius)
             .cursor_pointer()
             .hover(|this| this.bg(cx.theme().accent))
+            .font_weight(FontWeight::SEMIBOLD)
             .when(self.viewing == index + 1, |this| {
-                this.bg(cx.theme().primary)
-                    .text_color(cx.theme().primary_foreground)
+                this.bg(cx.theme().accent)
+                    .border_b_2()
+                    .border_color(cx.theme().input)
             })
             .on_click(move |_, window, cx| on_select(index, window, cx))
             .when_some(class, |this, class| {
@@ -110,8 +129,11 @@ fn number_cell(number: usize, cx: &App) -> Div {
         .child(format!("{number}."))
 }
 
-fn empty_text() -> Label {
-    Label::new("No moves yet")
+fn empty_text(cx: &App) -> Div {
+    div()
+        .py_2()
+        .text_color(cx.theme().muted_foreground)
+        .child("No moves yet")
 }
 
 /// A move number with White's move and Black's reply, each with its index into the move list.

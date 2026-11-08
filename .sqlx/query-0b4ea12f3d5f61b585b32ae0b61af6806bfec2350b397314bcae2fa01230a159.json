@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM play.challenges\nWHERE challenges.challenger_id = $1 OR challenges.challenged_id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0b4ea12f3d5f61b585b32ae0b61af6806bfec2350b397314bcae2fa01230a159"
+}

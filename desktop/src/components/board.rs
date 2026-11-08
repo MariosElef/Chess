@@ -1,8 +1,10 @@
 mod arrows;
 mod board_colors;
+mod board_column;
 mod board_grid;
 mod board_square;
 mod board_style;
+mod copy_fen;
 mod end_pictures;
 mod held_piece;
 mod piece_images;
@@ -10,9 +12,11 @@ mod promotion_picker;
 mod sliding_pieces;
 
 pub use board_colors::{BoardColors, square_colors};
+pub use board_column::{BoardColumn, PLAYER_BAR, board_page};
 pub use board_grid::{BoardBounds, BoardGrid};
 pub use board_square::DRAG_START;
 pub use board_style::BoardStyle;
+pub use copy_fen::copy_fen;
 pub use end_pictures::{end_picture, end_picture_paths};
 pub use held_piece::HeldPiece;
 pub use piece_images::{ALL as PIECE_IMAGES, piece_image};

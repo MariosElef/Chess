@@ -51,10 +51,21 @@ impl Drop for Engine {
     }
 }
 
-/// Forwards every line until the engine's output ends or the app stops listening.
+/// Forwards every line until the engine's output ends or the app stops listening. A line that
+/// is not valid UTF-8 is read leniently rather than taken for the engine ending.
 fn read_lines(stdout: ChildStdout, sender: &Sender<EngineEvent>) {
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        let event = EngineEvent::Message(UciMessage::parse(&line));
+    let mut reader = BufReader::new(stdout);
+    let mut bytes = Vec::new();
+    loop {
+        bytes.clear();
+        match reader.read_until(b'\n', &mut bytes) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        }
+        let line = String::from_utf8_lossy(&bytes);
+        let event = EngineEvent::Message(UciMessage::parse(line.trim_end_matches(['\n', '\r'])));
         if sender.send_blocking(event).is_err() {
             return;
         }

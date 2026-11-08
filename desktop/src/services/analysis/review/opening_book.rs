@@ -16,6 +16,12 @@ static BOOK: LazyLock<HashSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
+/// Builds the opening table now, which takes a moment: for a review being set up off the UI
+/// thread, so the first `is_book` later costs nothing.
+pub fn warm_up() {
+    LazyLock::force(&BOOK);
+}
+
 /// Whether the position is on one of the opening lines.
 pub fn is_book(position: &Position) -> bool {
     BOOK.contains(&position_key(position))

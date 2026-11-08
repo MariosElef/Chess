@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"wins!\"\nFROM puzzle.battles\nWHERE battles.winner_id = $1 AND battles.finished_at >= date_trunc('month', now())\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wins!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b959b688edbd0010aa8c4936f3e6091640b76bfc1384d46b3654101d2cb17dfd"
+}

@@ -22,6 +22,7 @@ pub enum ChessCode {
     NotAGroup,
     MessageLength,
     GroupTitle,
+    GuestCannotClose,
     InternalError,
 }
 
@@ -39,6 +40,7 @@ impl ChessCode {
             Self::OnlyFriends => StatusCode::FORBIDDEN,
             Self::NotAGroup => StatusCode::CONFLICT,
             Self::MessageLength | Self::GroupTitle => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::GuestCannotClose => StatusCode::FORBIDDEN,
             Self::SignInRequired | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::UsernameTaken | Self::AllGuestsBusy => StatusCode::CONFLICT,
             Self::LichessUnavailable => StatusCode::SERVICE_UNAVAILABLE,
@@ -66,6 +68,7 @@ impl ChessCode {
             Self::NotAGroup => "Only a group chat can do that",
             Self::MessageLength => "A message is 1 to 2000 characters",
             Self::GroupTitle => "A group needs a name of up to 60 characters",
+            Self::GuestCannotClose => "A guest account is shared and cannot be deleted",
             Self::InternalError => "Something went wrong",
         }
     }
@@ -95,6 +98,7 @@ impl ChessCode {
             Self::NotAGroup => "not-a-group",
             Self::MessageLength => "message-length",
             Self::GroupTitle => "group-title",
+            Self::GuestCannotClose => "guest-cannot-close",
             Self::InternalError => "internal-error",
         }
     }

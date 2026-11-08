@@ -2,12 +2,17 @@ use std::rc::Rc;
 
 use gpui_kit::{
     assets::IconName,
-    component::{ActiveTheme as _, Icon, h_flex, label::Label, switch::Switch, v_flex},
+    component::{ActiveTheme as _, Icon, h_flex, switch::Switch, v_flex},
     *,
 };
 
+use chess_domain::Side;
+
+use super::side_chip::side_chip;
 use crate::{
-    enums::analysis::EngineStatus, models::analysis::LineView, services::analysis::format_nps,
+    enums::analysis::EngineStatus,
+    models::analysis::LineView,
+    services::analysis::{favours_black, format_nps},
 };
 
 type OnToggle = Rc<dyn Fn(bool, &mut Window, &mut App)>;
@@ -43,11 +48,10 @@ impl RenderOnce for EnginePanel {
             .w_full()
             .gap_2()
             .p_3()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().border)
+            .rounded(px(8.))
+            .bg(cx.theme().muted)
             .child(self.header(cx))
-            .children(self.lines.iter().map(|line| line_row(line, cx)))
+            .children(self.lines.iter().map(line_row))
     }
 }
 
@@ -56,11 +60,19 @@ impl EnginePanel {
         let on_toggle = Rc::clone(&self.on_toggle);
         h_flex()
             .gap_2()
-            .child(Icon::from(IconName::Cpu))
-            .child(Label::new("Stockfish").text_sm())
+            .child(
+                Icon::from(IconName::Fish)
+                    .size_5()
+                    .text_color(cx.theme().blue),
+            )
+            .child(div().font_weight(FontWeight::BOLD).child("Stockfish"))
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .text_ellipsis()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(status_text(self.status)),
@@ -73,21 +85,22 @@ impl EnginePanel {
     }
 }
 
-/// The evaluation in a small box, then the moves on one line.
-fn line_row(line: &LineView, cx: &App) -> Div {
+/// The evaluation on a chip, white when White is better and dark when Black is, then the
+/// moves on one line.
+fn line_row(line: &LineView) -> Div {
+    let side = if favours_black(line.eval) {
+        Side::Black
+    } else {
+        Side::White
+    };
     h_flex()
         .gap_2()
         .text_sm()
         .child(
-            div()
-                .w_12()
+            side_chip(line.eval.label(), side)
+                .w(px(56.))
                 .flex_shrink_0()
-                .px_1()
-                .rounded(cx.theme().radius)
-                .bg(cx.theme().muted)
-                .text_center()
-                .font_family(cx.theme().mono_font_family.clone())
-                .child(line.eval.label()),
+                .py_0p5(),
         )
         .child(
             div()
@@ -106,7 +119,8 @@ fn status_text(status: EngineStatus) -> String {
         EngineStatus::Starting => "starting…".to_owned(),
         EngineStatus::Running { depth, nps } => format!("depth {depth} · {}", format_nps(nps)),
         EngineStatus::Finished => "game over".to_owned(),
-        EngineStatus::NotFound => "not found — install it with: brew install stockfish".to_owned(),
-        EngineStatus::Stopped => "stopped — switch it off and on to restart".to_owned(),
+        EngineStatus::PausedForReview => "paused for the review".to_owned(),
+        EngineStatus::NotFound => "not found: brew install stockfish".to_owned(),
+        EngineStatus::Stopped => "stopped: switch it on to restart".to_owned(),
     }
 }

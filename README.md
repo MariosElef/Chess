@@ -48,6 +48,9 @@ DATABASE_URL=postgres://chess:change-me@localhost:5433/chess \
 Puzzles take premoves: while the opponent's answer is on its way, the player can queue their
 next move, played and judged the moment the answer lands.
 
+Puzzle Rush (3 minutes, 5 minutes or Survival) starts easy and gets harder with each puzzle;
+three mistakes end it. Its panel shows your best score of the kind picked, ever and today.
+
 ## Online play
 
 Play → Online finds an opponent who asked for the same time control. The game runs on the
@@ -113,11 +116,31 @@ opens the game on Play for both. Challenges and requests waiting for you show as
 Social in the rail. Guests have friends too; a guest's friends stay with that guest account,
 so the next person to get it has them.
 
+## Puzzle Battle
+
+Puzzles → Puzzle Battle races another player through the same puzzles for three minutes,
+starting easy and getting harder; three mistakes end your run, the most solved wins, and a tie
+goes to whoever reached that score first. Play a random opponent, or pick a friend who is online
+to invite them; their invitation shows on your panel to accept or decline. Both scores update
+live over the WebSocket, and either player can resign. Rated battles between two signed-up
+players move a Puzzle Battle rating of its own; turn Rated off for one that does not count, and
+a guest's battles never do. The panel shows the rating with your wins this month. Invitations
+waiting for you show as a count on Puzzles in the rail. Battles need the puzzle database
+imported.
+
 ## Stats
 
 The Account page shows your rating in bullet, blitz, rapid, classical and puzzles, each with its
 best and how your games went (won, lost, drawn) or how many puzzles you solved, plus your Puzzle
-Rush bests. A `?` after a rating means too few results for it to be sure yet.
+Rush bests and Puzzle Battle rating. A `?` after a rating means too few results for it to be
+sure yet.
+
+Account → Delete account closes the account once its password is typed again: every app signed
+in as it is signed out and disconnected, its searches and invitations are withdrawn and any game
+or battle it was playing is resigned, and its friends, chats, ratings and puzzle scores are
+deleted. Its games and battles stay for the other players, under a removed name (`deleted_…`),
+and its email and username are free to sign up with again. A guest account is shared, so it
+cannot be deleted.
 
 ## Chat
 
@@ -125,6 +148,14 @@ Beside your friends on the Social page are your chats. Message a friend to start
 group of friends with a name; anyone in a group can add their own friends to it, and leave it.
 Messages arrive at once while you are online, and unread ones count on Social in the rail.
 During an online game the two players have a chat of their own beside the moves.
+
+## Known limits
+
+The server takes the app's word on whether a puzzle was solved: Practice, Puzzle Rush and
+Puzzle Battle all report the result rather than each move, so a modified app could claim
+puzzles it never solved and move its puzzle or battle rating. Online games are different: the
+server checks every move. Fine among friends; checking puzzle answers on the server would mean
+sending each move and judging it against the solution there.
 
 ## Checks
 

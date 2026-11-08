@@ -16,8 +16,9 @@ type OnSelect = Rc<dyn Fn(Page, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub struct NavRail {
     active: Page,
-    /// Challenges, friend requests and unread messages, shown on Social.
-    waiting: usize,
+    /// What waits on each page, as a red count on its tile: challenges, requests and messages
+    /// on Social, battle invitations on Puzzles.
+    counts: Vec<(Page, usize)>,
     on_select: OnSelect,
 }
 
@@ -25,13 +26,13 @@ impl NavRail {
     pub fn new(active: Page, on_select: impl Fn(Page, &mut Window, &mut App) + 'static) -> Self {
         Self {
             active,
-            waiting: 0,
+            counts: Vec::new(),
             on_select: Rc::new(on_select),
         }
     }
 
-    pub fn waiting(mut self, waiting: usize) -> Self {
-        self.waiting = waiting;
+    pub fn count(mut self, page: Page, count: usize) -> Self {
+        self.counts.push((page, count));
         self
     }
 }
@@ -58,7 +59,11 @@ impl NavRail {
     fn item(&self, page: Page, cx: &App) -> Stateful<Div> {
         let on_select = Rc::clone(&self.on_select);
         let active = page == self.active;
-        let waiting = (page == Page::Social && self.waiting > 0).then_some(self.waiting);
+        let waiting = self
+            .counts
+            .iter()
+            .find(|(counted, count)| *counted == page && *count > 0)
+            .map(|(_, count)| *count);
         let theme = cx.theme();
         // mc2's active tile: a card on the light chrome, the accent on the dark.
         let filled = if theme.is_dark() {

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM play.rating_history\nWHERE rating_history.user_id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc5d76f9d9029b260703fa8e9daf69b15f5f8e4e0941bd149b4a278421d1c53c"
+}

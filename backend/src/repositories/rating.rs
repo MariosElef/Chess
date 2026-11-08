@@ -19,6 +19,14 @@ pub async fn get(
     .await
 }
 
+/// Holds the players' rows for the caller's transaction, so none of them closes meanwhile.
+pub async fn lock_players(db: &mut PgConnection, players: &[Uuid]) -> Result<(), sqlx::Error> {
+    sqlx::query_file_scalar!("src/repositories/sql/rating/lock_players.sql", players)
+        .fetch_all(db)
+        .await?;
+    Ok(())
+}
+
 /// As `get`, locked for the caller's transaction.
 pub async fn get_for_update(
     db: &mut PgConnection,
@@ -36,7 +44,7 @@ pub async fn get_for_update(
 }
 
 /// Stores the new rating, counting one more result, and its row in the rating history, which
-/// names the game or puzzle attempt that moved it.
+/// names the game, puzzle attempt or battle that moved it.
 pub async fn record_result(
     db: &mut PgConnection,
     user_id: Uuid,
@@ -44,9 +52,10 @@ pub async fn record_result(
     source: RatingSource,
     rating: RatingRow,
 ) -> Result<(), sqlx::Error> {
-    let (game_id, attempt_id) = match source {
-        RatingSource::Game(game_id) => (Some(game_id), None),
-        RatingSource::PuzzleAttempt(attempt_id) => (None, Some(attempt_id)),
+    let (game_id, attempt_id, battle_id) = match source {
+        RatingSource::Game(game_id) => (Some(game_id), None, None),
+        RatingSource::PuzzleAttempt(attempt_id) => (None, Some(attempt_id), None),
+        RatingSource::Battle(battle_id) => (None, None, Some(battle_id)),
     };
     sqlx::query_file!(
         "src/repositories/sql/rating/upsert.sql",
@@ -65,6 +74,7 @@ pub async fn record_result(
         category,
         game_id,
         attempt_id,
+        battle_id,
         rating.rating,
         rating.deviation,
         rating.volatility,

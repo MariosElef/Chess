@@ -1,5 +1,6 @@
 mod bots;
 mod clock_warning;
+mod game_over;
 mod online_game;
 mod status;
 mod time_controls;
@@ -9,6 +10,7 @@ pub use bots::{
     player_side, think_time,
 };
 pub use clock_warning::ClockWarning;
+pub use game_over::{outcome_reason, result_title};
 pub use online_game::{
     can_abort, challenge_terms, clock_left, my_side, outcome_of, rating_line, replay, result_line,
 };

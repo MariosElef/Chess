@@ -7,7 +7,7 @@ use gpui_kit::{
 
 use super::{
     board_previews::{piece_set_preview, theme_preview},
-    choice_tile::ChoiceTile,
+    option_tile::OptionTile,
 };
 use crate::{
     components::board::BoardStyle,
@@ -101,7 +101,7 @@ impl SettingsPage {
             .gap_2()
             .children(BoardTheme::ALL.map(|theme| {
                 let on_board_style = Rc::clone(&self.on_board_style);
-                ChoiceTile::new(
+                OptionTile::new(
                     "board-theme",
                     theme.index(),
                     theme.label(),
@@ -121,7 +121,7 @@ impl SettingsPage {
             .gap_2()
             .children(PieceSet::ALL.map(|pieces| {
                 let on_board_style = Rc::clone(&self.on_board_style);
-                ChoiceTile::new(
+                OptionTile::new(
                     "board-pieces",
                     pieces.index(),
                     pieces.label(),

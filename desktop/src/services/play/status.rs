@@ -23,9 +23,9 @@ fn outcome_text(outcome: Outcome) -> String {
             side_name(winner.opponent()),
             side_name(winner)
         ),
-        Outcome::Stalemate => "Stalemate — it's a draw".to_owned(),
+        Outcome::Stalemate => "Stalemate".to_owned(),
         Outcome::DrawAgreement => "Draw agreed".to_owned(),
-        Outcome::InsufficientMaterial => "Draw — neither side can checkmate".to_owned(),
+        Outcome::InsufficientMaterial => "Draw by insufficient material".to_owned(),
         Outcome::Repetition => "Draw by threefold repetition".to_owned(),
         Outcome::FiftyMoves => "Draw by the fifty-move rule".to_owned(),
     }
@@ -81,7 +81,7 @@ mod tests {
         let position: Position = "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1".parse().expect("valid");
         assert_eq!(
             status_text(&Game::from_position(position)),
-            "Stalemate — it's a draw"
+            "Stalemate"
         );
     }
 
