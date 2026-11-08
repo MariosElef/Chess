@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO social.messages (id, conversation_id, sender_id, body)\nVALUES ($1, $2, $3, $4)\nRETURNING messages.sent_at\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "sent_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "55e5b2a6eb878d93914c42d30b6283d18ed4c100af2ce57254c06d920e08c9ab"
+}

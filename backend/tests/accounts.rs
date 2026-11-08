@@ -136,3 +136,84 @@ async fn the_probes_answer(db: Db) {
     server.get("/health").await.assert_status_ok();
     server.get("/ready").await.assert_status_ok();
 }
+
+#[sqlx::test]
+async fn the_stats_show_every_mode_and_puzzles(db: Db) {
+    let server = server(db.clone());
+    sign_up(&server, "ann@example.com", "ann").await;
+    sign_up(&server, "bob@example.com", "bob").await;
+    let token = sign_in(&server, "ann").await;
+    let id = |name: &'static str| {
+        let db = db.clone();
+        async move {
+            sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM account.users WHERE username = $1")
+                .bind(name)
+                .fetch_one(&db)
+                .await
+                .expect("the user")
+        }
+    };
+    let (ann, bob) = (id("ann").await, id("bob").await);
+    // Ann beat Bob at blitz and drew another; her blitz rating peaked at 1530.
+    for winner in [Some("white"), None] {
+        sqlx::query(
+            "INSERT INTO play.games (id, white_id, black_id, category_id, initial_s, increment_s, \
+             rated, fen, white_clock_ms, black_clock_ms, status, winner, outcome, finished_at) \
+             VALUES ($1, $2, $3, 'blitz', 180, 2, true, 'x', 0, 0, 'finished', $4, \
+             CASE WHEN $4 IS NULL THEN 'draw_agreement' ELSE 'resignation' END, now())",
+        )
+        .bind(uuid::Uuid::now_v7())
+        .bind(ann)
+        .bind(bob)
+        .bind(winner)
+        .execute(&db)
+        .await
+        .expect("a game");
+    }
+    sqlx::query("INSERT INTO play.ratings (user_id, category_id, rating, deviation) VALUES ($1, 'blitz', 1521.4, 60)")
+        .bind(ann)
+        .execute(&db)
+        .await
+        .expect("a rating");
+    let game: uuid::Uuid = sqlx::query_scalar("SELECT id FROM play.games LIMIT 1")
+        .fetch_one(&db)
+        .await
+        .expect("a game");
+    sqlx::query(
+        "INSERT INTO play.rating_history (id, user_id, category_id, game_id, rating, deviation, \
+         volatility) VALUES ($1, $2, 'blitz', $3, 1530, 60, 0.06)",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(ann)
+    .bind(game)
+    .execute(&db)
+    .await
+    .expect("a history row");
+
+    let stats: Value = server
+        .get("/api/users/me/stats")
+        .authorization_bearer(&token)
+        .await
+        .json();
+    let modes = stats["modes"].as_array().expect("the modes");
+    let names: Vec<&str> = modes
+        .iter()
+        .filter_map(|mode| mode["category"].as_str())
+        .collect();
+    assert_eq!(names, ["bullet", "blitz", "rapid", "classical"]);
+    let blitz = &modes[1];
+    assert_eq!(blitz["rating"], 1521);
+    assert_eq!(blitz["best"], 1530);
+    assert_eq!(blitz["provisional"], false);
+    assert_eq!(
+        (blitz["games"].clone(), blitz["wins"].clone()),
+        (json!(2), json!(1))
+    );
+    assert_eq!(
+        (blitz["losses"].clone(), blitz["draws"].clone()),
+        (json!(0), json!(1))
+    );
+    assert_eq!(modes[0]["rating"], Value::Null, "no bullet yet");
+    assert_eq!(stats["puzzles"]["attempted"], 0);
+    assert_eq!(stats["puzzles"]["rating"], Value::Null);
+}

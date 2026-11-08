@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The members of each of the conversations $1, by name.\nSELECT\n    conversation_members.conversation_id,\n    users.id AS user_id,\n    users.username\nFROM social.conversation_members\nINNER JOIN account.users ON users.id = conversation_members.user_id\nWHERE conversation_members.conversation_id = ANY($1)\nORDER BY lower(users.username)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conversation_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.conversation_members",
+            "name": "conversation_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8b83557cb4dfc3f122d94af1fca9ae30e88a2b51de5f578292e5e5f4baab5d95"
+}

@@ -6,7 +6,8 @@ use crate::{
         play::game,
     },
     services::{
-        account::{SessionService, UserService},
+        account::{SessionService, StatsService, UserService},
+        chat::ChatService,
         health::HealthService,
         play::PlayHub,
         puzzles::{attempt::AttemptService, puzzle::PuzzleService, rush::RushService},
@@ -18,6 +19,7 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub users: UserService,
+    pub stats: StatsService,
     pub sessions: SessionService,
     pub health: HealthService,
     pub puzzles: PuzzleService,
@@ -25,6 +27,7 @@ pub struct AppState {
     pub rushes: RushService,
     pub play: PlayHub,
     pub friends: FriendService,
+    pub chat: ChatService,
 }
 
 impl AppState {
@@ -48,8 +51,10 @@ impl AppState {
         let play = PlayHub::new(db.clone());
         Self {
             users: UserService::new(db.clone()),
+            stats: StatsService::new(db.clone()),
             sessions: SessionService::new(db.clone(), play.clone()),
             friends: FriendService::new(db.clone(), play.clone()),
+            chat: ChatService::new(db.clone(), play.clone()),
             puzzles: PuzzleService::new(db.clone(), lichess),
             attempts: AttemptService::new(db.clone()),
             rushes: RushService::new(db.clone()),

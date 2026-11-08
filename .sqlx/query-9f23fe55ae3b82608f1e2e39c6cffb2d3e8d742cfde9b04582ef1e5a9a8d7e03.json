@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM social.conversation_members\nWHERE conversation_members.conversation_id = $1 AND conversation_members.user_id = $2\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f23fe55ae3b82608f1e2e39c6cffb2d3e8d742cfde9b04582ef1e5a9a8d7e03"
+}

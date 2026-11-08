@@ -8,7 +8,8 @@ use crate::{
     clients::http::{HttpRuntime, no_answer, read_json},
     enums::puzzles::RushKind,
     models::{
-        account::{Session, SignIn, SignUp, User},
+        account::{Session, SignIn, SignUp, Stats, User},
+        chat::{ChatMessage, Conversation},
         play::LiveEvent,
         puzzles::{AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, RatingRange, RushRecord},
         server::{Problem, ServerError},
@@ -63,6 +64,17 @@ impl ServerClient {
             .http
             .client()
             .get(self.url("/api/users/me"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// The player's ratings in every mode and in puzzles, with their results.
+    pub fn stats(&self, token: &str) -> impl Future<Output = Result<Stats, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/users/me/stats"))
             .bearer_auth(token);
         self.http
             .run(async move { read_json(send(request).await?).await })
@@ -205,6 +217,131 @@ impl ServerClient {
             .client()
             .delete(self.url(&path))
             .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// The player's conversations, most recently active first.
+    pub fn conversations(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<Vec<Conversation>, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/chat/conversations"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// The conversation with a friend, started the first time.
+    pub fn open_direct(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Conversation, ServerError>> + use<> {
+        let body = serde_json::json!({ "user_id": user_id });
+        let request = self
+            .http
+            .client()
+            .post(self.url("/api/chat/direct"))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// A group of the player and some of their friends, with a name.
+    pub fn create_group(
+        &self,
+        token: &str,
+        title: &str,
+        member_ids: &[String],
+    ) -> impl Future<Output = Result<Conversation, ServerError>> + use<> {
+        let body = serde_json::json!({ "title": title, "member_ids": member_ids });
+        let request = self
+            .http
+            .client()
+            .post(self.url("/api/chat/groups"))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// Adds a friend to a group.
+    pub fn add_to_group(
+        &self,
+        token: &str,
+        conversation_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let body = serde_json::json!({ "user_id": user_id });
+        let path = format!("/api/chat/groups/{conversation_id}/members");
+        let request = self
+            .http
+            .client()
+            .post(self.url(&path))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    pub fn leave_group(
+        &self,
+        token: &str,
+        conversation_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/chat/groups/{conversation_id}/members/me");
+        let request = self
+            .http
+            .client()
+            .delete(self.url(&path))
+            .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// The conversation's newest messages, oldest first.
+    pub fn messages(
+        &self,
+        token: &str,
+        conversation_id: &str,
+    ) -> impl Future<Output = Result<Vec<ChatMessage>, ServerError>> + use<> {
+        let path = format!("/api/chat/conversations/{conversation_id}/messages");
+        let request = self.http.client().get(self.url(&path)).bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    pub fn send_message(
+        &self,
+        token: &str,
+        conversation_id: &str,
+        body: &str,
+    ) -> impl Future<Output = Result<ChatMessage, ServerError>> + use<> {
+        let json = serde_json::json!({ "body": body });
+        let path = format!("/api/chat/conversations/{conversation_id}/messages");
+        let request = self
+            .http
+            .client()
+            .post(self.url(&path))
+            .bearer_auth(token)
+            .json(&json);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// Everything in the conversation is read.
+    pub fn mark_read(
+        &self,
+        token: &str,
+        conversation_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/chat/conversations/{conversation_id}/read");
+        let request = self.http.client().post(self.url(&path)).bearer_auth(token);
         self.http
             .run(async move { send(request).await.map(|_| ()) })
     }

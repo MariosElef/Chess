@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $3 of the conversation $1's messages before the message $2 (all, without it), the\n-- latest first; ids are uuid v7, so they sort by when they were sent.\nSELECT\n    messages.id,\n    messages.conversation_id,\n    messages.sender_id,\n    users.username AS sender_name,\n    messages.body,\n    messages.sent_at\nFROM social.messages\nINNER JOIN account.users ON users.id = messages.sender_id\nWHERE messages.conversation_id = $1 AND ($2::uuid IS NULL OR messages.id < $2)\nORDER BY messages.id DESC\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "conversation_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "conversation_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "sender_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "sender_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "sender_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "social.messages",
+            "name": "sent_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9d91927ee01b49fc36d8ced07184b74be5228c6a911731f269ebd38c1ddfdb90"
+}

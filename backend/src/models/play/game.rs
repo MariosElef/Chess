@@ -26,6 +26,8 @@ pub struct GameSnapshot {
     pub draw_offer: Option<Color>,
     /// How each rating moved, once a rated game is over.
     pub rating_changes: Option<RatingChanges>,
+    /// The two players' chat.
+    pub chat_id: Uuid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -45,6 +47,8 @@ pub struct NewGame {
     pub increment_s: i32,
     pub rated: bool,
     pub fen: String,
+    /// The two players' chat.
+    pub conversation_id: Uuid,
 }
 
 /// A move to store, with the game as it stands after it.

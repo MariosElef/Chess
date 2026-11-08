@@ -23,6 +23,8 @@ pub struct GameSnapshot {
     pub winner: Option<Color>,
     pub draw_offer: Option<Color>,
     pub rating_changes: Option<RatingChanges>,
+    /// The two players' chat.
+    pub chat_id: String,
 }
 
 /// A player at the board: their name, and their rating unless they are a guest.

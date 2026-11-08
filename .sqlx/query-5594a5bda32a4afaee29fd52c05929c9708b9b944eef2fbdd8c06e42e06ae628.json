@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO social.conversation_members (conversation_id, user_id, role)\nVALUES ($1, $2, $3)\nON CONFLICT (conversation_id, user_id) DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5594a5bda32a4afaee29fd52c05929c9708b9b944eef2fbdd8c06e42e06ae628"
+}

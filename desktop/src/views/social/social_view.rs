@@ -6,6 +6,7 @@ use gpui_kit::{
     component::{
         ActiveTheme as _, Disableable as _, Sizable as _,
         button::{Button, ButtonVariants},
+        h_flex,
         input::{Input, InputEvent, InputState},
         label::Label,
         v_flex,
@@ -28,6 +29,7 @@ use crate::{
         server::error_message,
     },
     views::{
+        chat::ChatsView,
         live::{LiveConnection, SessionSource},
         sound::play_sound,
     },
@@ -62,6 +64,9 @@ pub struct SocialView {
     rated: bool,
     /// A challenge went out or was answered, and the server's word on it is still to come.
     awaiting: bool,
+    /// The player's conversations and the one open, beside the friends.
+    chats: Entity<ChatsView>,
+    _chat_changes: Subscription,
 }
 
 impl SocialView {
@@ -81,6 +86,15 @@ impl SocialView {
                 view.search_changed(cx);
             }
         });
+        let chats = cx.new(|cx| {
+            ChatsView::new(
+                client.clone(),
+                (session.clone(), connection.clone()),
+                window,
+                cx,
+            )
+        });
+        let _chat_changes = cx.observe(&chats, |_, _, cx| cx.notify());
         Self {
             client,
             session,
@@ -99,17 +113,20 @@ impl SocialView {
             choice: DEFAULT_TIME_CONTROL.unwrap_or(TimeControl::new(3, 2)),
             rated: true,
             awaiting: false,
+            chats,
+            _chat_changes,
         }
     }
 
     /// The page came on screen: its lists are fetched afresh.
     pub fn opened(&mut self, cx: &mut Context<Self>) {
         self.refresh(cx);
+        self.chats.update(cx, |chats, cx| chats.refresh(cx));
     }
 
-    /// What waits for the player: challenges and friend requests sent to them.
-    pub fn waiting_for_me(&self) -> usize {
-        self.received.len() + self.friends.incoming.len()
+    /// What waits for the player: challenges, friend requests and unread messages.
+    pub fn waiting_for_me(&self, cx: &App) -> usize {
+        self.received.len() + self.friends.incoming.len() + self.chats.read(cx).unread()
     }
 
     /// Signed in with an account: guests play unrated only.
@@ -138,6 +155,9 @@ impl SocialView {
     fn friends_arrived(&mut self, result: Result<Friends, ServerError>, cx: &mut Context<Self>) {
         match result {
             Ok(friends) => {
+                let listed = friends.friends.clone();
+                self.chats
+                    .update(cx, |chats, cx| chats.set_friends(listed, cx));
                 self.friends = friends;
                 self.loaded = true;
             }
@@ -253,7 +273,9 @@ impl SocialView {
             }
             ServerMessage::Error { .. }
             | ServerMessage::Seeking { .. }
-            | ServerMessage::SeekCancelled => {}
+            | ServerMessage::SeekCancelled
+            | ServerMessage::ChatMessage { .. }
+            | ServerMessage::ConversationsChanged => {}
         }
     }
 
@@ -400,9 +422,20 @@ impl SocialView {
             id: friend.id.clone(),
             username: friend.username.clone(),
         };
+        let to_message = friend.id.clone();
+        let message = Button::new(SharedString::from(format!("message-{to_message}")))
+            .outline()
+            .small()
+            .label("Message")
+            .on_click(cx.listener(move |view, _, window, cx| {
+                view.chats.update(cx, |chats, cx| {
+                    chats.message_friend(&to_message, window, cx)
+                });
+            }));
         let row = PersonRow::new(friend.username.clone())
             .online(friend.online)
             .detail(if friend.online { "Online" } else { "Offline" })
+            .action(message)
             .action(challenge)
             .action(self.remove_button("unfriend", "Remove", &person, cx));
         v_flex().gap_2().child(row).when(picking, |this| {
@@ -513,14 +546,25 @@ impl SocialView {
 
 impl Render for SocialView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        page_frame()
+        let people = v_flex()
+            .flex_1()
+            .gap_6()
             .when_some(self.problem.clone(), |this, problem| {
                 this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
             })
             .children(self.challenges_section(cx))
             .children(self.requests_section(cx))
             .child(self.friends_section(cx))
-            .child(self.search_section(cx))
+            .child(self.search_section(cx));
+        page_frame().child(
+            h_flex()
+                .flex_1()
+                .min_h_0()
+                .items_start()
+                .gap_6()
+                .child(people)
+                .child(self.chats.clone()),
+        )
     }
 }
 
@@ -690,10 +734,10 @@ mod tests {
         let (view, asked, cx) = social(cx, false);
         view.update(cx, |view, cx| view.opened(cx));
         wait_until(cx, |cx| view.read_with(cx, |view, _| view.loaded));
-        view.read_with(cx, |view, _| {
+        view.read_with(cx, |view, cx| {
             assert_eq!(view.friends.friends[0].username, "bob");
             assert!(view.friends.friends[0].online);
-            assert_eq!(view.waiting_for_me(), 1, "Cat's request waits");
+            assert_eq!(view.waiting_for_me(cx), 1, "Cat's request waits");
         });
         view.update(cx, |view, cx| view.accept_friend("cat", cx));
         wait_until(cx, |_| asked_for(&asked, "accept cat"));

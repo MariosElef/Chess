@@ -17,6 +17,11 @@ pub enum ChessCode {
     UserNotFound,
     NoFriendRequest,
     CannotBefriendYourself,
+    ConversationNotFound,
+    OnlyFriends,
+    NotAGroup,
+    MessageLength,
+    GroupTitle,
     InternalError,
 }
 
@@ -30,6 +35,10 @@ impl ChessCode {
             | Self::UserNotFound
             | Self::NoFriendRequest => StatusCode::NOT_FOUND,
             Self::CannotBefriendYourself => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::ConversationNotFound => StatusCode::NOT_FOUND,
+            Self::OnlyFriends => StatusCode::FORBIDDEN,
+            Self::NotAGroup => StatusCode::CONFLICT,
+            Self::MessageLength | Self::GroupTitle => StatusCode::UNPROCESSABLE_ENTITY,
             Self::SignInRequired | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::UsernameTaken | Self::AllGuestsBusy => StatusCode::CONFLICT,
             Self::LichessUnavailable => StatusCode::SERVICE_UNAVAILABLE,
@@ -52,6 +61,11 @@ impl ChessCode {
             Self::UserNotFound => "No such player",
             Self::NoFriendRequest => "No friend request from that player",
             Self::CannotBefriendYourself => "You cannot add yourself",
+            Self::ConversationNotFound => "No such conversation",
+            Self::OnlyFriends => "You can only chat with friends",
+            Self::NotAGroup => "Only a group chat can do that",
+            Self::MessageLength => "A message is 1 to 2000 characters",
+            Self::GroupTitle => "A group needs a name of up to 60 characters",
             Self::InternalError => "Something went wrong",
         }
     }
@@ -76,6 +90,11 @@ impl ChessCode {
             Self::UserNotFound => "user-not-found",
             Self::NoFriendRequest => "no-friend-request",
             Self::CannotBefriendYourself => "cannot-befriend-yourself",
+            Self::ConversationNotFound => "conversation-not-found",
+            Self::OnlyFriends => "only-friends",
+            Self::NotAGroup => "not-a-group",
+            Self::MessageLength => "message-length",
+            Self::GroupTitle => "group-title",
             Self::InternalError => "internal-error",
         }
     }

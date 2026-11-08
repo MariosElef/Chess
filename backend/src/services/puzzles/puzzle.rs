@@ -133,7 +133,7 @@ fn in_bounds(rating: i32, name: &str) -> Result<i32, FieldError> {
 }
 
 /// Each kind's best, from the database's rows.
-fn best_rush(rows: Vec<BestRushRow>) -> BestRushModel {
+pub fn best_rush(rows: Vec<BestRushRow>) -> BestRushModel {
     let mut best = BestRushModel::default();
     for row in rows {
         let slot = match RushKind::from_key(&row.kind) {

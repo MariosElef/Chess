@@ -66,6 +66,8 @@ pub struct GameStart {
     pub control: TimeControl,
     /// The `play.rating_categories` id its ratings move in.
     pub category: String,
+    /// The two players' chat.
+    pub chat_id: Uuid,
 }
 
 /// Runs the game on a task of its own, which alone holds its board and clock; the commands
@@ -413,6 +415,7 @@ impl LiveGame {
                 .map(Color::from),
             draw_offer: self.game.draw_offer().map(Color::from),
             rating_changes: self.rating_changes,
+            chat_id: self.start.chat_id,
         }
     }
 

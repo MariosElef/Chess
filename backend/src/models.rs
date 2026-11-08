@@ -1,4 +1,5 @@
 pub mod account;
+pub mod chat;
 pub mod message;
 pub mod play;
 pub mod puzzles;

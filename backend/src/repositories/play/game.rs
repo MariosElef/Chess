@@ -16,6 +16,7 @@ pub async fn insert(db: impl PgExecutor<'_>, game: &NewGame) -> Result<(), sqlx:
         game.increment_s,
         game.rated,
         game.fen,
+        game.conversation_id,
     )
     .execute(db)
     .await?;

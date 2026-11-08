@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{challenge::ChallengeModel, game::GameSnapshot};
+use crate::models::chat::message::ChatMessageModel;
 
 /// What the app sends over the live socket.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -79,4 +80,10 @@ pub enum ServerMessage {
         sent: Vec<ChallengeModel>,
         received: Vec<ChallengeModel>,
     },
+    /// A message in one of the player's conversations.
+    ChatMessage {
+        message: ChatMessageModel,
+    },
+    /// A conversation was started, or someone joined or left one: fetch the list again.
+    ConversationsChanged,
 }

@@ -113,6 +113,19 @@ opens the game on Play for both. Challenges and requests waiting for you show as
 Social in the sidebar. Guests have friends too; a guest's friends stay with that guest account,
 so the next person to get it has them.
 
+## Stats
+
+The Account page shows your rating in bullet, blitz, rapid, classical and puzzles, each with its
+best and how your games went (won, lost, drawn) or how many puzzles you solved, plus your Puzzle
+Rush bests. A `?` after a rating means too few results for it to be sure yet.
+
+## Chat
+
+Beside your friends on the Social page are your chats. Message a friend to start one, or make a
+group of friends with a name; anyone in a group can add their own friends to it, and leave it.
+Messages arrive at once while you are online, and unread ones count on Social in the sidebar.
+During an online game the two players have a chat of their own beside the moves.
+
 ## Checks
 
 `./ci.sh` runs rustfmt, clippy with warnings as errors, every test, `cargo deny`, the layer

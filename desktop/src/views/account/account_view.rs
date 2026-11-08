@@ -10,10 +10,12 @@ use gpui_kit::{
 
 use crate::{
     clients::{server::ServerClient, settings::SessionTokenFile},
-    components::account::{AccountCard, FormField, GuestCard, SignedInCard, WaitingCard},
+    components::account::{
+        AccountCard, FormField, GuestCard, SignedInCard, StatsPanel, WaitingCard,
+    },
     enums::account::AccountForm,
     models::{
-        account::{AccountChanged, FormProblems, Session, SignIn, SignUp, User},
+        account::{AccountChanged, FormProblems, Session, SignIn, SignUp, Stats, User},
         server::ServerError,
     },
     services::account::form_problems,
@@ -36,6 +38,8 @@ pub struct AccountView {
     restoring: bool,
     /// Enter in any field submits the form.
     _enter_presses: Vec<Subscription>,
+    /// The signed-in player's ratings and results, once fetched.
+    stats: Option<Stats>,
 }
 
 impl EventEmitter<AccountChanged> for AccountView {}
@@ -68,6 +72,7 @@ impl AccountView {
             busy: false,
             restoring: false,
             _enter_presses,
+            stats: None,
         };
         view.restore(window, cx);
         view
@@ -211,7 +216,27 @@ impl AccountView {
     fn signed_in(&mut self, session: Session, cx: &mut Context<Self>) {
         self.session = Some(session);
         self.problems = FormProblems::default();
+        self.stats = None;
+        self.opened(cx);
         cx.emit(AccountChanged);
+    }
+
+    /// The page came on screen: the stats are fetched afresh, as games and puzzles move them.
+    pub fn opened(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = self.token() else {
+            return;
+        };
+        let request = self.client.stats(&token);
+        cx.spawn(async move |view, cx| {
+            // Without them the page shows the account alone.
+            if let Ok(stats) = request.await {
+                let _ = view.update(cx, |view, cx| {
+                    view.stats = Some(stats);
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
     }
 
     /// Signs out here at once; the server is told too, and if it cannot be reached the token
@@ -220,6 +245,7 @@ impl AccountView {
         let Some(session) = self.session.take() else {
             return;
         };
+        self.stats = None;
         let _ = self.tokens.forget();
         let request = self.client.sign_out(&session.token);
         cx.spawn(async move |_, _| {
@@ -341,6 +367,12 @@ impl Render for AccountView {
             .gap_4()
             .child(self.heading(cx))
             .child(div().flex().justify_center().child(self.card(cx)))
+            .children(
+                self.stats
+                    .clone()
+                    .filter(|_| self.is_admitted())
+                    .map(|stats| div().flex().justify_center().child(StatsPanel::new(stats))),
+            )
     }
 }
 
@@ -416,6 +448,28 @@ mod tests {
                     post(move || async move { (StatusCode::CREATED, Json(guest)) }),
                 )
                 .route(
+                    "/api/users/me/stats",
+                    get(|| async {
+                        let mode = |category: &str, rating: Option<i32>| {
+                            json!({
+                                "category": category, "rating": rating, "provisional": false,
+                                "best": rating, "games": 3, "wins": 2, "losses": 1, "draws": 0
+                            })
+                        };
+                        Json(json!({
+                            "modes": [
+                                mode("bullet", None), mode("blitz", Some(1521)),
+                                mode("rapid", None), mode("classical", None)
+                            ],
+                            "puzzles": {
+                                "rating": 1650, "provisional": true, "best": 1700,
+                                "attempted": 4, "solved": 3,
+                                "best_rush": { "three_minutes": 12, "five_minutes": null, "survival": null }
+                            }
+                        }))
+                    }),
+                )
+                .route(
                     "/api/users/me",
                     get(|| async {
                         // A real server takes a moment: long enough to see the wait.
@@ -478,8 +532,18 @@ mod tests {
         let name = view.update(cx, |view, _| view.player_name());
         assert_eq!(name.as_deref(), Some("Mario"));
         assert_eq!(tokens.load().as_deref(), Some("abc"));
+        wait_for(&view, cx, |view| view.stats.is_some());
+        let (blitz, puzzles) = view.update(cx, |view, _| {
+            let stats = view.stats.clone().expect("the stats");
+            (stats.modes[1].rating, stats.puzzles.rating)
+        });
+        assert_eq!((blitz, puzzles), (Some(1521), Some(1650)));
 
         view.update(cx, |view, cx| view.sign_out(cx));
+        assert!(
+            view.update(cx, |view, _| view.stats.is_none()),
+            "nor do their stats stay"
+        );
         assert!(!view.update(cx, |view, _| view.is_admitted()));
         assert_eq!(tokens.load(), None, "signing out forgets the token");
     }

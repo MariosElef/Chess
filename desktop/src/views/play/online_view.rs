@@ -36,6 +36,7 @@ use crate::{
     },
     views::{
         board::BoardView,
+        chat::ChatView,
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
@@ -78,6 +79,8 @@ pub struct OnlineView {
     holding: Holding,
     _ticker: Option<Task<()>>,
     focus_handle: FocusHandle,
+    /// The two players' chat, beside the moves; made when the game is first drawn.
+    chat: Option<Entity<ChatView>>,
 }
 
 impl OnlineView {
@@ -114,7 +117,29 @@ impl OnlineView {
             holding: Holding::default(),
             _ticker: None,
             focus_handle: cx.focus_handle(),
+            chat: None,
         }
+    }
+
+    /// The chat follows the game on the board: one for each game the player is in, none
+    /// without one.
+    fn keep_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let wanted = self
+            .live
+            .as_ref()
+            .filter(|live| live.me.is_some())
+            .map(|live| live.snapshot.chat_id.clone());
+        let current = self
+            .chat
+            .as_ref()
+            .map(|chat| chat.read(cx).conversation_id().to_owned());
+        if wanted == current {
+            return;
+        }
+        self.chat = wanted.map(|chat_id| {
+            let source = (&self.connection, self.session.clone());
+            cx.new(|cx| ChatView::new(source, (chat_id, "Chat".into()), window, cx))
+        });
     }
 
     pub fn focus_handle(&self) -> FocusHandle {
@@ -171,7 +196,9 @@ impl OnlineView {
             }
             ServerMessage::Error { .. }
             | ServerMessage::FriendsChanged
-            | ServerMessage::Challenges { .. } => {}
+            | ServerMessage::Challenges { .. }
+            | ServerMessage::ChatMessage { .. }
+            | ServerMessage::ConversationsChanged => {}
         }
     }
 
@@ -513,7 +540,12 @@ impl OnlineView {
                                 live.history.sans().to_vec(),
                                 live.history.viewing(),
                                 select_move(page),
-                            )),
+                            ))
+                            .children(
+                                self.chat
+                                    .clone()
+                                    .map(|chat| div().h(px(280.)).flex_shrink_0().child(chat)),
+                            ),
                     ),
             )
     }
@@ -680,7 +712,8 @@ impl HistoryNavigation for OnlineView {
 }
 
 impl Render for OnlineView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.keep_chat(window, cx);
         let content = match self.live.take() {
             Some(live) => {
                 let view = self.game_view(&live, cx);
@@ -766,6 +799,7 @@ mod tests {
             "running": running, "status": status, "result": result, "winner": winner,
             "draw_offer": null,
             "rating_changes": finished.map(|_| json!({ "white": -8, "black": 8 })),
+            "chat_id": "c1",
         }})
         .to_string()
     }

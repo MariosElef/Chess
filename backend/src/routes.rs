@@ -1,4 +1,5 @@
 mod account;
+mod chat;
 mod health;
 mod play;
 mod puzzles;
@@ -34,7 +35,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(account::router())
         .nest("/puzzles", puzzles::router())
         .merge(play::router())
-        .nest("/social", social::router());
+        .nest("/social", social::router())
+        .nest("/chat", chat::router());
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(

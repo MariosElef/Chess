@@ -20,12 +20,16 @@ use super::{
     pairing::{Seek, cancel, queue, take_match},
 };
 use crate::{
-    models::play::{
-        game::NewGame,
-        messages::{ClientMessage, ServerMessage},
-        player::{Player, PlayerModel},
+    enums::chat::ConversationKind,
+    models::{
+        chat::conversation::NewConversation,
+        play::{
+            game::NewGame,
+            messages::{ClientMessage, ServerMessage},
+            player::{Player, PlayerModel},
+        },
     },
-    repositories::{database::Db, play::game, rating},
+    repositories::{chat, database::Db, play::game, rating},
     services::rating::{from_row, whole},
 };
 
@@ -276,6 +280,12 @@ impl PlayHub {
             cancel(&mut seeks, black);
         }
         let category = control.category().name().to_lowercase();
+        let Some(chat_id) = self.start_game_chat([white.id, black.id]).await else {
+            for player in [white.id, black.id] {
+                self.refuse(player, "The game could not start: try again");
+            }
+            return None;
+        };
         let start = GameStart {
             id: Uuid::now_v7(),
             white: self.at_board(white, &category).await,
@@ -283,6 +293,7 @@ impl PlayHub {
             rated,
             control,
             category,
+            chat_id,
         };
         let new_game = NewGame {
             id: start.id,
@@ -293,6 +304,7 @@ impl PlayHub {
             increment_s: i32::try_from(control.increment.as_secs()).unwrap_or(i32::MAX),
             rated,
             fen: Position::starting().to_string(),
+            conversation_id: chat_id,
         };
         if let Err(error) = game::insert(&self.inner.db, &new_game).await {
             tracing::error!(?error, "starting a game failed");
@@ -308,6 +320,33 @@ impl PlayHub {
         self.drop_challenges_of(white.id);
         self.drop_challenges_of(black.id);
         Some(new_game.id)
+    }
+
+    /// The two players' chat for a game about to start; `None` if it could not be stored.
+    async fn start_game_chat(&self, players: [Uuid; 2]) -> Option<Uuid> {
+        let id = Uuid::now_v7();
+        let new = NewConversation {
+            id,
+            kind: ConversationKind::Game,
+            title: None,
+            direct_key: None,
+            created_by_id: None,
+        };
+        let stored = async {
+            let mut tx = self.inner.db.begin().await?;
+            chat::conversation::insert(&mut *tx, &new).await?;
+            for player in players {
+                chat::conversation::add_member(&mut *tx, id, player, "member").await?;
+            }
+            tx.commit().await
+        };
+        match stored.await {
+            Ok(()) => Some(id),
+            Err(error) => {
+                tracing::error!(?error, "starting a game's chat failed");
+                None
+            }
+        }
     }
 
     /// The player as their opponent sees them: with their rating in the category, or none for

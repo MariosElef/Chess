@@ -57,6 +57,11 @@ impl LiveConnection {
         }));
     }
 
+    /// The server's API, for the pages listening here that also fetch over HTTP.
+    pub fn client(&self) -> ServerClient {
+        self.client.clone()
+    }
+
     /// Queues `message`; it goes as soon as the connection is up.
     pub fn send(&self, message: ClientMessage) {
         if let Some(socket) = &self.socket {

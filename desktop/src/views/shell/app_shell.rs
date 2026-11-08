@@ -129,6 +129,9 @@ impl AppShell {
         if page == Page::Social {
             self.social.update(cx, |social, cx| social.opened(cx));
         }
+        if page == Page::Account {
+            self.account.update(cx, |account, cx| account.opened(cx));
+        }
         self.analyze.update(cx, |analysis, cx| {
             analysis.set_shown(page == Page::Analyze, cx)
         });
@@ -212,7 +215,7 @@ impl Render for AppShell {
                 .into_any_element();
         }
         let player = account.player_name();
-        let waiting = self.social.read(cx).waiting_for_me();
+        let waiting = self.social.read(cx).waiting_for_me(cx);
         let shell = cx.entity().downgrade();
         h_flex()
             .size_full()
@@ -494,7 +497,7 @@ mod tests {
             "rated": false, "initial_s": 180, "increment_s": 2, "moves": [],
             "white_ms": 180_000, "black_ms": 180_000, "running": null,
             "status": "ongoing", "result": null, "winner": null, "draw_offer": null,
-            "rating_changes": null
+            "rating_changes": null, "chat_id": "c1"
         }});
         let _ = socket.send(Message::Text(game.to_string().into())).await;
         // Kept open, as the server keeps it, until the app goes.

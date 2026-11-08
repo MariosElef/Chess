@@ -2,6 +2,7 @@
 pub mod account;
 pub mod analysis;
 pub mod board;
+pub mod chat;
 pub mod history;
 pub mod live;
 pub mod play;

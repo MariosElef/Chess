@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{challenge::Challenge, live_game::GameSnapshot};
+use crate::models::chat::ChatMessage;
 
 /// What the app sends over the live socket.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -74,6 +75,12 @@ pub enum ServerMessage {
         sent: Vec<Challenge>,
         received: Vec<Challenge>,
     },
+    /// A message in one of the player's conversations.
+    ChatMessage {
+        message: ChatMessage,
+    },
+    /// A conversation was started, or someone joined or left one: fetch the list again.
+    ConversationsChanged,
 }
 
 /// What happens on the live socket, for the page: the connection coming and going, and the

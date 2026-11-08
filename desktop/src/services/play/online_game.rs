@@ -160,6 +160,7 @@ mod tests {
             winner: None,
             draw_offer: None,
             rating_changes: None,
+            chat_id: "chat".to_owned(),
         }
     }
 
