@@ -1,4 +1,4 @@
-use chess_domain::{Move, PieceKind, Position, Square};
+use chess_domain::{Move, Position, Square};
 
 /// What a click on the board does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,32 +7,37 @@ pub enum ClickOutcome {
     Select(Option<Square>),
     /// The selected piece moves to the clicked square.
     Play(Move),
+    /// A pawn reaches the last rank: the player picks what it becomes first.
+    Promote { from: Square, to: Square },
 }
 
-/// Clicking a marked square plays the move; any other click changes the selection.
+/// Clicking a marked square plays the move (or asks for a promotion); any other click changes the selection.
 pub fn click_outcome(
     position: &Position,
     selected: Option<Square>,
     clicked: Square,
 ) -> ClickOutcome {
-    match chosen_move(position, selected, clicked) {
-        Some(mv) => ClickOutcome::Play(mv),
+    let moves = moves_to(position, selected, clicked);
+    match moves.first() {
+        Some(mv) if mv.promotion.is_some() => ClickOutcome::Promote {
+            from: mv.from,
+            to: mv.to,
+        },
+        Some(&mv) => ClickOutcome::Play(mv),
         None => ClickOutcome::Select(next_selection(position, selected, clicked)),
     }
 }
 
-/// The legal move from the selected square to `clicked`; a pawn reaching the last rank becomes a queen.
-fn chosen_move(position: &Position, selected: Option<Square>, clicked: Square) -> Option<Move> {
-    let moves: Vec<Move> = position
-        .legal_moves_from(selected?)
+/// The legal moves from the selected square to `clicked`: one, or four for a promotion.
+fn moves_to(position: &Position, selected: Option<Square>, clicked: Square) -> Vec<Move> {
+    let Some(from) = selected else {
+        return Vec::new();
+    };
+    position
+        .legal_moves_from(from)
         .into_iter()
         .filter(|mv| mv.to == clicked)
-        .collect();
-    moves
-        .iter()
-        .find(|mv| mv.promotion == Some(PieceKind::Queen))
-        .or_else(|| moves.first())
-        .copied()
+        .collect()
 }
 
 /// What is selected after clicking `clicked`: a piece of the side to move, or nothing.
@@ -72,7 +77,7 @@ fn is_own_piece(position: &Position, square: Square) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use chess_domain::{Move, PieceKind, Position, Square};
+    use chess_domain::{Move, Position, Square};
 
     use super::{ClickOutcome, click_outcome, next_selection, targets};
 
@@ -113,11 +118,14 @@ mod tests {
     }
 
     #[test]
-    fn a_pawn_reaching_the_last_rank_becomes_a_queen() {
+    fn a_pawn_reaching_the_last_rank_asks_what_to_become() {
         let position: Position = "8/4P3/8/8/8/8/8/k6K w - - 0 1".parse().expect("valid");
         assert_eq!(
             click_outcome(&position, Some(sq("e7")), sq("e8")),
-            ClickOutcome::Play(Move::promoting(sq("e7"), sq("e8"), PieceKind::Queen))
+            ClickOutcome::Promote {
+                from: sq("e7"),
+                to: sq("e8")
+            }
         );
     }
 

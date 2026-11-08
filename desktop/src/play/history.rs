@@ -1,63 +1,79 @@
-use chess_domain::{IllegalMove, Move, Position};
+use chess_domain::{Game, GameError, Move, Position, Side};
 
-/// Every position of the game in order, the moves between them, and which position the board shows.
-/// `positions[0]` is the start; `sans[i]` is the move that led to `positions[i + 1]`.
+/// The game being played, and which of its positions the board is showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameHistory {
-    positions: Vec<Position>,
-    sans: Vec<String>,
+    game: Game,
+    /// 0 is the start; `n` is the position after the n-th move.
     viewing: usize,
 }
 
 impl GameHistory {
     pub fn new() -> Self {
         Self {
-            positions: vec![Position::starting()],
-            sans: Vec::new(),
+            game: Game::new(),
             viewing: 0,
         }
     }
 
+    pub fn game(&self) -> &Game {
+        &self.game
+    }
+
     /// The position the game is actually at; moves are played from here.
     pub fn live(&self) -> &Position {
-        self.positions
-            .last()
-            .expect("the history always holds the start")
+        self.game.live()
     }
 
     /// The position on the board right now, possibly an earlier one.
     pub fn shown(&self) -> &Position {
-        &self.positions[self.viewing]
+        &self.game.positions()[self.viewing]
+    }
+
+    /// The move that led to the shown position, for the last-move highlight.
+    pub fn shown_last_move(&self) -> Option<Move> {
+        self.viewing
+            .checked_sub(1)
+            .map(|index| self.game.moves()[index])
+    }
+
+    pub fn sans(&self) -> &[String] {
+        self.game.sans()
+    }
+
+    pub fn viewing(&self) -> usize {
+        self.viewing
     }
 
     pub fn is_live(&self) -> bool {
         self.viewing == self.last_index()
     }
 
-    /// The moves played so far, written the way people read them.
-    pub fn sans(&self) -> &[String] {
-        &self.sans
-    }
-
-    /// Which position is on the board: 0 is the start, `n` is the one after the n-th move.
-    pub fn viewing(&self) -> usize {
-        self.viewing
-    }
-
-    /// Plays `mv` from the live position, writes it down, and jumps the board to the result.
-    pub fn play(&mut self, mv: Move) -> Result<(), IllegalMove> {
-        let live = self.live();
-        let san = live.san(mv)?;
-        let next = live.play(mv)?;
-        self.sans.push(san);
-        self.positions.push(next);
-        self.viewing = self.last_index();
+    /// Plays `mv` from the live position and jumps the board to the result.
+    pub fn play(&mut self, mv: Move) -> Result<(), GameError> {
+        self.game.play(mv)?;
+        self.jump_to_live();
         Ok(())
     }
 
-    /// Shows the position after the move at `index` in `sans`.
-    pub fn jump_to_move(&mut self, index: usize) {
-        self.viewing = (index + 1).min(self.last_index());
+    pub fn resign(&mut self, side: Side) -> Result<(), GameError> {
+        self.game.resign(side)
+    }
+
+    pub fn flag(&mut self, side: Side) -> Result<(), GameError> {
+        self.game.flag(side)
+    }
+
+    pub fn offer_draw(&mut self, side: Side) -> Result<(), GameError> {
+        self.game.offer_draw(side)
+    }
+
+    pub fn accept_draw(&mut self, side: Side) -> Result<(), GameError> {
+        self.game.accept_draw(side)
+    }
+
+    pub fn decline_draw(&mut self, side: Side) -> Result<(), GameError> {
+        self.game.decline_draw(side)
     }
 
     pub fn can_go_back(&self) -> bool {
@@ -84,29 +100,33 @@ impl GameHistory {
         self.viewing = self.last_index();
     }
 
+    /// Shows the position after the move at `index` in `sans`.
+    pub fn jump_to_move(&mut self, index: usize) {
+        self.viewing = (index + 1).min(self.last_index());
+    }
+
     fn last_index(&self) -> usize {
-        self.positions.len() - 1
+        self.game.positions().len() - 1
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chess_domain::{Move, Position};
+    use chess_domain::{Move, Position, Side};
 
     use super::GameHistory;
 
-    fn played(history: &mut GameHistory, from: &str, to: &str) {
-        let mv = Move::new(
+    fn mv(from: &str, to: &str) -> Move {
+        Move::new(
             from.parse().expect("a square"),
             to.parse().expect("a square"),
-        );
-        history.play(mv).expect("legal");
+        )
     }
 
     fn two_moves() -> GameHistory {
         let mut history = GameHistory::new();
-        played(&mut history, "e2", "e4");
-        played(&mut history, "e7", "e5");
+        history.play(mv("e2", "e4")).expect("legal");
+        history.play(mv("e7", "e5")).expect("legal");
         history
     }
 
@@ -116,6 +136,7 @@ mod tests {
         assert_eq!(history.shown(), &Position::starting());
         assert!(!history.can_go_back());
         assert!(!history.can_go_forward());
+        assert_eq!(history.shown_last_move(), None);
     }
 
     #[test]
@@ -123,6 +144,7 @@ mod tests {
         let mut history = two_moves();
         let live = *history.live();
         history.back();
+        assert_eq!(history.shown_last_move(), Some(mv("e2", "e4")));
         history.back();
         assert_eq!(history.shown(), &Position::starting());
         assert_eq!(history.live(), &live);
@@ -137,15 +159,13 @@ mod tests {
         history.jump_to_start();
         history.back();
         assert!(!history.can_go_back());
-        history.forward();
         history.jump_to_live();
         assert!(history.is_live());
     }
 
     #[test]
     fn moves_are_written_down_in_order() {
-        let history = two_moves();
-        assert_eq!(history.sans(), ["e4", "e5"]);
+        assert_eq!(two_moves().sans(), ["e4", "e5"]);
     }
 
     #[test]
@@ -153,7 +173,7 @@ mod tests {
         let mut history = two_moves();
         history.jump_to_move(0);
         assert_eq!(history.viewing(), 1);
-        assert_eq!(history.shown().side_to_move(), chess_domain::Side::Black);
+        assert_eq!(history.shown().side_to_move(), Side::Black);
         history.jump_to_move(99);
         assert!(history.is_live());
     }
@@ -162,7 +182,7 @@ mod tests {
     fn a_move_jumps_back_to_the_live_position() {
         let mut history = two_moves();
         history.jump_to_start();
-        played(&mut history, "g1", "f3");
+        history.play(mv("g1", "f3")).expect("legal");
         assert!(history.is_live());
         assert_eq!(history.shown(), history.live());
     }

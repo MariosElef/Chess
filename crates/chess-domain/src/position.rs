@@ -76,6 +76,14 @@ impl Position {
         self.counters
     }
 
+    /// The same position for repetition: pieces, side to move, castling and en passant, but not the counters.
+    pub fn is_same_position(&self, other: &Self) -> bool {
+        self.board == other.board
+            && self.side_to_move == other.side_to_move
+            && self.castling == other.castling
+            && self.en_passant == other.en_passant
+    }
+
     /// Fifty moves by each side without a capture or a pawn move; either player may then claim a draw.
     pub fn is_fifty_move_draw(&self) -> bool {
         self.counters.halfmove_clock >= 100

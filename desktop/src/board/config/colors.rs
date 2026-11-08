@@ -7,8 +7,28 @@ pub struct BoardColors {
     pub light_square: Hsla,
     pub dark_square: Hsla,
     pub selected_square: Hsla,
+    /// The two squares of the move that led to the shown position.
+    pub last_move_square: Hsla,
+    /// The king's square while it is in check.
+    pub check_square: Hsla,
+    /// A square the player marked with a right-click; softer than check so the two read apart.
+    pub marked_square: Hsla,
+    /// Arrows the player drew with a right-drag.
+    pub arrow: Hsla,
     /// The dots and rings marking where the picked-up piece can go.
     pub move_hint: Hsla,
+    /// Dims the board behind the promotion picker.
+    pub overlay: Hsla,
+}
+
+/// What a square is lit up for; when several apply, the most urgent wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SquareHighlight {
+    None,
+    LastMove,
+    Marked,
+    Selected,
+    Check,
 }
 
 impl BoardColors {
@@ -20,11 +40,13 @@ impl BoardColors {
         }
     }
 
-    pub fn background(&self, square: Square, selected: bool) -> Hsla {
-        if selected {
-            self.selected_square
-        } else {
-            self.square(square)
+    pub fn background(&self, square: Square, highlight: SquareHighlight) -> Hsla {
+        match highlight {
+            SquareHighlight::None => self.square(square),
+            SquareHighlight::LastMove => self.last_move_square,
+            SquareHighlight::Marked => self.marked_square,
+            SquareHighlight::Selected => self.selected_square,
+            SquareHighlight::Check => self.check_square,
         }
     }
 
@@ -36,12 +58,26 @@ impl BoardColors {
         }
     }
 
+    /// The coordinate letters take the other square colour, so they read on either.
+    pub fn coordinate(&self, square: Square) -> Hsla {
+        if square.is_light() {
+            self.dark_square
+        } else {
+            self.light_square
+        }
+    }
+
     fn light_mode() -> Self {
         Self {
             light_square: rgb(0xe9e5dc).into(),
             dark_square: rgb(0x9fb1c4).into(),
             selected_square: rgb(0xf0d27a).into(),
+            last_move_square: rgb(0xe3d79b).into(),
+            check_square: rgb(0xd9483b).into(),
+            marked_square: rgb(0xeb8f80).into(),
+            arrow: hsla(0.09, 0.95, 0.5, 0.8),
             move_hint: hsla(0., 0., 0., 0.25),
+            overlay: hsla(0., 0., 0., 0.45),
         }
     }
 
@@ -50,7 +86,12 @@ impl BoardColors {
             light_square: rgb(0xb8c1cc).into(),
             dark_square: rgb(0x6f7f93).into(),
             selected_square: rgb(0xc9a94e).into(),
+            last_move_square: rgb(0xb4a86a).into(),
+            check_square: rgb(0xb5342a).into(),
+            marked_square: rgb(0xc9776a).into(),
+            arrow: hsla(0.09, 0.9, 0.5, 0.8),
             move_hint: hsla(0., 0., 0., 0.3),
+            overlay: hsla(0., 0., 0., 0.55),
         }
     }
 }

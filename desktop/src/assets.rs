@@ -9,7 +9,15 @@ use crate::board::PIECE_IMAGES;
 
 icon_assets!(
     ChessIcons,
-    [ChessKnight, Puzzle, ChevronsLeft, ChevronsRight]
+    [
+        ChessKnight,
+        Puzzle,
+        ChevronsLeft,
+        ChevronsRight,
+        Flag,
+        Handshake,
+        ArrowUpDown
+    ]
 );
 
 /// The kit's default icons, the Lucide icons only this app uses, and the piece images.

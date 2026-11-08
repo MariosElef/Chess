@@ -31,6 +31,21 @@ impl Appearance {
         }
     }
 
+    /// How the choice is written in the settings file.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|appearance| appearance.key() == key)
+    }
+
     pub fn apply(self, window: &mut Window, cx: &mut App) {
         match self {
             Self::System => Theme::sync_system_appearance(Some(window), cx),

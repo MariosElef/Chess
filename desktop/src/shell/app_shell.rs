@@ -4,7 +4,7 @@ use super::{nav_sidebar::NavSidebar, page::Page};
 use crate::{
     play::PlayPage,
     puzzles::PuzzlesPage,
-    settings::{Appearance, SettingsPage},
+    settings::{Appearance, SettingsPage, load_appearance, save_appearance},
 };
 
 pub struct AppShell {
@@ -16,7 +16,7 @@ pub struct AppShell {
 
 impl AppShell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let appearance = Appearance::default();
+        let appearance = load_appearance().unwrap_or_default();
         appearance.apply(window, cx);
         let _appearance_changes = cx.observe_window_appearance(window, |shell, window, cx| {
             if shell.appearance == Appearance::System {
@@ -45,6 +45,8 @@ impl AppShell {
     ) {
         self.appearance = appearance;
         appearance.apply(window, cx);
+        // A failed save only means the next launch starts on System again.
+        let _ = save_appearance(appearance);
         cx.notify();
     }
 }
