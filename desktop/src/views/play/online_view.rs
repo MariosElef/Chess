@@ -20,10 +20,17 @@ use gpui_kit::{
 use crate::{
     components::{
         history::{MoveList, NavigationBar},
-        play::{CapturedRow, ClockFace, GameSetup, OnlineOptions},
+        play::{
+            CapturedRow, ClockFace, GameSetup, OnlineOptions, PLAYER_BAR, PlayPanel, WaitingBar,
+            lobby,
+        },
     },
-    enums::{play::LiveStatus, sound::Sound},
+    enums::{
+        play::{LiveStatus, PlayMode},
+        sound::Sound,
+    },
     models::{
+        account::ModeStats,
         board::{MoveMade, ShownPosition},
         play::{AnalyzeGame, ClientMessage, GameSnapshot, LiveEvent, ServerMessage},
     },
@@ -44,6 +51,9 @@ use crate::{
         sound::{play_move_sound, play_sound},
     },
 };
+
+/// Switches the Play page to another way to play.
+type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
 
 /// How often the running clock is redrawn.
 const TICK: Duration = Duration::from_millis(100);
@@ -81,6 +91,10 @@ pub struct OnlineView {
     focus_handle: FocusHandle,
     /// The two players' chat, beside the moves; made when the game is first drawn.
     chat: Option<Entity<ChatView>>,
+    /// The player's rating in each speed, for their bar under the board.
+    ratings: Vec<ModeStats>,
+    /// The lobby's tabs: another way to play, which the Play page shows.
+    on_mode: Option<OnMode>,
 }
 
 impl OnlineView {
@@ -118,6 +132,8 @@ impl OnlineView {
             _ticker: None,
             focus_handle: cx.focus_handle(),
             chat: None,
+            ratings: Vec::new(),
+            on_mode: None,
         }
     }
 
@@ -156,6 +172,39 @@ impl OnlineView {
     pub fn connect(&mut self, cx: &mut Context<Self>) {
         self.connection
             .update(cx, |connection, cx| connection.connect(cx));
+        self.fetch_ratings(cx);
+    }
+
+    /// What the lobby's tabs do: the Play page switches to the way to play picked.
+    pub fn on_mode(&mut self, on_mode: impl Fn(PlayMode, &mut Window, &mut App) + 'static) {
+        self.on_mode = Some(Rc::new(on_mode));
+    }
+
+    /// The player's ratings, for the lobby's bar; they move with each rated game.
+    fn fetch_ratings(&self, cx: &mut Context<Self>) {
+        let Some(token) = (self.session)(cx).map(|session| session.token) else {
+            return;
+        };
+        let request = self.connection.read(cx).client().stats(&token);
+        cx.spawn(async move |view, cx| {
+            // Without them the bar shows the name alone.
+            if let Ok(stats) = request.await {
+                let _ = view.update(cx, |view, cx| {
+                    view.ratings = stats.modes;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// The player's rating in the chosen speed, once they have one.
+    fn my_rating(&self) -> Option<i32> {
+        let key = self.choice.category().name().to_lowercase();
+        self.ratings
+            .iter()
+            .find(|mode| mode.category == key)
+            .and_then(|mode| mode.rating)
     }
 
     fn send(&self, message: ClientMessage, cx: &App) {
@@ -434,6 +483,7 @@ impl OnlineView {
         self.live = None;
         self._ticker = None;
         self.board.update(cx, |board, cx| board.reset(cx));
+        self.fetch_ratings(cx);
         cx.notify();
     }
 
@@ -497,7 +547,27 @@ impl OnlineView {
                 let _ = cancel.update(cx, |view, cx| view.cancel_seek(cx));
             }),
         });
-        div().flex().justify_center().child(setup)
+        let me = (self.session)(cx).map_or_else(String::new, |session| session.user.username);
+        let me = match self.my_rating() {
+            Some(rating) => format!("{me} ({rating})"),
+            None => me,
+        };
+        let clock = Some(self.choice.initial);
+        let column = v_flex()
+            .h_full()
+            .flex_shrink_0()
+            .gap_2()
+            .child(WaitingBar::new("Opponent").clock(clock))
+            .child(div().flex_1().min_h_0().child(self.board.clone()))
+            .child(WaitingBar::new(me).clock(clock));
+        let on_mode = self.on_mode.clone();
+        let panel = PlayPanel::new(PlayMode::Online, move |mode, window, cx| {
+            if let Some(on_mode) = &on_mode {
+                on_mode(mode, window, cx);
+            }
+        })
+        .child(setup);
+        lobby(column, panel)
     }
 
     fn game_view(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Div {
@@ -517,7 +587,7 @@ impl OnlineView {
                     .gap_6()
                     .child(
                         v_flex()
-                            .h(relative(0.9))
+                            .h_full()
                             .flex_shrink_0()
                             .gap_2()
                             .child(self.player_bar(live, bottom.opponent()))
@@ -661,6 +731,8 @@ impl OnlineView {
         let running = snapshot.running.map(Side::from) == Some(side);
         h_flex()
             .w_full()
+            .h(PLAYER_BAR)
+            .flex_shrink_0()
             .justify_between()
             .gap_4()
             .child(
@@ -766,6 +838,8 @@ mod tests {
     use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
 
+    use chess_domain::TimeControl;
+
     use super::OnlineView;
     use crate::{
         clients::server::ServerClient,
@@ -855,6 +929,14 @@ mod tests {
             let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
             OnlineView::new(connection, session, cx)
         })
+    }
+
+    #[gpui_kit::test]
+    fn a_time_is_picked_from_the_speeds(cx: &mut TestAppContext) {
+        let (view, cx) = online(cx);
+        click(cx, "time-3 | 2");
+        let choice = view.read_with(cx, |view, _| view.choice);
+        assert_eq!(choice, TimeControl::new(3, 2));
     }
 
     #[gpui_kit::test]

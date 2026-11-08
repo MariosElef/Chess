@@ -1,8 +1,8 @@
 use chess_domain::Category;
 use gpui_kit::{component::h_flex, prelude::FluentBuilder as _, *};
 
-/// The speeds' pictures: each one's asset path and its bytes. Classical has none.
-const PICTURES: [(Category, &str, &[u8]); 3] = [
+/// The speeds' pictures: each one's asset path and its bytes.
+const PICTURES: [(Category, &str, &[u8]); 4] = [
     (
         Category::Bullet,
         "speed/bullet.png",
@@ -17,6 +17,11 @@ const PICTURES: [(Category, &str, &[u8]); 3] = [
         Category::Rapid,
         "speed/rapid.png",
         include_bytes!("../../../assets/speed/rapid.png"),
+    ),
+    (
+        Category::Classical,
+        "speed/classical.svg",
+        include_bytes!("../../../assets/speed/classical.svg"),
     ),
 ];
 

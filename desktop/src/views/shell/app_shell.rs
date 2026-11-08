@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use gpui_kit::{component::h_flex, *};
+use gpui_kit::{
+    component::{ActiveTheme as _, h_flex, v_flex},
+    *,
+};
 
 use crate::{
     clients::{
@@ -16,7 +19,7 @@ use crate::{
     components::{
         board::BoardStyle,
         settings::{SettingsChoices, SettingsPage},
-        shell::NavSidebar,
+        shell::{AccountMenu, AppHeader, MenuPerson, NavRail},
     },
     enums::{play::LiveStatus, settings::Appearance, shell::Page},
     models::{
@@ -66,7 +69,7 @@ pub struct AppShell {
     /// The live connection Play's online games and Social share.
     live: Entity<LiveConnection>,
     social: Entity<SocialView>,
-    /// A game starting from a challenge opens Play; Social's waiting count redraws the sidebar.
+    /// A game starting from a challenge opens Play; Social's waiting count redraws the rail.
     _live_events: Subscription,
     _social_changes: Subscription,
     appearance: Appearance,
@@ -209,26 +212,74 @@ impl Render for AppShell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let account = self.account.read(cx);
         if !account.is_admitted() {
-            return div()
+            // The header still holds the window's buttons and moves it.
+            return v_flex()
                 .size_full()
-                .child(self.account.clone())
+                .bg(cx.theme().background)
+                .child(AppHeader::new())
+                .child(div().flex_1().min_h_0().child(self.account.clone()))
                 .into_any_element();
         }
-        let player = account.player_name();
+        let person = account.user().map(|user| MenuPerson {
+            name: user.username.clone(),
+            email: (!user.guest).then(|| user.email.clone()),
+            guest: user.guest,
+        });
         let waiting = self.social.read(cx).waiting_for_me(cx);
         let shell = cx.entity().downgrade();
-        h_flex()
+        let header = person.into_iter().fold(AppHeader::new(), |header, person| {
+            header.action(self.account_menu(person, cx))
+        });
+        // The header and the rail are one L of the chrome's colour; the page is a panel set
+        // into it, rounded where it meets the corner.
+        v_flex()
             .size_full()
-            .items_stretch()
-            .child(div().debug_selector(|| "nav-sidebar".to_owned()).child(
-                NavSidebar::new(self.page, player, open_page(shell.clone())).waiting(waiting),
-            ))
-            .child(div().flex_1().min_w_0().child(self.content(shell)))
+            .bg(cx.theme().sidebar)
+            .child(header)
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .items_stretch()
+                    .child(
+                        div()
+                            .debug_selector(|| "nav-rail".to_owned())
+                            .h_full()
+                            .child(
+                                NavRail::new(self.page, open_page(shell.clone())).waiting(waiting),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .rounded_tl(px(10.))
+                            .overflow_hidden()
+                            .bg(cx.theme().background)
+                            .child(self.content(shell)),
+                    ),
+            )
             .into_any_element()
     }
 }
 
 impl AppShell {
+    /// The avatar's menu: Account and Settings open here, signing out goes to the account.
+    fn account_menu(&self, person: MenuPerson, cx: &mut Context<Self>) -> AccountMenu {
+        let shell = cx.entity().downgrade();
+        let (sign_out, leave) = (self.account.downgrade(), self.account.downgrade());
+        AccountMenu::new(
+            person,
+            open_page(shell),
+            move |_, cx| {
+                let _ = sign_out.update(cx, |account, cx| account.sign_out(cx));
+            },
+            move |form, _, cx| {
+                let _ = leave.update(cx, |account, cx| account.leave_guest(form, cx));
+            },
+        )
+    }
+
     fn content(&self, shell: WeakEntity<Self>) -> AnyElement {
         match self.page {
             Page::Play => self.play.clone().into_any_element(),
@@ -504,9 +555,9 @@ mod tests {
         while let Some(Ok(_)) = socket.recv().await {}
     }
 
-    fn sidebar_shown(cx: &mut VisualTestContext) -> bool {
+    fn rail_shown(cx: &mut VisualTestContext) -> bool {
         cx.run_until_parked();
-        cx.debug_bounds("nav-sidebar").is_some()
+        cx.debug_bounds("nav-rail").is_some()
     }
 
     #[gpui_kit::test]
@@ -519,10 +570,7 @@ mod tests {
             tokens: SessionTokenFile::at(path),
         };
         let (shell, cx) = cx.add_window_view(|window, cx| AppShell::with(setup, window, cx));
-        assert!(
-            !sidebar_shown(cx),
-            "only the account screen before signing in"
-        );
+        assert!(!rail_shown(cx), "only the account screen before signing in");
 
         let account = shell.update(cx, |shell, _| shell.account.clone());
         account.update_in(cx, |account, window, cx| {
@@ -531,11 +579,11 @@ mod tests {
         wait_until(cx, |cx| {
             account.update(cx, |account, _| account.is_admitted())
         });
-        assert!(sidebar_shown(cx), "the app opens");
+        assert!(rail_shown(cx), "the app opens");
         let play_before = shell.update(cx, |shell, _| shell.play.entity_id());
 
         account.update(cx, |account, cx| account.sign_out(cx));
-        assert!(!sidebar_shown(cx), "back to the account screen");
+        assert!(!rail_shown(cx), "back to the account screen");
         let play_after = shell.update(cx, |shell, _| shell.play.entity_id());
         assert_ne!(
             play_before, play_after,

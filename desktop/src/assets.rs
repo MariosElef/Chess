@@ -26,12 +26,14 @@ icon_assets!(
         Users,
         UserPlus,
         Swords,
-        Sparkles
+        Sparkles,
+        LogIn,
+        LogOut
     ]
 );
 
 /// The kit's default icons, the Lucide icons only this app uses, the piece images, the game
-/// review's icons, and the sidebar's and the speeds' pictures.
+/// review's icons, and the rail's and the speeds' pictures.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {
@@ -95,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn every_sidebar_and_speed_picture_is_served() {
+    fn every_rail_and_speed_picture_is_served() {
         for path in [
             "nav/play.png",
             "nav/puzzles.png",
@@ -104,6 +106,7 @@ mod tests {
             "speed/bullet.png",
             "speed/blitz.png",
             "speed/rapid.png",
+            "speed/classical.svg",
             "bots/sporos.jpg",
             "bots/andreas.jpg",
             "end/winner.png",

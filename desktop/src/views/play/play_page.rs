@@ -9,7 +9,6 @@ use gpui_kit::{
         h_flex,
         label::Label,
         slider::{SliderEvent, SliderState},
-        tab::{Tab, TabBar},
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -32,7 +31,10 @@ use crate::{
     clients::engine::{Engine, locate_stockfish},
     components::{
         history::{MoveList, NavigationBar, PositionPanel},
-        play::{BotOptions, BotPicker, CapturedRow, ClockFace, GameSetup},
+        play::{
+            BotOptions, BotPicker, CapturedRow, ClockFace, GameSetup, PLAYER_BAR, PlayPanel,
+            WaitingBar, lobby,
+        },
     },
     enums::{
         play::{ColourChoice, PlayMode},
@@ -112,6 +114,12 @@ impl PlayPage {
             cx.emit(event.clone());
         });
         let page = cx.weak_entity();
+        let tabs_page = page.clone();
+        online.update(cx, |online, _| {
+            online.on_mode(move |mode, _, cx| {
+                let _ = tabs_page.update(cx, |page, cx| page.choose_mode(mode, cx));
+            });
+        });
         let board = cx.new(|board| {
             BoardView::new(
                 move |cx| page.upgrade().map(|page| page.read(cx).shown_position()),
@@ -190,6 +198,19 @@ impl PlayPage {
     /// What the board shows: the position being looked at, taking moves only on the live
     /// position of a game still going.
     fn shown_position(&self) -> ShownPosition {
+        if self.stage == Stage::Setup {
+            return ShownPosition {
+                position: chess_domain::Position::starting(),
+                last_move: None,
+                can_move: false,
+                premoves: false,
+                player: None,
+                engine_arrow: None,
+                badge: None,
+                best_arrow: None,
+                outcome: None,
+            };
+        }
         // Worked out once: it looks at every legal move and every earlier position.
         let outcome = self.history.game().outcome();
         let live = self.history.is_live();
@@ -578,7 +599,7 @@ impl PlayPage {
             Side::White
         };
         v_flex()
-            .h(relative(0.9))
+            .h_full()
             .flex_shrink_0()
             .gap_2()
             .child(self.player_bar(bottom.opponent()))
@@ -590,6 +611,8 @@ impl PlayPage {
     fn player_bar(&self, side: Side) -> Div {
         h_flex()
             .w_full()
+            .h(PLAYER_BAR)
+            .flex_shrink_0()
             .justify_between()
             .gap_4()
             .child(
@@ -620,6 +643,7 @@ impl PlayPage {
         )
     }
 
+    /// The board waiting between its two bars, and the panel with the tabs and the choices.
     fn setup_view(&self, page: WeakEntity<Self>) -> Div {
         let setup = GameSetup::new(
             self.setup_choice,
@@ -628,30 +652,38 @@ impl PlayPage {
         );
         let against_bot = self.mode == PlayMode::Bots;
         let setup = if against_bot {
-            let bot = self.picked_bot();
             setup.bot(BotOptions {
-                name: bot.name,
-                rating: bot.rating,
                 problem: self.bot_problem.clone(),
             })
         } else {
             setup
         };
         let picker = against_bot.then(|| self.bot_picker(page.clone()));
+        let panel = PlayPanel::new(self.mode, choose_mode(page))
+            .children(picker)
+            .child(setup);
+        lobby(self.waiting_column(), panel)
+    }
+
+    /// Before the game: the opponent above the board, the player below, each with the clock
+    /// they will start on.
+    fn waiting_column(&self) -> Div {
+        let clock = self.setup_choice.map(|control| control.initial);
+        let (top, bottom) = if self.mode == PlayMode::Bots {
+            let bot = self.picked_bot();
+            let top =
+                WaitingBar::new(format!("{} ({})", bot.name, bot.rating)).picture(bot.picture);
+            (top, WaitingBar::new("You"))
+        } else {
+            (WaitingBar::new("Black"), WaitingBar::new("White"))
+        };
         v_flex()
-            .size_full()
-            .p_6()
-            .gap_4()
-            .child(Label::new("Play").text_2xl())
-            .child(mode_tabs(self.mode, page))
-            .child(
-                h_flex()
-                    .justify_center()
-                    .items_start()
-                    .gap_6()
-                    .children(picker)
-                    .child(setup),
-            )
+            .h_full()
+            .flex_shrink_0()
+            .gap_2()
+            .child(top.clock(clock))
+            .child(div().flex_1().min_h_0().child(self.board.clone()))
+            .child(bottom.clock(clock))
     }
 
     fn bot_picker(&self, page: WeakEntity<Self>) -> BotPicker {
@@ -675,24 +707,15 @@ impl PlayPage {
         )
     }
 
-    /// The online lobby under the same heading and tabs; an online game alone.
-    fn online_view(&self, page: WeakEntity<Self>, cx: &App) -> Div {
-        let in_game = self.online.read(cx).in_game();
-        v_flex()
-            .size_full()
-            .p_6()
-            .gap_4()
-            .when(!in_game, |this| {
-                this.child(Label::new("Play").text_2xl())
-                    .child(mode_tabs(self.mode, page))
-            })
-            .child(div().flex_1().min_h_0().child(self.online.clone()))
+    /// The online lobby, which draws its own tabs, or an online game.
+    fn online_view(&self) -> Div {
+        div().size_full().child(self.online.clone())
     }
 
     fn game_view(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> Div {
         v_flex()
             .size_full()
-            .p_6()
+            .p_4()
             .gap_4()
             .child(self.header(cx))
             .child(board_area(self.board_column(cx), self.side_column(page)))
@@ -727,24 +750,11 @@ impl Render for PlayPage {
             )
             .size_full()
             .child(match self.stage {
-                _ if self.shows_online(cx) => self.online_view(page, cx),
+                _ if self.shows_online(cx) => self.online_view(),
                 Stage::Setup => self.setup_view(page),
                 Stage::Playing => self.game_view(page, cx),
             })
     }
-}
-
-/// On this computer or online.
-fn mode_tabs(mode: PlayMode, page: WeakEntity<PlayPage>) -> TabBar {
-    TabBar::new("play-mode")
-        .segmented()
-        .w_96()
-        .selected_index(mode.index())
-        .children(PlayMode::ALL.map(|mode| Tab::new().label(mode.label())))
-        .on_click(move |index, _, cx| {
-            let mode = PlayMode::ALL[*index];
-            let _ = page.update(cx, |page, cx| page.choose_mode(mode, cx));
-        })
 }
 
 fn flip_button(cx: &mut Context<PlayPage>) -> Button {
@@ -814,6 +824,12 @@ fn board_area(board_column: Div, side: Div) -> Div {
 }
 
 // The page outlives what it renders; a failed update means the window is closing.
+
+fn choose_mode(page: WeakEntity<PlayPage>) -> impl Fn(PlayMode, &mut Window, &mut App) + 'static {
+    move |mode, _, cx| {
+        let _ = page.update(cx, |page, cx| page.choose_mode(mode, cx));
+    }
+}
 
 fn choose_time(
     page: WeakEntity<PlayPage>,
@@ -940,6 +956,18 @@ mod tests {
 
     fn premoves(page: &Entity<PlayPage>, cx: &mut VisualTestContext) -> Vec<(Square, Square)> {
         page.update(cx, |page, cx| page.board.read(cx).premoves().pairs())
+    }
+
+    #[gpui_kit::test]
+    fn the_panel_tabs_switch_between_the_ways_to_play(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let (page, cx) = cx.add_window_view(|_, cx| offline_page(cx));
+        click(cx, "mode-Bots");
+        assert_eq!(page.read_with(cx, |page, _| page.mode), PlayMode::Bots);
+        click(cx, "mode-Local");
+        assert_eq!(page.read_with(cx, |page, _| page.mode), PlayMode::Local);
+        click(cx, "mode-Online");
+        assert_eq!(page.read_with(cx, |page, _| page.mode), PlayMode::Online);
     }
 
     #[gpui_kit::test]

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g fill="#e9a23b">
+    <circle cx="256" cy="256" r="104"/>
+    <g id="ray">
+      <rect x="236" y="24" width="40" height="88" rx="20"/>
+    </g>
+    <use href="#ray" transform="rotate(45 256 256)"/>
+    <use href="#ray" transform="rotate(90 256 256)"/>
+    <use href="#ray" transform="rotate(135 256 256)"/>
+    <use href="#ray" transform="rotate(180 256 256)"/>
+    <use href="#ray" transform="rotate(225 256 256)"/>
+    <use href="#ray" transform="rotate(270 256 256)"/>
+    <use href="#ray" transform="rotate(315 256 256)"/>
+  </g>
+</svg>

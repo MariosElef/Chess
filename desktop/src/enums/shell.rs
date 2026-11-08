@@ -11,7 +11,7 @@ pub enum Page {
 }
 
 impl Page {
-    /// The pages listed in the sidebar; Settings and Account open from the profile menu instead.
+    /// The pages on the rail; Settings and Account open from the avatar menu instead.
     pub const NAV: [Self; 4] = [Self::Play, Self::Puzzles, Self::Analyze, Self::Social];
 
     pub fn label(self) -> &'static str {

@@ -110,7 +110,7 @@ The Social page lists your friends, with who is online, and the friend requests 
 Find players by name to add them; a friend who is online can be challenged to a game with the
 time control and rating you pick. A challenge waits a minute for an answer, and accepting it
 opens the game on Play for both. Challenges and requests waiting for you show as a count on
-Social in the sidebar. Guests have friends too; a guest's friends stay with that guest account,
+Social in the rail. Guests have friends too; a guest's friends stay with that guest account,
 so the next person to get it has them.
 
 ## Stats
@@ -123,7 +123,7 @@ Rush bests. A `?` after a rating means too few results for it to be sure yet.
 
 Beside your friends on the Social page are your chats. Message a friend to start one, or make a
 group of friends with a name; anyone in a group can add their own friends to it, and leave it.
-Messages arrive at once while you are online, and unread ones count on Social in the sidebar.
+Messages arrive at once while you are online, and unread ones count on Social in the rail.
 During an online game the two players have a chat of their own beside the moves.
 
 ## Checks

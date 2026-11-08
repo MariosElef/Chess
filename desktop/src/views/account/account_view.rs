@@ -93,11 +93,6 @@ impl AccountView {
         self.session.as_ref().map(|session| session.token.clone())
     }
 
-    /// The name the sidebar shows: the username, Guest3 for a guest.
-    pub fn player_name(&self) -> Option<String> {
-        self.user().map(|user| user.username.clone())
-    }
-
     /// The account signed in on this app, if any.
     pub fn user(&self) -> Option<&User> {
         self.session.as_ref().map(|session| &session.user)
@@ -259,7 +254,7 @@ impl AccountView {
     }
 
     /// From a guest to the sign-in screen, on `form`: the guest is signed out, which frees it.
-    fn leave_guest(&mut self, form: AccountForm, cx: &mut Context<Self>) {
+    pub fn leave_guest(&mut self, form: AccountForm, cx: &mut Context<Self>) {
         self.sign_out(cx);
         self.form = form;
     }
@@ -529,7 +524,7 @@ mod tests {
             view.submit(window, cx);
         });
         wait_for(&view, cx, AccountView::is_admitted);
-        let name = view.update(cx, |view, _| view.player_name());
+        let name = view.update(cx, |view, _| view.user().map(|user| user.username.clone()));
         assert_eq!(name.as_deref(), Some("Mario"));
         assert_eq!(tokens.load().as_deref(), Some("abc"));
         wait_for(&view, cx, |view| view.stats.is_some());
@@ -553,7 +548,7 @@ mod tests {
         let (view, tokens, cx) = opened(cx, "account-guest");
         view.update_in(cx, |view, window, cx| view.continue_as_guest(window, cx));
         wait_for(&view, cx, AccountView::is_admitted);
-        let name = view.update(cx, |view, _| view.player_name());
+        let name = view.update(cx, |view, _| view.user().map(|user| user.username.clone()));
         assert_eq!(name.as_deref(), Some("Guest3"));
         assert_eq!(tokens.load().as_deref(), Some("guest-token"));
 
@@ -581,7 +576,8 @@ mod tests {
         wait_for(&view, cx, AccountView::is_admitted);
         assert!(!view.update(cx, |view, _| view.restoring));
         assert_eq!(
-            view.update(cx, |view, _| view.player_name()).as_deref(),
+            view.update(cx, |view, _| view.user().map(|user| user.username.clone()))
+                .as_deref(),
             Some("Mario")
         );
         tokens.forget().expect("cleaned up");

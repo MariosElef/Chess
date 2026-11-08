@@ -66,26 +66,25 @@ impl RenderOnce for BotPicker {
             picture: None,
         };
         v_flex()
-            .w(px(460.))
-            .gap_5()
-            .p_6()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().border)
-            .child(Label::new("Choose a bot").text_xl())
+            .w_full()
+            .gap_3()
             .child(
-                h_flex()
-                    .flex_wrap()
-                    .gap_3()
+                div()
+                    .w_full()
+                    .grid()
+                    .grid_cols(3)
+                    .gap_2()
                     .children(cards)
                     .child(self.card(None, &custom, cx)),
             )
             .when(self.picked.is_none(), |this| {
                 this.child(
-                    v_flex()
-                        .gap_2()
-                        .child(Label::new(format!("Strength ~{}", self.custom_rating)).text_sm())
-                        .child(Slider::new(&self.strength)),
+                    h_flex()
+                        .gap_3()
+                        .child(div().w(px(104.)).flex_shrink_0().child(
+                            Label::new(format!("Strength ~{}", self.custom_rating)).text_sm(),
+                        ))
+                        .child(div().flex_1().child(Slider::new(&self.strength))),
                 )
             })
             .child(self.colour_row())
@@ -93,25 +92,47 @@ impl RenderOnce for BotPicker {
 }
 
 impl BotPicker {
-    /// A bot's picture, name and rating; outlined in the theme's colour once picked.
+    /// A bot's photo, name and rating, on a soft tile; once picked, the tile takes the
+    /// theme's colour and the photo a ring of it.
     fn card(&self, place: Option<usize>, bot: &Bot, cx: &App) -> Stateful<Div> {
         let on_pick = Rc::clone(&self.on_pick);
         let picked = self.picked == place;
         let theme = cx.theme();
+        let ring = if picked { theme.primary } else { theme.border };
         v_flex()
             .id(SharedString::from(format!("bot-{}", bot.name)))
-            .w_24()
             .items_center()
             .gap_1()
-            .p_2()
-            .rounded(theme.radius)
+            .pt_3()
+            .pb_2()
+            .px_2()
+            .rounded(px(12.))
             .border_2()
-            .border_color(if picked { theme.primary } else { theme.border })
             .cursor_pointer()
-            .hover(|this| this.bg(theme.accent))
+            .when(picked, |this| {
+                this.border_color(theme.primary)
+                    .bg(theme.primary.opacity(0.12))
+            })
+            .when(!picked, |this| {
+                this.border_color(transparent_black())
+                    .bg(theme.muted)
+                    .hover(|this| this.bg(theme.accent))
+            })
             .on_click(move |_, window, cx| on_pick(place, window, cx))
-            .child(portrait(bot.picture, cx))
-            .child(div().text_sm().child(bot.name))
+            .child(
+                div()
+                    .rounded_full()
+                    .border_2()
+                    .border_color(ring)
+                    .p(px(2.))
+                    .child(portrait(bot.picture, cx)),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(bot.name),
+            )
             .child(
                 div()
                     .text_xs()
@@ -148,9 +169,9 @@ impl BotPicker {
 /// The bot's photo in a circle, or a robot-less placeholder for the custom bot.
 fn portrait(picture: Option<&'static str>, cx: &App) -> AnyElement {
     match picture {
-        Some(path) => img(path).size_16().rounded_full().into_any_element(),
+        Some(path) => img(path).size_12().rounded_full().into_any_element(),
         None => div()
-            .size_16()
+            .size_12()
             .rounded_full()
             .flex()
             .items_center()

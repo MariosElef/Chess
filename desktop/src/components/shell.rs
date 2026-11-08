@@ -1,5 +1,9 @@
+mod account_menu;
+mod app_header;
 mod nav_pictures;
-mod nav_sidebar;
+mod nav_rail;
 
+pub use account_menu::{AccountMenu, MenuPerson};
+pub use app_header::{AppHeader, WINDOW_BUTTONS_AT};
 pub use nav_pictures::{nav_picture, nav_picture_paths};
-pub use nav_sidebar::NavSidebar;
+pub use nav_rail::NavRail;

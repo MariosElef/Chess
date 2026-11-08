@@ -72,17 +72,9 @@ impl PlayMode {
     /// In the order the tabs show them, the first being where Play opens.
     pub const ALL: [Self; 3] = [Self::Online, Self::Bots, Self::Local];
 
-    pub fn index(self) -> usize {
-        match self {
-            Self::Online => 0,
-            Self::Bots => 1,
-            Self::Local => 2,
-        }
-    }
-
     pub fn label(self) -> &'static str {
         match self {
-            Self::Local => "On this computer",
+            Self::Local => "Local",
             Self::Online => "Online",
             Self::Bots => "Bots",
         }
