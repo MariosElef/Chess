@@ -1,9 +1,6 @@
-use std::{
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
-use chess_domain::{Board, Clock, Move, PieceKind, Side, Square, TimeControl};
+use chess_domain::{Clock, Move, Side, TimeControl};
 use gpui_kit::{
     assets::IconName,
     component::{
@@ -30,18 +27,23 @@ enum Stage {
 }
 use crate::{
     components::{
-        board::{BoardGrid, PromotionPrompt},
         history::{MoveList, NavigationBar, PositionPanel},
         play::{CapturedRow, ClockFace, GameSetup},
     },
-    enums::{board::ClickMode, history::NavStep},
-    models::play::AnalyzeGame,
-    services::{
-        board::{BoardInteraction, PremoveQueue, click_mode},
-        history::GameHistory,
-        play::{DEFAULT_TIME_CONTROL, status_text},
+    enums::{history::NavStep, sound::Sound},
+    models::{
+        board::{MoveMade, ShownPosition},
+        play::AnalyzeGame,
     },
-    views::history::{CONTEXT, FirstPosition, LivePosition, NextPosition, PreviousPosition},
+    services::{
+        history::GameHistory,
+        play::{ClockWarning, DEFAULT_TIME_CONTROL, status_text},
+    },
+    views::{
+        board::BoardView,
+        history::{HistoryNavigation, select_move, step_history, with_history_keys},
+        sound::{play_move_sound, play_sound},
+    },
 };
 
 /// The game being played, the position on the board, and what the player is in the middle of.
@@ -55,18 +57,25 @@ pub struct PlayPage {
     turn_started: Option<Instant>,
     /// Redraws the running clock; dropping it stops the ticking.
     _ticker: Option<Task<()>>,
-    /// The picked-up piece, promotion choice, drawings and board orientation.
-    interaction: BoardInteraction,
-    /// Moves each side has queued for when its turn comes.
-    premoves: PremoveQueue,
-    /// The open promotion picker is for a premove, not a move.
-    pending_premove: bool,
+    /// The board, with what the player is doing on it and the queued premoves.
+    board: Entity<BoardView>,
+    _board_moves: Subscription,
+    /// Who has heard the low-time warning this game.
+    clock_warning: ClockWarning,
     /// Keyboard focus, so the arrow keys reach this page.
     focus_handle: FocusHandle,
 }
 
 impl PlayPage {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let page = cx.weak_entity();
+        let board = cx.new(|_| {
+            BoardView::new(move |cx| page.upgrade().map(|page| page.read(cx).shown_position()))
+        });
+        let _board_moves = cx.subscribe(&board, |page, _, MoveMade(mv), cx| {
+            page.play(*mv, cx);
+            cx.notify();
+        });
         Self {
             stage: Stage::Setup,
             setup_choice: DEFAULT_TIME_CONTROL,
@@ -74,9 +83,9 @@ impl PlayPage {
             clock: None,
             turn_started: None,
             _ticker: None,
-            interaction: BoardInteraction::default(),
-            premoves: PremoveQueue::default(),
-            pending_premove: false,
+            board,
+            _board_moves,
+            clock_warning: ClockWarning::default(),
             focus_handle: cx.focus_handle(),
         }
     }
@@ -94,78 +103,13 @@ impl PlayPage {
         self.history.is_live() && !self.history.game().is_over()
     }
 
-    fn click_square(&mut self, square: Square, cx: &mut Context<Self>) {
-        match self.click_mode(square) {
-            ClickMode::Move => {
-                let mv = self
-                    .interaction
-                    .click(self.history.live(), square, self.can_play());
-                self.play_if_any(mv);
-            }
-            ClickMode::Premove => {
-                let mv =
-                    self.interaction
-                        .premove_click(&self.preview(), self.waiting_side(), square);
-                self.queue_if_any(mv);
-            }
-        }
-        cx.notify();
-    }
-
-    fn drop_piece(&mut self, from: Square, to: Square, cx: &mut Context<Self>) {
-        match self.click_mode(from) {
-            ClickMode::Move => {
-                let mv = self
-                    .interaction
-                    .drop(self.history.live(), from, to, self.can_play());
-                self.play_if_any(mv);
-            }
-            ClickMode::Premove => {
-                let mv =
-                    self.interaction
-                        .premove_drop(&self.preview(), self.waiting_side(), from, to);
-                self.queue_if_any(mv);
-            }
-        }
-        cx.notify();
-    }
-
-    /// Nothing is premoved on an earlier position or once the game is over.
-    fn click_mode(&self, square: Square) -> ClickMode {
-        if !self.can_play() {
-            return ClickMode::Move;
-        }
-        click_mode(
-            &self.preview(),
-            self.waiting_side(),
-            self.interaction.selected(),
-            square,
-        )
-    }
-
-    /// The side not to move: the one that may queue premoves.
-    fn waiting_side(&self) -> Side {
-        self.side_to_move().opponent()
-    }
-
-    /// The live pieces as the queued premoves leave them.
-    fn preview(&self) -> Board {
-        self.premoves
-            .preview(self.history.live().board(), self.side_to_move())
-    }
-
-    fn play_if_any(&mut self, mv: Option<Move>) {
-        self.pending_premove = false;
-        if let Some(mv) = mv {
-            self.play(mv);
-        }
-    }
-
-    /// Queues the premove, or remembers that the promotion picker now open is for one.
-    fn queue_if_any(&mut self, mv: Option<Move>) {
-        self.pending_premove = self.interaction.is_promoting();
-        if let Some(mv) = mv {
-            self.premoves.queue(self.waiting_side(), mv);
+    /// What the board shows: the position being looked at, taking moves only while live.
+    fn shown_position(&self) -> ShownPosition {
+        ShownPosition {
+            position: *self.history.shown(),
+            last_move: self.history.shown_last_move(),
+            can_move: self.can_play(),
+            engine_arrow: None,
         }
     }
 
@@ -181,43 +125,51 @@ impl PlayPage {
         self.turn_started = None;
         self._ticker = self.clock.is_some().then(|| start_ticker(cx));
         self.stage = Stage::Playing;
+        self.clock_warning = ClockWarning::default();
         self.end_interaction(cx);
+        play_sound(Sound::GameStart, cx);
     }
 
     /// Plays a move picked from the legal ones; the mover's clock is charged, and the
     /// opponent's starts unless the move ended the game. Then any premoves that are due play.
-    fn play(&mut self, mv: Move) {
+    fn play(&mut self, mv: Move, cx: &mut Context<Self>) {
         let mover = self.side_to_move();
         self.charge_clock(mover, Clock::finish_turn);
-        self.record_move(mv);
-        self.run_premoves();
+        self.record_move(mv, cx);
+        self.run_premoves(cx);
     }
 
-    fn record_move(&mut self, mv: Move) {
+    /// Adds the move to the game with its sound, and the game's end sound if it was the last.
+    fn record_move(&mut self, mv: Move, cx: &App) {
+        let before = *self.history.live();
+        let plain = mover_sound(before.side_to_move());
         self.history
             .play(mv)
             .expect("moves come from the legal ones");
-        self.turn_started = (!self.history.game().is_over()).then(Instant::now);
+        let is_over = self.history.game().is_over();
+        play_move_sound(&before, self.history.live(), mv, plain, is_over, cx);
+        self.turn_started = (!is_over).then(Instant::now);
     }
 
     /// Plays the side to move's queued premoves while each is legal, then the other side's,
     /// and so on; the first one that is not drops the rest of that side's queue, and a game
     /// that ends drops them all.
-    fn run_premoves(&mut self) {
+    fn run_premoves(&mut self, cx: &mut Context<Self>) {
         loop {
             let side = self.side_to_move();
             if self.history.game().is_over() {
-                self.premoves.clear_all();
+                self.board.update(cx, |board, _| board.drop_all_premoves());
                 return;
             }
             if !self.clock_allows_premove(side) {
-                self.premoves.clear(side);
+                self.board.update(cx, |board, _| board.drop_premoves(side));
                 return;
             }
-            let Some(mv) = self.premoves.next_playable(self.history.live()) else {
+            let live = *self.history.live();
+            let Some(mv) = self.board.update(cx, |board, _| board.next_premove(&live)) else {
                 return;
             };
-            self.play_premove(side, mv);
+            self.play_premove(side, mv, cx);
         }
     }
 
@@ -228,11 +180,11 @@ impl PlayPage {
     }
 
     /// A premove is played at once for a fixed cost instead of the time the turn took.
-    fn play_premove(&mut self, side: Side, mv: Move) {
+    fn play_premove(&mut self, side: Side, mv: Move, cx: &App) {
         if let Some(clock) = self.clock.as_mut() {
             clock.finish_turn(side, PREMOVE_COST);
         }
-        self.record_move(mv);
+        self.record_move(mv, cx);
     }
 
     /// Applies the running turn's time to `side` with `charge`, if a clock is running.
@@ -254,16 +206,32 @@ impl PlayPage {
         if self.history.game().is_over() {
             return false;
         }
+        self.warn_if_low_on_time(cx);
         if self.is_flagged() {
             self.stop_clock();
             self.history
                 .flag(self.side_to_move())
                 .expect("the game was still going");
             self.end_interaction(cx);
+            play_sound(Sound::GameEnd, cx);
             return false;
         }
         cx.notify();
         true
+    }
+
+    /// The side whose clock is running hears the warning once it is down to its last seconds.
+    fn warn_if_low_on_time(&mut self, cx: &App) {
+        let (Some(side), Some(clock)) = (self.running_side(), self.clock) else {
+            return;
+        };
+        let left = self.time_left(side).unwrap_or(Duration::ZERO);
+        if self
+            .clock_warning
+            .is_due(side, left, clock.control().initial)
+        {
+            play_sound(Sound::LowTime, cx);
+        }
     }
 
     fn is_flagged(&self) -> bool {
@@ -289,37 +257,6 @@ impl PlayPage {
         self.clock.map(|clock| clock.remaining(side, elapsed))
     }
 
-    fn promote(&mut self, kind: PieceKind, cx: &mut Context<Self>) {
-        let mv = self.interaction.promote(kind);
-        if self.pending_premove {
-            self.queue_if_any(mv);
-        } else {
-            self.play_if_any(mv);
-        }
-        cx.notify();
-    }
-
-    fn cancel_promotion(&mut self, cx: &mut Context<Self>) {
-        self.interaction.cancel_promotion();
-        cx.notify();
-    }
-
-    /// A right-click with premoves queued cancels them all, as on chess.com, and draws nothing.
-    fn right_down(&mut self, square: Square, cx: &mut Context<Self>) {
-        if self.premoves.is_empty() {
-            self.interaction.right_down(square);
-        } else {
-            self.premoves.clear_all();
-            cx.notify();
-        }
-    }
-
-    fn right_up(&mut self, square: Square, cx: &mut Context<Self>) {
-        if self.interaction.right_up(square) {
-            cx.notify();
-        }
-    }
-
     fn side_to_move(&self) -> Side {
         self.history.live().side_to_move()
     }
@@ -330,12 +267,14 @@ impl PlayPage {
             .resign(self.side_to_move())
             .expect("the button only shows while the game is on");
         self.end_interaction(cx);
+        play_sound(Sound::GameEnd, cx);
     }
 
     fn offer_draw(&mut self, cx: &mut Context<Self>) {
         self.history
             .offer_draw(self.side_to_move())
             .expect("the button only shows while the game is on");
+        play_sound(Sound::Notify, cx);
         cx.notify();
     }
 
@@ -345,6 +284,7 @@ impl PlayPage {
             .accept_draw(self.side_to_move())
             .expect("the button only shows for an offer made to this side");
         self.end_interaction(cx);
+        play_sound(Sound::GameEnd, cx);
     }
 
     fn decline_draw(&mut self, cx: &mut Context<Self>) {
@@ -355,7 +295,7 @@ impl PlayPage {
     }
 
     fn flip(&mut self, cx: &mut Context<Self>) {
-        self.interaction.flip();
+        self.board.update(cx, |board, cx| board.flip(cx));
         cx.notify();
     }
 
@@ -375,39 +315,11 @@ impl PlayPage {
         self.end_interaction(cx);
     }
 
-    /// Puts down a picked-up piece, closes the promotion picker and wipes the drawings.
+    /// Puts down a picked-up piece, closes the promotion picker, wipes the drawings and drops
+    /// the premoves.
     fn end_interaction(&mut self, cx: &mut Context<Self>) {
-        self.interaction.clear();
-        self.premoves.clear_all();
-        self.pending_premove = false;
+        self.board.update(cx, |board, cx| board.reset(cx));
         cx.notify();
-    }
-
-    fn previous_position(&mut self, _: &PreviousPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(NavStep::Back, cx);
-    }
-
-    fn next_position(&mut self, _: &NextPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(NavStep::Forward, cx);
-    }
-
-    fn first_position(&mut self, _: &FirstPosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(NavStep::Start, cx);
-    }
-
-    fn live_position(&mut self, _: &LivePosition, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(NavStep::Live, cx);
-    }
-
-    fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.history.jump_to_move(index);
-        self.end_interaction(cx);
-    }
-
-    /// Moves the board through the history; the picked-up piece is put down first.
-    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
-        self.history.step(step);
-        self.end_interaction(cx);
     }
 
     /// An offer the side to move has received from the other side.
@@ -445,65 +357,6 @@ impl PlayPage {
         }
     }
 
-    fn board(&self, page: WeakEntity<Self>) -> BoardGrid {
-        let shown = self.history.shown();
-        let board = self.shown_board();
-        let draggable = if self.interaction.accepts_moves(self.can_play()) {
-            vec![Side::White, Side::Black]
-        } else {
-            Vec::new()
-        };
-        BoardGrid::for_interaction(
-            &self.interaction,
-            shown,
-            &board,
-            self.shown_targets(&board),
-            self.history.shown_last_move(),
-            draggable,
-        )
-        .premoves(self.premoves.pairs())
-        .promotion(self.promotion_prompt(page.clone()))
-        .on_right_button(right_down(page.clone()), right_up(page.clone()))
-        .on_square_click(click_square(page.clone()))
-        .on_piece_drop(drop_piece(page))
-    }
-
-    /// The live pieces as the premoves leave them; an earlier position as it was.
-    fn shown_board(&self) -> Board {
-        if self.history.is_live() {
-            self.preview()
-        } else {
-            *self.history.shown().board()
-        }
-    }
-
-    /// The dots: where the selected piece may move, or may premove on the preview.
-    fn shown_targets(&self, board: &Board) -> Vec<Square> {
-        match self.interaction.selected() {
-            Some(selected) if self.click_mode(selected) == ClickMode::Premove => {
-                self.interaction.premove_targets(board)
-            }
-            Some(_) | None => self.interaction.legal_targets(self.history.shown()),
-        }
-    }
-
-    /// The pawn's side: the mover's, or the waiting side's for a premove.
-    fn promoting_side(&self) -> Side {
-        if self.pending_premove {
-            self.waiting_side()
-        } else {
-            self.side_to_move()
-        }
-    }
-
-    fn promotion_prompt(&self, page: WeakEntity<Self>) -> Option<PromotionPrompt> {
-        self.interaction.is_promoting().then(|| PromotionPrompt {
-            side: self.promoting_side(),
-            on_pick: Rc::new(pick_promotion(page.clone())),
-            on_cancel: Rc::new(cancel_promotion(page)),
-        })
-    }
-
     fn navigation(&self, page: WeakEntity<Self>) -> NavigationBar {
         NavigationBar::new(
             self.history.can_go_back(),
@@ -526,8 +379,8 @@ impl PlayPage {
     }
 
     /// The board between two player bars: the side drawn at the top above it, the other below.
-    fn board_column(&self, page: WeakEntity<Self>) -> Div {
-        let bottom = if self.interaction.flipped() {
+    fn board_column(&self, cx: &App) -> Div {
+        let bottom = if self.board.read(cx).flipped() {
             Side::Black
         } else {
             Side::White
@@ -537,7 +390,7 @@ impl PlayPage {
             .flex_shrink_0()
             .gap_2()
             .child(self.player_bar(bottom.opponent()))
-            .child(div().flex_1().min_h_0().child(self.board(page)))
+            .child(div().flex_1().min_h_0().child(self.board.clone()))
             .child(self.player_bar(bottom))
     }
 
@@ -572,25 +425,30 @@ impl PlayPage {
             .p_6()
             .gap_4()
             .child(self.header(cx))
-            .child(board_area(
-                self.board_column(page.clone()),
-                self.side_column(page),
-            ))
+            .child(board_area(self.board_column(cx), self.side_column(page)))
     }
 }
 
 impl EventEmitter<AnalyzeGame> for PlayPage {}
 
+impl HistoryNavigation for PlayPage {
+    /// Moves the board through the history; the picked-up piece is put down first.
+    fn navigate(&mut self, step: NavStep, cx: &mut Context<Self>) {
+        self.history.step(step);
+        self.end_interaction(cx);
+    }
+
+    fn select_move(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.history.jump_to_move(index);
+        self.end_interaction(cx);
+    }
+}
+
 impl Render for PlayPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let page = cx.entity().downgrade();
-        v_flex()
-            .key_context(CONTEXT)
+        with_history_keys(v_flex(), cx)
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(Self::previous_position))
-            .on_action(cx.listener(Self::next_position))
-            .on_action(cx.listener(Self::first_position))
-            .on_action(cx.listener(Self::live_position))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|page, _, window, cx| page.focus(window, cx)),
@@ -685,6 +543,14 @@ fn start_game(page: WeakEntity<PlayPage>) -> impl Fn(&mut Window, &mut App) + 's
     }
 }
 
+/// On the Play board two players share one computer: White's moves and Black's sound apart.
+fn mover_sound(mover: Side) -> Sound {
+    match mover {
+        Side::White => Sound::MoveSelf,
+        Side::Black => Sound::MoveOpponent,
+    }
+}
+
 /// Wakes every tick until the game is over or the page is gone.
 fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
     cx.spawn(async move |page, cx| {
@@ -698,58 +564,6 @@ fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
     })
 }
 
-fn step_history(page: WeakEntity<PlayPage>) -> impl Fn(NavStep, &mut Window, &mut App) + 'static {
-    move |step, _, cx| {
-        let _ = page.update(cx, |page, cx| page.navigate(step, cx));
-    }
-}
-
-fn select_move(page: WeakEntity<PlayPage>) -> impl Fn(usize, &mut Window, &mut App) + 'static {
-    move |index, _, cx| {
-        let _ = page.update(cx, |page, cx| page.select_move(index, cx));
-    }
-}
-
-fn click_square(page: WeakEntity<PlayPage>) -> impl Fn(Square, &mut Window, &mut App) + 'static {
-    move |square, _, cx| {
-        let _ = page.update(cx, |page, cx| page.click_square(square, cx));
-    }
-}
-
-fn right_down(page: WeakEntity<PlayPage>) -> impl Fn(Square, &mut Window, &mut App) + 'static {
-    move |square, _, cx| {
-        let _ = page.update(cx, |page, cx| page.right_down(square, cx));
-    }
-}
-
-fn right_up(page: WeakEntity<PlayPage>) -> impl Fn(Square, &mut Window, &mut App) + 'static {
-    move |square, _, cx| {
-        let _ = page.update(cx, |page, cx| page.right_up(square, cx));
-    }
-}
-
-fn drop_piece(
-    page: WeakEntity<PlayPage>,
-) -> impl Fn(Square, Square, &mut Window, &mut App) + 'static {
-    move |from, to, _, cx| {
-        let _ = page.update(cx, |page, cx| page.drop_piece(from, to, cx));
-    }
-}
-
-fn pick_promotion(
-    page: WeakEntity<PlayPage>,
-) -> impl Fn(PieceKind, &mut Window, &mut App) + 'static {
-    move |kind, _, cx| {
-        let _ = page.update(cx, |page, cx| page.promote(kind, cx));
-    }
-}
-
-fn cancel_promotion(page: WeakEntity<PlayPage>) -> impl Fn(&mut Window, &mut App) + 'static {
-    move |_, cx| {
-        let _ = page.update(cx, |page, cx| page.cancel_promotion(cx));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use chess_domain::{Move, Side, Square, TimeControl};
@@ -757,8 +571,10 @@ mod tests {
 
     use super::PlayPage;
     use crate::{
-        enums::history::NavStep,
-        views::testing::{click, drag, lift, release},
+        enums::{history::NavStep, sound::Sound},
+        testing::{click, drag, lift, release},
+        views::history::HistoryNavigation as _,
+        views::sound::{played_sounds, record_sounds},
     };
 
     fn sq(name: &str) -> Square {
@@ -780,71 +596,95 @@ mod tests {
         (page, cx)
     }
 
-    #[gpui_kit::test]
-    fn a_premove_is_queued_and_plays_after_the_opponent_moves(cx: &mut TestAppContext) {
-        let (page, cx) = started(cx, false);
-        page.update(cx, |page, cx| {
-            page.click_square(sq("e7"), cx);
-            assert_eq!(page.interaction.selected(), Some(sq("e7")));
-            page.click_square(sq("e5"), cx);
-            assert_eq!(page.premoves.first(Side::Black), Some(mv("e7", "e5")));
-            page.click_square(sq("e2"), cx);
-            page.click_square(sq("e4"), cx);
-            assert_eq!(page.history.sans(), ["e4", "e5"]);
-            assert!(page.premoves.is_empty());
-        });
+    fn sans(page: &Entity<PlayPage>, cx: &mut VisualTestContext) -> Vec<String> {
+        page.update(cx, |page, _| page.history.sans().to_vec())
+    }
+
+    fn premoves(page: &Entity<PlayPage>, cx: &mut VisualTestContext) -> Vec<(Square, Square)> {
+        page.update(cx, |page, cx| page.board.read(cx).premoves().pairs())
     }
 
     #[gpui_kit::test]
-    fn a_dragged_premove_is_queued(cx: &mut TestAppContext) {
+    fn a_premove_is_queued_and_plays_after_the_opponent_moves(cx: &mut TestAppContext) {
         let (page, cx) = started(cx, false);
-        page.update(cx, |page, cx| {
-            page.drop_piece(sq("g8"), sq("f6"), cx);
-            page.drop_piece(sq("f6"), sq("g4"), cx);
-            assert_eq!(page.premoves.pairs().len(), 2);
-        });
+        click(cx, "square-e7");
+        let selected = page.update(cx, |page, cx| page.board.read(cx).selected());
+        assert_eq!(selected, Some(sq("e7")));
+        click(cx, "square-e5");
+        assert_eq!(premoves(&page, cx), [(sq("e7"), sq("e5"))]);
+        click(cx, "square-e2");
+        click(cx, "square-e4");
+        assert_eq!(sans(&page, cx), ["e4", "e5"]);
+        assert!(premoves(&page, cx).is_empty());
+    }
+
+    #[gpui_kit::test]
+    fn premoves_chain_through_the_preview(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        drag(cx, "square-g8", "square-f6");
+        drag(cx, "square-f6", "square-g4");
+        assert_eq!(premoves(&page, cx).len(), 2);
     }
 
     #[gpui_kit::test]
     fn a_premove_that_mates_drops_every_other_premove(cx: &mut TestAppContext) {
         let (page, cx) = started(cx, false);
-        page.update(cx, |page, cx| {
-            page.drop_piece(sq("f2"), sq("f3"), cx);
-            page.drop_piece(sq("e7"), sq("e5"), cx);
-            page.drop_piece(sq("d8"), sq("h4"), cx);
-            page.drop_piece(sq("a7"), sq("a6"), cx);
-            assert_eq!(page.premoves.pairs().len(), 2, "two black premoves queued");
-            page.drop_piece(sq("g2"), sq("g4"), cx);
-            assert_eq!(page.history.sans(), ["f3", "e5", "g4", "Qh4#"]);
-            assert!(
-                page.premoves.is_empty(),
-                "a6 is dropped once the game is over"
-            );
-        });
+        drag(cx, "square-f2", "square-f3");
+        drag(cx, "square-e7", "square-e5");
+        drag(cx, "square-d8", "square-h4");
+        drag(cx, "square-a7", "square-a6");
+        assert_eq!(premoves(&page, cx).len(), 2, "two black premoves queued");
+        drag(cx, "square-g2", "square-g4");
+        assert_eq!(sans(&page, cx), ["f3", "e5", "g4", "Qh4#"]);
+        assert!(
+            premoves(&page, cx).is_empty(),
+            "a6 is dropped once the game is over"
+        );
     }
 
     #[gpui_kit::test]
     fn looking_back_cancels_the_premoves(cx: &mut TestAppContext) {
         let (page, cx) = started(cx, false);
-        page.update(cx, |page, cx| {
-            page.drop_piece(sq("e2"), sq("e4"), cx);
-            page.drop_piece(sq("g1"), sq("f3"), cx);
-            assert!(!page.premoves.is_empty());
-            page.navigate(NavStep::Back, cx);
-            assert!(
-                page.premoves.is_empty(),
-                "no red squares on an earlier position"
-            );
-        });
+        drag(cx, "square-e2", "square-e4");
+        drag(cx, "square-g1", "square-f3");
+        assert!(!premoves(&page, cx).is_empty());
+        page.update(cx, |page, cx| page.navigate(NavStep::Back, cx));
+        assert!(
+            premoves(&page, cx).is_empty(),
+            "no red squares on an earlier position"
+        );
     }
 
     #[gpui_kit::test]
-    fn real_clicks_on_the_board_move_and_premove(cx: &mut TestAppContext) {
-        let (page, cx) = started(cx, false);
-        for selector in ["square-e7", "square-e5", "square-e2", "square-e4"] {
-            click(cx, selector);
-        }
-        page.update(cx, |page, _| assert_eq!(page.history.sans(), ["e4", "e5"]));
+    fn a_game_sounds_from_its_start_to_a_premoved_mate(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            record_sounds(cx);
+        });
+        let (page, cx) = cx.add_window_view(|_, cx| PlayPage::new(cx));
+        page.update(cx, |page, cx| {
+            page.choose_time(None, cx);
+            page.start_game(cx);
+        });
+        drag(cx, "square-e2", "square-e5");
+        drag(cx, "square-f2", "square-f3");
+        drag(cx, "square-e7", "square-e5");
+        drag(cx, "square-d8", "square-h4");
+        drag(cx, "square-g2", "square-g4");
+        let played = cx.update(|_, cx| played_sounds(cx));
+        assert_eq!(
+            played,
+            [
+                Sound::GameStart,
+                Sound::Illegal,
+                Sound::MoveSelf,
+                Sound::MoveOpponent,
+                Sound::Premove,
+                Sound::MoveSelf,
+                Sound::Check,
+                Sound::GameEnd,
+            ]
+        );
     }
 
     #[gpui_kit::test]
@@ -853,7 +693,7 @@ mod tests {
         for selector in ["square-e7", "square-e5", "square-e2", "square-e4"] {
             click(cx, selector);
         }
-        page.update(cx, |page, _| assert_eq!(page.history.sans(), ["e4", "e5"]));
+        assert_eq!(sans(&page, cx), ["e4", "e5"]);
     }
 
     #[gpui_kit::test]
@@ -876,17 +716,18 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn real_drags_move_and_premove(cx: &mut TestAppContext) {
+    fn real_drags_move_and_premove_in_a_timed_game(cx: &mut TestAppContext) {
         let (page, cx) = started(cx, true);
         drag(cx, "square-g8", "square-f6");
-        page.update(cx, |page, _| {
-            assert_eq!(
-                page.premoves.first(Side::Black),
-                Some(mv("g8", "f6")),
-                "black premove queued by dragging"
-            );
+        let first = page.update(cx, |page, cx| {
+            page.board.read(cx).premoves().first(Side::Black)
         });
+        assert_eq!(
+            first,
+            Some(mv("g8", "f6")),
+            "black premove queued by dragging"
+        );
         drag(cx, "square-e2", "square-e4");
-        page.update(cx, |page, _| assert_eq!(page.history.sans(), ["e4", "Nf6"]));
+        assert_eq!(sans(&page, cx), ["e4", "Nf6"]);
     }
 }

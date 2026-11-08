@@ -3,9 +3,17 @@ use gpui_kit::{component::h_flex, *};
 use crate::{
     clients::{
         engine::device_cores,
-        settings::{load_appearance, load_engine_settings, save_appearance, save_engine_settings},
+        settings::{
+            load_appearance, load_board_theme, load_engine_settings, load_piece_set,
+            save_appearance, save_board_theme, save_engine_settings, save_piece_set,
+        },
     },
-    components::{puzzles::PuzzlesPage, settings::SettingsPage, shell::NavSidebar},
+    components::{
+        board::BoardStyle,
+        puzzles::PuzzlesPage,
+        settings::{SettingsChoices, SettingsPage},
+        shell::NavSidebar,
+    },
     enums::{settings::Appearance, shell::Page},
     models::{engine::EngineSettings, play::AnalyzeGame},
     views::{analysis::AnalysisPage, play::PlayPage, settings::apply_appearance},
@@ -16,6 +24,8 @@ pub struct AppShell {
     play: Entity<PlayPage>,
     analyze: Entity<AnalysisPage>,
     appearance: Appearance,
+    /// The board theme and pieces every board draws with; also kept as a global for them.
+    board_style: BoardStyle,
     /// Stockfish's threads, memory and depth, shared by Settings and the analysis board.
     engine_settings: EngineSettings,
     _appearance_changes: Subscription,
@@ -33,6 +43,8 @@ impl AppShell {
             }
         });
 
+        let board_style = saved_board_style();
+        cx.set_global(board_style);
         let engine_settings = load_engine_settings();
         let play = new_play_page(window, cx);
         let _play_events = cx.subscribe_in(&play, window, analyze_game);
@@ -41,6 +53,7 @@ impl AppShell {
             play,
             analyze: cx.new(|cx| AnalysisPage::new(engine_settings, window, cx)),
             appearance,
+            board_style,
             engine_settings,
             _appearance_changes,
             _play_events,
@@ -79,6 +92,16 @@ impl AppShell {
         cx.notify();
     }
 
+    /// Saves the new board style and redraws every board with it.
+    fn set_board_style(&mut self, style: BoardStyle, cx: &mut Context<Self>) {
+        self.board_style = style;
+        // A failed save only means the next launch starts on the default board.
+        let _ = save_board_theme(style.theme);
+        let _ = save_piece_set(style.pieces);
+        cx.set_global(style);
+        cx.refresh_windows();
+    }
+
     fn set_appearance(
         &mut self,
         appearance: Appearance,
@@ -111,10 +134,14 @@ impl AppShell {
             Page::Puzzles => PuzzlesPage.into_any_element(),
             Page::Analyze => self.analyze.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
-                self.appearance,
-                self.engine_settings,
-                device_cores(),
+                SettingsChoices {
+                    appearance: self.appearance,
+                    board_style: self.board_style,
+                    engine: self.engine_settings,
+                    cores: device_cores(),
+                },
                 change_appearance(shell.clone()),
+                change_board_style(shell.clone()),
                 change_engine_settings(shell),
             )
             .into_any_element(),
@@ -135,6 +162,14 @@ fn change_engine_settings(
 ) -> impl Fn(EngineSettings, &mut Window, &mut App) + 'static {
     move |settings, _, cx| {
         let _ = shell.update(cx, |shell, cx| shell.set_engine_settings(settings, cx));
+    }
+}
+
+fn change_board_style(
+    shell: WeakEntity<AppShell>,
+) -> impl Fn(BoardStyle, &mut Window, &mut App) + 'static {
+    move |style, _, cx| {
+        let _ = shell.update(cx, |shell, cx| shell.set_board_style(style, cx));
     }
 }
 
@@ -166,4 +201,12 @@ fn new_play_page(window: &mut Window, cx: &mut Context<AppShell>) -> Entity<Play
     let focus = play.read(cx).focus_handle();
     focus.focus(window, cx);
     play
+}
+
+/// The board style saved last time, or the defaults on a first launch.
+fn saved_board_style() -> BoardStyle {
+    BoardStyle {
+        theme: load_board_theme().unwrap_or_default(),
+        pieces: load_piece_set().unwrap_or_default(),
+    }
 }

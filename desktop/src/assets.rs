@@ -46,3 +46,24 @@ impl AssetSource for AppAssets {
         Ok(paths)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::AssetSource as _;
+
+    use super::AppAssets;
+    use crate::components::board::PIECE_IMAGES;
+
+    #[test]
+    fn every_piece_picture_of_both_sets_is_served() {
+        for image in PIECE_IMAGES {
+            let served = AppAssets.load(image.path).expect("loading never fails");
+            assert_eq!(served.as_deref(), Some(image.bytes), "{}", image.path);
+        }
+        assert!(
+            PIECE_IMAGES
+                .iter()
+                .any(|image| image.path == "pieces/modern/wK.png")
+        );
+    }
+}

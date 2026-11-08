@@ -2,12 +2,16 @@
 use std::{fs, io, path::PathBuf};
 
 use crate::{
-    clients::engine::device_cores, enums::settings::Appearance, models::engine::EngineSettings,
+    clients::engine::device_cores,
+    enums::settings::{Appearance, BoardTheme, PieceSet},
+    models::engine::EngineSettings,
 };
 
 const APP_FOLDER: &str = "Chess";
 const APPEARANCE_FILE: &str = "appearance";
 const ENGINE_FILE: &str = "engine";
+const BOARD_THEME_FILE: &str = "board_theme";
+const PIECE_SET_FILE: &str = "pieces";
 
 /// The saved choice, or `None` on a first launch or when the file is missing or unreadable.
 pub fn load_appearance() -> Option<Appearance> {
@@ -16,6 +20,24 @@ pub fn load_appearance() -> Option<Appearance> {
 
 pub fn save_appearance(appearance: Appearance) -> io::Result<()> {
     write_setting(APPEARANCE_FILE, appearance.key())
+}
+
+/// The saved board theme, or `None` on a first launch or when the file is missing or unreadable.
+pub fn load_board_theme() -> Option<BoardTheme> {
+    BoardTheme::from_key(read_setting(BOARD_THEME_FILE)?.trim())
+}
+
+pub fn save_board_theme(theme: BoardTheme) -> io::Result<()> {
+    write_setting(BOARD_THEME_FILE, theme.key())
+}
+
+/// The saved piece set, or `None` on a first launch or when the file is missing or unreadable.
+pub fn load_piece_set() -> Option<PieceSet> {
+    PieceSet::from_key(read_setting(PIECE_SET_FILE)?.trim())
+}
+
+pub fn save_piece_set(set: PieceSet) -> io::Result<()> {
+    write_setting(PIECE_SET_FILE, set.key())
 }
 
 /// The saved engine settings, fitted to this device; its defaults on a first launch.

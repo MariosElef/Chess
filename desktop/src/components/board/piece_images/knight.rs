@@ -1,20 +1,33 @@
 use chess_domain::Side;
 
 use super::PieceImage;
+use crate::enums::settings::PieceSet;
 
-pub const WHITE: PieceImage = PieceImage {
-    path: "pieces/wN.svg",
-    bytes: include_bytes!("../../../../assets/pieces/wN.svg"),
+pub const CLASSIC_WHITE: PieceImage = PieceImage {
+    path: "pieces/classic/wN.svg",
+    bytes: include_bytes!("../../../../assets/pieces/classic/wN.svg"),
 };
 
-pub const BLACK: PieceImage = PieceImage {
-    path: "pieces/bN.svg",
-    bytes: include_bytes!("../../../../assets/pieces/bN.svg"),
+pub const CLASSIC_BLACK: PieceImage = PieceImage {
+    path: "pieces/classic/bN.svg",
+    bytes: include_bytes!("../../../../assets/pieces/classic/bN.svg"),
 };
 
-pub fn image(side: Side) -> PieceImage {
-    match side {
-        Side::White => WHITE,
-        Side::Black => BLACK,
+pub const MODERN_WHITE: PieceImage = PieceImage {
+    path: "pieces/modern/wN.png",
+    bytes: include_bytes!("../../../../assets/pieces/modern/wN.png"),
+};
+
+pub const MODERN_BLACK: PieceImage = PieceImage {
+    path: "pieces/modern/bN.png",
+    bytes: include_bytes!("../../../../assets/pieces/modern/bN.png"),
+};
+
+pub fn image(side: Side, set: PieceSet) -> PieceImage {
+    match (set, side) {
+        (PieceSet::Classic, Side::White) => CLASSIC_WHITE,
+        (PieceSet::Classic, Side::Black) => CLASSIC_BLACK,
+        (PieceSet::Modern, Side::White) => MODERN_WHITE,
+        (PieceSet::Modern, Side::Black) => MODERN_BLACK,
     }
 }

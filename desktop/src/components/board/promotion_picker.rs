@@ -6,7 +6,7 @@ use gpui_kit::{
     *,
 };
 
-use super::{board_colors::BoardColors, piece_images::piece_image};
+use super::{board_colors::BoardColors, board_style::BoardStyle, piece_images::piece_image};
 
 const CHOICES: [PieceKind; 4] = [
     PieceKind::Queen,
@@ -76,7 +76,11 @@ fn choice(kind: PieceKind, prompt: &PromotionPrompt, cx: &App) -> Stateful<Div> 
             cx.stop_propagation();
             on_pick(kind, window, cx);
         })
-        .child(img(piece_image(Piece::new(prompt.side, kind)).path).size_full())
+        .child(piece_choice(Piece::new(prompt.side, kind), cx))
+}
+
+fn piece_choice(piece: Piece, cx: &App) -> Img {
+    img(piece_image(piece, BoardStyle::current(cx).pieces).path).size_full()
 }
 
 fn kind_index(kind: PieceKind) -> usize {

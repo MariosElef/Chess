@@ -4,6 +4,8 @@ mod components;
 mod enums;
 mod models;
 mod services;
+#[cfg(test)]
+mod testing;
 mod views;
 
 use gpui_kit::*;
@@ -14,6 +16,7 @@ fn main() {
     application().with_assets(AppAssets).run(|cx| {
         init(cx);
         views::history::bind_keys(cx);
+        views::sound::install_speaker(cx);
 
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

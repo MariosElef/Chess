@@ -3,8 +3,8 @@ use std::{cell::Cell, rc::Rc};
 use chess_domain::{Piece, Square};
 use gpui_kit::{prelude::FluentBuilder as _, *};
 
-use super::{board_colors::BoardColors, piece_images::piece_image};
-use crate::enums::board::SquareHighlight;
+use super::{board_colors::BoardColors, board_style::BoardStyle, piece_images::piece_image};
+use crate::enums::{board::SquareHighlight, settings::PieceSet};
 
 pub type OnSquareClick = Rc<dyn Fn(Square, &mut Window, &mut App)>;
 pub type OnPieceDrop = Rc<dyn Fn(Square, Square, &mut Window, &mut App)>;
@@ -111,6 +111,7 @@ impl RenderOnce for BoardSquare {
         let coordinate = self.colors.coordinate(square);
         let lifted = lifted_state(square, window, cx);
         let shown_piece = self.piece.filter(|_| !is_lifted(&lifted, cx));
+        let pieces = BoardStyle::current(cx).pieces;
         div()
             .id(("square", square.index()))
             .debug_selector(|| format!("square-{square}"))
@@ -127,7 +128,7 @@ impl RenderOnce for BoardSquare {
                 this.child(file_label(label, coordinate))
             })
             .when_some(shown_piece, |this, piece| {
-                this.child(piece_picture(piece, square))
+                this.child(piece_picture(piece, square, pieces))
             })
             .when(self.target, |this| {
                 this.child(move_marker(self.piece.is_some(), self.colors))
@@ -183,8 +184,8 @@ fn is_lifted(lifted: &Entity<bool>, cx: &mut App) -> bool {
     false
 }
 
-fn piece_picture(piece: Piece, square: Square) -> Img {
-    img(piece_image(piece).path)
+fn piece_picture(piece: Piece, square: Square, pieces: PieceSet) -> Img {
+    img(piece_image(piece, pieces).path)
         .size_full()
         .debug_selector(|| format!("piece-{square}"))
 }
@@ -263,12 +264,12 @@ pub struct DragPreview {
 }
 
 impl Render for DragPreview {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .relative()
             .left(self.shift.x)
             .top(self.shift.y)
             .size(self.size)
-            .child(img(piece_image(self.piece).path).size_full())
+            .child(img(piece_image(self.piece, BoardStyle::current(cx).pieces).path).size_full())
     }
 }

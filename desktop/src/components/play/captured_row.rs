@@ -5,7 +5,11 @@ use gpui_kit::{
     *,
 };
 
-use crate::{components::board::piece_image, services::board::side_name};
+use crate::{
+    components::board::{BoardStyle, piece_image},
+    enums::settings::PieceSet,
+    services::board::side_name,
+};
 
 /// The pieces one side has taken, small, with "+N" when that side is ahead in material.
 #[derive(IntoElement)]
@@ -29,6 +33,7 @@ impl CapturedRow {
 impl RenderOnce for CapturedRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let lost_side = self.side.opponent();
+        let pieces = BoardStyle::current(cx).pieces;
         h_flex()
             .h_6()
             .gap_1()
@@ -36,7 +41,7 @@ impl RenderOnce for CapturedRow {
             .children(
                 self.taken
                     .iter()
-                    .map(|&kind| small_piece(Piece::new(lost_side, kind))),
+                    .map(|&kind| small_piece(Piece::new(lost_side, kind), pieces)),
             )
             .when(self.advantage > 0, |this| {
                 this.child(advantage_text(self.advantage, cx))
@@ -52,8 +57,8 @@ fn advantage(white_minus_black: i32, side: Side) -> i32 {
     }
 }
 
-fn small_piece(piece: Piece) -> Img {
-    img(piece_image(piece).path).size_5()
+fn small_piece(piece: Piece, pieces: PieceSet) -> Img {
+    img(piece_image(piece, pieces).path).size_5()
 }
 
 fn advantage_text(advantage: i32, cx: &App) -> Div {

@@ -6,3 +6,4 @@ pub mod engine;
 pub mod history;
 pub mod settings;
 pub mod shell;
+pub mod sound;

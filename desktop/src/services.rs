@@ -4,3 +4,4 @@ pub mod board;
 pub mod engine;
 pub mod history;
 pub mod play;
+pub mod sound;

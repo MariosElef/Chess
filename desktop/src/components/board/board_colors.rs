@@ -1,9 +1,11 @@
 use chess_domain::Square;
 use gpui_kit::{App, Hsla, component::ActiveTheme as _, hsla, rgb};
 
-use crate::enums::board::SquareHighlight;
+use super::board_style::BoardStyle;
+use crate::enums::{board::SquareHighlight, settings::BoardTheme};
 
-/// The board's own colour roles, one set per theme mode, so no view writes a colour literal.
+/// The board's own colour roles, one set per theme mode with the squares from the chosen board
+/// theme, so no view writes a colour literal.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoardColors {
     pub light_square: Hsla,
@@ -32,10 +34,12 @@ pub struct BoardColors {
 
 impl BoardColors {
     pub fn current(cx: &App) -> Self {
-        if cx.theme().is_dark() {
-            Self::dark_mode()
+        let is_dark = cx.theme().is_dark();
+        let squares = square_colors(BoardStyle::current(cx).theme, is_dark);
+        if is_dark {
+            Self::dark_mode(squares)
         } else {
-            Self::light_mode()
+            Self::light_mode(squares)
         }
     }
 
@@ -67,10 +71,10 @@ impl BoardColors {
         }
     }
 
-    fn light_mode() -> Self {
+    fn light_mode((light_square, dark_square): (Hsla, Hsla)) -> Self {
         Self {
-            light_square: rgb(0xe9e5dc).into(),
-            dark_square: rgb(0x9fb1c4).into(),
+            light_square,
+            dark_square,
             selected_square: rgb(0xf0d27a).into(),
             last_move_square: rgb(0xe3d79b).into(),
             check_square: rgb(0xd9483b).into(),
@@ -85,10 +89,10 @@ impl BoardColors {
         }
     }
 
-    fn dark_mode() -> Self {
+    fn dark_mode((light_square, dark_square): (Hsla, Hsla)) -> Self {
         Self {
-            light_square: rgb(0xb8c1cc).into(),
-            dark_square: rgb(0x6f7f93).into(),
+            light_square,
+            dark_square,
             selected_square: rgb(0xc9a94e).into(),
             last_move_square: rgb(0xb4a86a).into(),
             check_square: rgb(0xb5342a).into(),
@@ -101,5 +105,48 @@ impl BoardColors {
             eval_black: rgb(0x1f1f21).into(),
             overlay: hsla(0., 0., 0., 0.55),
         }
+    }
+}
+
+/// The light and dark squares of `theme`. Only Slate has a darker version for dark mode; the
+/// others keep the colours they are known by: Lichess's brown, chess.com's blue and green.
+pub fn square_colors(theme: BoardTheme, is_dark: bool) -> (Hsla, Hsla) {
+    let (light, dark) = match (theme, is_dark) {
+        (BoardTheme::Slate, false) => (0xe9e5dc, 0x9fb1c4),
+        (BoardTheme::Slate, true) => (0xb8c1cc, 0x6f7f93),
+        (BoardTheme::Brown, _) => (0xf0d9b5, 0xb58863),
+        (BoardTheme::Blue, _) => (0xeae9d2, 0x4b7399),
+        (BoardTheme::Green, _) => (0xeeeed2, 0x769656),
+    };
+    (rgb(light).into(), rgb(dark).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::{Hsla, rgb};
+
+    use super::square_colors;
+    use crate::enums::settings::BoardTheme;
+
+    fn hex(color: u32) -> Hsla {
+        rgb(color).into()
+    }
+
+    #[test]
+    fn each_theme_has_its_own_squares() {
+        assert_eq!(
+            square_colors(BoardTheme::Green, false),
+            (hex(0xeeeed2), hex(0x769656))
+        );
+        assert_eq!(
+            square_colors(BoardTheme::Brown, true),
+            square_colors(BoardTheme::Brown, false),
+            "brown looks the same in dark mode"
+        );
+        assert_ne!(
+            square_colors(BoardTheme::Slate, true),
+            square_colors(BoardTheme::Slate, false),
+            "slate darkens in dark mode"
+        );
     }
 }
