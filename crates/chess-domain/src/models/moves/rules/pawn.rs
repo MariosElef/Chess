@@ -7,7 +7,7 @@ const PROMOTIONS: [PieceKind; 4] = [
     PieceKind::Knight,
 ];
 
-/// Forward onto empty squares, diagonal captures (en passant included), and promotion on the last rank.
+/// Forward onto empty squares, diagonal captures with en passant, and promotion on the last rank.
 pub(super) fn moves(position: &Position, from: Square, moves: &mut Vec<Move>) {
     pushes(position, from, moves);
     captures(position, from, moves);

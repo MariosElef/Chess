@@ -19,8 +19,7 @@ const QUEUE: usize = 64;
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
-/// The open line to the server for live play, connected again on its own whenever it drops.
-/// Dropping it closes the connection for good.
+/// The open line to the server for live play, reconnecting on its own whenever it drops.
 pub struct LiveSocket {
     outgoing: mpsc::Sender<ClientMessage>,
 }

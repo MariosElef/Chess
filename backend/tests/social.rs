@@ -325,3 +325,40 @@ async fn starting_a_game_calls_off_waiting_challenges(db: Db) {
     let after = next(&mut bob, "challenges").await;
     assert_eq!(after["received"], json!([]), "Ann is playing Cat now");
 }
+
+#[sqlx::test]
+async fn friends_come_with_when_they_were_last_online_and_their_ratings(db: Db) {
+    let server = server(db.clone());
+    let ((ann_token, _), (bob_token, bob_id)) = friends_ann_and_bob(&server).await;
+    let listed = friends(&server, &ann_token).await;
+    assert!(
+        listed["friends"][0]["away_s"].is_number(),
+        "Bob never opened the app, but signed in: his session says when"
+    );
+    assert_eq!(
+        listed["friends"][0]["ratings"],
+        json!({}),
+        "he has not played"
+    );
+    assert_eq!(listed["my_ratings"], json!({}));
+    let mut ann = connect(&server, &ann_token).await;
+    let bob = connect(&server, &bob_token).await;
+    next(&mut ann, "friends_changed").await;
+    drop(bob);
+    next(&mut ann, "friends_changed").await;
+    let listed = friends(&server, &ann_token).await;
+    assert_eq!(listed["friends"][0]["online"], false);
+    assert!(
+        listed["friends"][0]["away_s"].is_number(),
+        "Bob was just here"
+    );
+    // The app being open was stored, not just the session's use.
+    let bob_id: uuid::Uuid = bob_id.parse().expect("a uuid");
+    let stored: bool =
+        sqlx::query_scalar("SELECT last_online_at IS NOT NULL FROM account.users WHERE id = $1")
+            .bind(bob_id)
+            .fetch_one(&db)
+            .await
+            .expect("Bob's row");
+    assert!(stored, "Bob's last time online is kept");
+}

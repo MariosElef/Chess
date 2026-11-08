@@ -9,8 +9,7 @@ use chess_domain::{Piece, PieceKind};
 
 use crate::enums::settings::PieceSet;
 
-/// One piece's picture (an SVG or a PNG), compiled into the binary and served to `img()`
-/// under `path`.
+/// One piece's picture (an SVG or a PNG), compiled into the binary and served to `img()`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PieceImage {
     pub path: &'static str,

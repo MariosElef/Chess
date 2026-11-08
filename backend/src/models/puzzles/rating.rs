@@ -1,7 +1,6 @@
 use serde::Serialize;
 
-/// A puzzle rating as the player sees it, rounded; `change` is how much the last attempt moved
-/// it, when there was one.
+/// A puzzle rating as the player sees it, rounded, with how much the last attempt moved it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct PuzzleRatingModel {
     pub rating: i32,

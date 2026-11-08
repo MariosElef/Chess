@@ -5,8 +5,7 @@ use crate::{
 };
 
 impl PlayHub {
-    /// Tells the player's friends who are online to fetch their friends again: the player came
-    /// or went.
+    /// Tells the player's online friends to fetch their friends again: the player came or went.
     pub(super) fn tell_friends(&self, player: &Player) {
         let (hub, player_id) = (self.clone(), player.id);
         tokio::spawn(async move {

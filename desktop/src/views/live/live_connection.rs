@@ -13,8 +13,7 @@ use crate::{
 /// Reads the signed-in session, for the live socket and for knowing which player is "me".
 pub type SessionSource = Rc<dyn Fn(&App) -> Option<Session>>;
 
-/// The one live connection to the server while signed in, shared by online play and the Social
-/// page: each listens to its events and sends through it. It reconnects on its own.
+/// The one live connection while signed in, shared by online play and Social; it reconnects itself.
 pub struct LiveConnection {
     client: ServerClient,
     session: SessionSource,

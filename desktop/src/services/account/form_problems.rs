@@ -14,8 +14,7 @@ pub fn form_problems(error: &ServerError) -> FormProblems {
     }
 }
 
-/// Each field error under its field; a taken email or username under that field; anything
-/// else above the button.
+/// Each field error under its field; a taken email or username there; anything else above.
 fn refused(problem: &Problem) -> FormProblems {
     let mut problems = FormProblems::default();
     for field in &problem.errors {

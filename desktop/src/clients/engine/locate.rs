@@ -1,8 +1,7 @@
 use std::{env, ffi::OsString, path::PathBuf};
 
 const BINARY: &str = "stockfish";
-/// Where Homebrew installs it on Apple silicon and on Intel Macs. An app opened from Finder
-/// does not get the shell's `PATH`, so these are tried even when `PATH` lacks them.
+/// Where Homebrew installs it on Apple silicon and Intel, tried even when `PATH` lacks them.
 const HOMEBREW: [&str; 2] = ["/opt/homebrew/bin/stockfish", "/usr/local/bin/stockfish"];
 
 /// The Stockfish to run: `$STOCKFISH_PATH` if set, else the Homebrew locations, else `PATH`.

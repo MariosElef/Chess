@@ -33,7 +33,7 @@ use crate::{
             player::{Player, PlayerModel},
         },
     },
-    repositories::{chat, database::Db, play::game, rating},
+    repositories::{account::user, chat, database::Db, play::game, rating},
     services::rating::{from_row, whole},
 };
 
@@ -44,8 +44,6 @@ const LONGEST_START: u32 = 3 * 60 * 60;
 const LONGEST_INCREMENT: u32 = 180;
 
 /// Live play: who is connected, who is waiting for an opponent, and the games being played.
-/// Each game runs on a task of its own; the hub only routes messages to and from it. Cloning
-/// shares it.
 #[derive(Clone)]
 pub struct PlayHub {
     inner: Arc<HubInner>,
@@ -104,9 +102,7 @@ impl PlayHub {
         }
     }
 
-    /// A new socket for `player`; their games and battle in progress and their challenges and
-    /// battle invitations are sent to it straight away, so reconnecting puts them back where
-    /// they were. Their friends hear they came online.
+    /// A new socket for `player`, sent their games, battle, challenges and invitations at once.
     pub fn connect(&self, player: &Player) -> Connection {
         let (sender, messages) = mpsc::channel(OUTBOX_SIZE);
         let id = self.inner.next_connection.fetch_add(1, Ordering::Relaxed);
@@ -129,7 +125,7 @@ impl PlayHub {
         self.resend_battle(player.id);
         self.send_battle_challenges(player.id);
         if first {
-            self.tell_friends(player);
+            self.remember_online_and_tell(player);
         }
         Connection { id, messages }
     }
@@ -139,8 +135,7 @@ impl PlayHub {
         lock(&self.inner.connections).contains_key(&player)
     }
 
-    /// Everyone the live server is holding a place for: connected now, or at a board waiting
-    /// for them to come back.
+    /// Everyone the live server holds a place for: connected now, or awaited back at a board.
     pub fn players_present(&self) -> Vec<Uuid> {
         let mut present: Vec<Uuid> = lock(&self.inner.connections).keys().copied().collect();
         let at_boards = lock(&self.inner.games)
@@ -153,8 +148,7 @@ impl PlayHub {
         present
     }
 
-    /// A socket closed; with the player's last one gone, their seeks and invitations, for games
-    /// and battles, go too, and their friends hear they left.
+    /// A socket closed; with the player's last one gone, their seeks and invitations go too.
     pub fn disconnect(&self, player: &Player, connection_id: u64) {
         let gone = {
             let mut connections = lock(&self.inner.connections);
@@ -170,8 +164,20 @@ impl PlayHub {
             cancel(&mut lock(&self.inner.seeks), player);
             self.drop_challenges_of(player.id);
             self.drop_battle_wishes_of(player.id);
-            self.tell_friends(player);
+            self.remember_online_and_tell(player);
         }
+    }
+
+    /// Stores now as when the player last had the app open, then tells their friends.
+    fn remember_online_and_tell(&self, player: &Player) {
+        let hub = self.clone();
+        let player = player.clone();
+        tokio::spawn(async move {
+            if let Err(error) = user::mark_online(&hub.inner.db, player.id).await {
+                tracing::error!(?error, "storing when a player was online failed");
+            }
+            hub.tell_friends(&player);
+        });
     }
 
     pub async fn handle(&self, player: &Player, message: ClientMessage) {
@@ -305,9 +311,7 @@ impl PlayHub {
         }
     }
 
-    /// Two players meet, from seeks or a challenge: colours are drawn, any seeks and
-    /// challenges of theirs go, the game is stored and its task starts. The game's id, unless
-    /// it could not start.
+    /// Two players meet: colours are drawn, the game is stored and starts; its id, if it did.
     async fn start_game(
         &self,
         (first, second): (&Player, &Player),
@@ -413,8 +417,7 @@ impl PlayHub {
         }
     }
 
-    /// The player as their opponent sees them: with their rating in the category, or none for
-    /// a guest. A player without one yet shows the starting rating.
+    /// The player as their opponent sees them, with their rating in the category; none for a guest.
     async fn at_board(&self, player: &Player, category: &str) -> (PlayerModel, Rating) {
         let stored = rating::get(&self.inner.db, player.id, category).await;
         let current = stored.ok().flatten().map_or(Rating::NEW, from_row);
@@ -441,9 +444,7 @@ impl PlayHub {
         }
     }
 
-    /// A closed account's last word: its seeks and invitations go, its games and battle are
-    /// resigned, every socket it has open is shut, and anything still on its way from one is
-    /// ignored.
+    /// A closed account's last word: its seeks go, its games are resigned and its sockets shut.
     pub fn forget_player(&self, player: Uuid) {
         {
             let mut connections = lock(&self.inner.connections);
@@ -498,8 +499,7 @@ fn seek_refusal(
     Ok(())
 }
 
-/// Each lock guards entries that do not depend on each other, so one poisoned by a panic is
-/// still safe to use.
+/// Takes the lock even if a panic poisoned it, as its entries do not depend on each other.
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }

@@ -15,8 +15,7 @@ pub struct PuzzleText {
 }
 
 impl PuzzleText {
-    /// The position and moves read; `Err` names what did not parse, which the server never
-    /// sends.
+    /// The position and moves read; `Err` names what did not parse.
     pub fn read(&self) -> Result<Puzzle, String> {
         let unreadable = |what: &str| format!("puzzle {}: bad {what}", self.id);
         let position = self.fen.parse().map_err(|_| unreadable("FEN"))?;

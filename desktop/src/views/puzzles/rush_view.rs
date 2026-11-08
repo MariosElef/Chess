@@ -42,8 +42,7 @@ const NEXT_DELAY: Duration = Duration::from_millis(300);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RushSaved;
 
-/// Puzzle Rush: ever harder puzzles until three mistakes, or the clock, end it. The next
-/// puzzle is fetched while the current one is solved.
+/// Puzzle Rush: ever harder puzzles until three mistakes or the clock end it.
 pub struct RushView {
     client: ServerClient,
     token: TokenSource,
@@ -210,8 +209,7 @@ impl RushView {
         self.fetch_next(cx);
     }
 
-    /// A solved puzzle scores; a wrong move is a strike and loses the puzzle. Either way the
-    /// next one follows, unless the rush is over.
+    /// A solved puzzle scores; a wrong move is a strike; the next follows unless the rush is over.
     fn judged(&mut self, verdict: PuzzleVerdict, cx: &mut Context<Self>) {
         let Some(rush) = self.rush.as_mut() else {
             return;

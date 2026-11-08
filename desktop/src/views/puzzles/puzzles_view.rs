@@ -45,8 +45,7 @@ enum Stage {
     Battle,
 }
 
-/// The Puzzles page: a menu with the puzzle rating, then Practice at a chosen difficulty,
-/// Puzzle Rush or Puzzle Battle.
+/// The Puzzles page: a menu with the puzzle rating, then Practice, Puzzle Rush or Puzzle Battle.
 pub struct PuzzlesView {
     stage: Stage,
     client: ServerClient,
@@ -214,8 +213,7 @@ impl PuzzlesView {
         cx.notify();
     }
 
-    /// Back to the menu: a rush still going ends and its score counts, Practice's clock stops,
-    /// and a search for a battle opponent is called off.
+    /// Back to the menu: a rush ends and counts, Practice's clock stops, a battle search ends.
     fn back_to_menu(&mut self, cx: &mut Context<Self>) {
         self.rush.update(cx, |rush, cx| rush.leave(cx));
         self.practice.update(cx, |practice, cx| practice.leave(cx));

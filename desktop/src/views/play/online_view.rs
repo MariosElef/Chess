@@ -54,8 +54,7 @@ use crate::{
 /// Switches the Play page to another way to play.
 type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
 
-/// An online game on the board: the server's last word on it, when it arrived, the history to
-/// browse, and the player's own move while the server has not yet confirmed it.
+/// An online game on the board: the server's last word, the history, and an unconfirmed move.
 struct LiveBoard {
     snapshot: GameSnapshot,
     received_at: Instant,
@@ -66,8 +65,7 @@ struct LiveBoard {
     clock_warning: ClockWarning,
 }
 
-/// Play against someone online: a lobby to ask for a game, then the game on the shared board,
-/// over the live socket.
+/// Play against someone online: a lobby to ask for a game, then the game over the socket.
 pub struct OnlineView {
     connection: Entity<LiveConnection>,
     _live: Subscription,
@@ -136,8 +134,7 @@ impl OnlineView {
         }
     }
 
-    /// The chat follows the game on the board: one for each game the player is in, none
-    /// without one.
+    /// The chat follows the game on the board: one for each game the player is in.
     fn keep_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let wanted = self
             .live
@@ -166,8 +163,7 @@ impl OnlineView {
         self.live.is_some()
     }
 
-    /// Opens the live connection, unless it is open. A game the player is in arrives on its
-    /// own as soon as it connects.
+    /// Opens the live connection, unless it is open; a game the player is in then arrives.
     pub fn connect(&mut self, cx: &mut Context<Self>) {
         self.connection
             .update(cx, |connection, cx| connection.connect(cx));
@@ -254,8 +250,7 @@ impl OnlineView {
         }
     }
 
-    /// The server's latest word on a game: the board, sounds and clock follow it, and a
-    /// premove queued for this turn goes out.
+    /// The server's latest word on a game: board, sounds and clock follow, and a premove goes.
     fn on_snapshot(&mut self, snapshot: GameSnapshot, cx: &mut Context<Self>) {
         let Some(game) = replay(&snapshot) else {
             self.problem = Some("The game could not be read".to_owned());
@@ -304,8 +299,7 @@ impl OnlineView {
         self.play_due_premove(cx);
     }
 
-    /// The sound of what changed since the last snapshot: the game starting, a move, or the
-    /// game ending some other way than a move.
+    /// The sound of what changed since the last snapshot: a start, a move, or the game ending.
     fn sound_for(
         &self,
         before: Option<&GameSnapshot>,
@@ -361,8 +355,7 @@ impl OnlineView {
         }
     }
 
-    /// The player's move: shown at once and sent; the server's answer confirms it, or an
-    /// error takes it back.
+    /// The player's move: shown at once and sent; the server confirms it or takes it back.
     fn move_made(&mut self, mv: Move, cx: &mut Context<Self>) {
         let Some(live) = self.live.as_mut() else {
             return;
@@ -381,8 +374,7 @@ impl OnlineView {
         cx.notify();
     }
 
-    /// What the board shows: the live position with the player's unconfirmed move made, or an
-    /// earlier one being looked at; in the lobby, the starting position.
+    /// What the board shows: the live position with the pending move, or an earlier one.
     fn shown_position(&self) -> ShownPosition {
         let Some(live) = &self.live else {
             return ShownPosition::waiting();
@@ -478,8 +470,7 @@ impl OnlineView {
         }
     }
 
-    /// The end-of-game card: who won and how, the rating change, and the game-over actions;
-    /// none for an aborted game, or once put away.
+    /// The end-of-game card: who won and how, the rating change, and what to do next.
     fn game_over_card(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Option<GameOverCard> {
         let outcome = outcome_of(&live.snapshot).filter(|_| !self.card_closed)?;
         let title = result_title(outcome.winner(), live.me, None);
@@ -499,8 +490,7 @@ impl OnlineView {
         Some(card)
     }
 
-    /// Game Review, then a look without a review, back to the lobby, or another opponent at the
-    /// same time control.
+    /// Game Review, a look without a review, back to the lobby, or a rematch at the same time.
     fn game_over_actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> GameOverActions {
         let control = TimeControl {
             initial: Duration::from_secs(live.snapshot.initial_s.into()),
@@ -696,8 +686,7 @@ impl OnlineView {
             )
     }
 
-    /// Analyze and New game once a game with no result to review is over, as an aborted one;
-    /// Abort before both have moved; Accept and Decline for an offer; otherwise Draw and Resign.
+    /// The game buttons: Abort, Draw and Resign, an offer's answers, or what to do once over.
     fn actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let snapshot = &live.snapshot;
         if snapshot.status != LiveStatus::Ongoing {
@@ -781,8 +770,7 @@ impl OnlineView {
             .child(ClockFace::new(left, running))
     }
 
-    /// Redraws the running clock and warns the player once their time is low; whether to
-    /// keep ticking.
+    /// Redraws the running clock and warns once time is low; whether to keep ticking.
     fn tick(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(live) = self
             .live

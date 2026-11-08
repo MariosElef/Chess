@@ -67,8 +67,7 @@ fn can_start_castling(position: &Position, from: Square) -> bool {
     from == home(4, side.back_rank()) && !is_attacked(position.board(), from, side.opponent())
 }
 
-/// The king moves two squares toward a rook that has not moved, over empty squares, never through
-/// or into check.
+/// The king moves two squares toward an unmoved rook, over empty squares, never through check.
 fn castle(
     position: &Position,
     from: Square,

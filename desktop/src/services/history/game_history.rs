@@ -72,8 +72,7 @@ impl GameHistory {
         Ok(())
     }
 
-    /// Plays `mv` from the position on the board; from an earlier one, the later moves are
-    /// dropped first, as on an analysis board.
+    /// Plays `mv` from the shown position, dropping later moves first, as on an analysis board.
     pub fn play_from_shown(&mut self, mv: Move) -> Result<(), GameError> {
         if !self.is_live() {
             self.game = self.game.truncated(self.viewing);

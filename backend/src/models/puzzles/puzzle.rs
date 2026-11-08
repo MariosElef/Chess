@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// A puzzle for the app: the position the player moves from, the opponent's move that led to
-/// it, and the solution in UCI, the player's moves and the opponent's answers in turn.
+/// A puzzle for the app: the position, the opponent's move that led to it, and the UCI solution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GetPuzzleModel {
     pub id: String,
@@ -20,8 +19,7 @@ pub struct PuzzleQuery {
     pub max_rating: Option<i32>,
 }
 
-/// A puzzle as stored: as the Lichess database has it, the position before the opponent's
-/// move and the moves from there, the opponent's first.
+/// A puzzle as the Lichess database stores it: the position before the opponent's move, then moves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PuzzleRow {
     pub id: String,

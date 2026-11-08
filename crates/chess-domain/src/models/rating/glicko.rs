@@ -43,7 +43,7 @@ impl Rating {
         self.deviation > PROVISIONAL_DEVIATION
     }
 
-    /// The rating after `results`; with none, only the deviation grows, as for a player who sat out.
+    /// The rating after `results`; with none, only the deviation grows, as when sitting out.
     pub fn after(self, results: &[RatedResult]) -> Self {
         let player = Internal::from(self);
         if results.is_empty() {

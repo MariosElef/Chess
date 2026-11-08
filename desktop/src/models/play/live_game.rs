@@ -2,8 +2,7 @@ use serde::Deserialize;
 
 use crate::enums::play::{Color, GameResult, LiveStatus};
 
-/// An online game as the server sends it after every change: the moves from the start, both
-/// clocks at the moment it was sent, and how it stands.
+/// An online game as the server sends it after every change: moves, clocks, and how it stands.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct GameSnapshot {
     pub id: String,

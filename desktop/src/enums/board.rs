@@ -13,8 +13,7 @@ pub enum ClickOutcome {
     Promote { from: Square, to: Square },
 }
 
-/// Whether a click on the board is the side to move making its move, or the other side
-/// queueing a premove.
+/// Whether a board click is the side to move moving, or the other side queueing a premove.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ClickMode {
     Move,
@@ -34,8 +33,7 @@ pub enum SquareHighlight {
     Check,
 }
 
-/// What a king shows once the game is over, as chess.com marks the final position: the winner's
-/// crown, the loser's reason, or a draw; the side is the king's, for its colour of icon.
+/// What a king shows once the game is over: the winner's crown, the loser's reason, or a draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EndBadge {
     Winner,

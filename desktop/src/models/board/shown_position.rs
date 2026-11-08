@@ -2,19 +2,16 @@ use chess_domain::{Move, Outcome, Position, Side, Square};
 
 use crate::enums::analysis::MoveClass;
 
-/// What a page shows on its board: the position, how it was reached, whether moves may be made
-/// on it, and the engine's best move if the page has one.
+/// What a page shows on its board: the position, how it was reached, and if moves may be made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShownPosition {
     pub position: Position,
     pub last_move: Option<Move>,
     /// Moves and premoves are taken; when not, the board can only be looked at and drawn on.
     pub can_move: bool,
-    /// The side not to move may queue premoves: a game between two players. A puzzle has one
-    /// player, so its board takes only the side to move's moves.
+    /// The side not to move may queue premoves: a game between two players, not a puzzle.
     pub premoves: bool,
-    /// The board is this player's, as in an online game: only their pieces move, now or as
-    /// premoves. `None` lets either side move, as two players at one computer do.
+    /// The board is this player's, as online; `None` lets either side move, as at one computer.
     pub player: Option<Side>,
     pub engine_arrow: Option<(Square, Square)>,
     /// What should have been played instead of the move that led here, once reviewed.

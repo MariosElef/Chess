@@ -1,7 +1,6 @@
 use axum::http::StatusCode;
 
-/// Every problem the server answers with. A code is for a case the client handles
-/// differently; its title is the sentence a person reads.
+/// Every problem the server answers with: a code the client acts on and a title a person reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChessCode {
     InvalidRequestBody,

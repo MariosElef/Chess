@@ -19,8 +19,7 @@ use crate::{
 /// How sure a puzzle's own rating is taken to be; puzzles are rated by thousands of plays.
 const PUZZLE_VOLATILITY: f64 = 0.06;
 
-/// Puzzle attempts: remembered so a puzzle is not served twice, and in Practice, played as a
-/// Glicko-2 game against the puzzle that moves the player's puzzle rating.
+/// Puzzle attempts: remembered so no puzzle comes twice, and in Practice, moving the rating.
 #[derive(Clone)]
 pub struct AttemptService {
     db: Db,
@@ -31,8 +30,7 @@ impl AttemptService {
         Self { db }
     }
 
-    /// Records the attempt and, when rated, the player's new rating. A guest's attempt, or one
-    /// at a puzzle that is not in the database (from Lichess), keeps nothing.
+    /// Records the attempt and, when rated, the new rating; a guest's attempt keeps nothing.
     pub async fn record(
         &self,
         user_id: Uuid,

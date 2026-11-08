@@ -2,8 +2,7 @@ use chess_domain::{Move, PieceKind, Position};
 
 use crate::enums::sound::Sound;
 
-/// The sound `mv` makes, played from `before` to `after`: a check above all, then a
-/// promotion, a castle, a capture, and otherwise `plain`.
+/// The sound `mv` makes: a check above all, then a promotion, a castle, a capture, else `plain`.
 pub fn move_sound(before: &Position, after: &Position, mv: Move, plain: Sound) -> Sound {
     if after.is_check() {
         Sound::Check

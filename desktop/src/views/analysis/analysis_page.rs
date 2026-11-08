@@ -54,8 +54,7 @@ use crate::{
 
 /// How many lines the engine panel shows, matching the engine's MultiPV.
 const LINES: usize = 3;
-/// How deep a review searches each position: deep enough to see tactics, quick enough for a
-/// whole game in seconds.
+/// How deep a review searches each position: enough for tactics, quick for a whole game.
 const REVIEW_DEPTH: u32 = 16;
 /// Each review engine's hash: its searches are short.
 const REVIEW_HASH_MB: usize = 32;
@@ -74,16 +73,14 @@ struct ReviewWorker {
     _task: Task<()>,
 }
 
-/// A review under way: a few engines of one thread each, searching the game's positions side by
-/// side, and the board stepping through the game as far as they have got.
+/// A review under way: a few engines searching the game's positions side by side.
 struct Reviewer {
     workers: Vec<ReviewWorker>,
     run: ReviewRun,
     _replay: Task<()>,
 }
 
-/// Why the engine is not running: it is not installed, or it stopped and could not be started
-/// again.
+/// Why the engine is not running: not installed, or stopped and could not restart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EngineProblem {
     NotFound,
@@ -185,8 +182,7 @@ impl AnalysisPage {
         self.sync_engine(cx);
     }
 
-    /// Opens a game from Play at the position it was showing, with how it ended when the moves
-    /// alone do not say.
+    /// Opens a game from Play at the position it was showing, with how it ended.
     pub fn load_game(
         &mut self,
         game: &Game,
@@ -222,8 +218,7 @@ impl AnalysisPage {
         self.after_navigation(cx);
     }
 
-    /// Takes the keyboard for the arrow keys, unless the click went to the FEN and PGN field,
-    /// which keeps it for typing and pasting.
+    /// Takes the keyboard for the arrow keys, unless the click went to the FEN and PGN field.
     fn focus(&self, window: &mut Window, cx: &mut App) {
         if self.fen_input.focus_handle(cx).is_focused(window) {
             return;
@@ -241,8 +236,7 @@ impl AnalysisPage {
         cx.notify();
     }
 
-    /// Searches the shown position while switched on and visible, and no review is running;
-    /// otherwise stops searching.
+    /// Searches the shown position while switched on, visible and not reviewing; else stops.
     fn sync_engine(&mut self, cx: &mut Context<Self>) {
         if self.enabled && self.shown && self.problem.is_none() && !self.is_reviewing() {
             self.ensure_engine(cx);
@@ -313,9 +307,7 @@ impl AnalysisPage {
         }
     }
 
-    /// The engine crashed or could not be written to: dropped, its lines with it, and started
-    /// again the next time it is wanted. A second failure in a row gives up, and the switch
-    /// shows it off.
+    /// The engine crashed: dropped and restarted when next wanted; a second failure gives up.
     fn engine_failed(&mut self) {
         self.engine = None;
         self.queue = None;
@@ -415,9 +407,7 @@ impl AnalysisPage {
         }
     }
 
-    /// Either side may move, from any shown position; moving from an earlier one replaces
-    /// what followed it. Premoves that are due then play. A game the rules already ended (a
-    /// repetition, say) takes no more moves.
+    /// Either side may move from any shown position, replacing what followed it.
     fn play_move(&mut self, mv: Move, cx: &mut Context<Self>) {
         if self.play_with_sound(mv, cx) {
             // Another move makes it another game, which has not ended the same way.
@@ -429,8 +419,7 @@ impl AnalysisPage {
         cx.notify();
     }
 
-    /// Plays queued premoves while each is legal; one that is not drops its side's queue, and
-    /// a game that ends drops them all.
+    /// Plays queued premoves while each is legal; one that is not drops its side's queue.
     fn run_premoves(&mut self, cx: &mut Context<Self>) {
         loop {
             let shown = *self.history.shown();
@@ -469,9 +458,7 @@ impl AnalysisPage {
         cx.notify();
     }
 
-    /// Reads the field: a FEN starts a fresh analysis from that position, a PGN opens the whole
-    /// game at its start, ready to step through or review; anything else says why, and an empty
-    /// field does nothing.
+    /// Reads the field: a FEN starts a fresh analysis, a PGN opens the whole game.
     fn load_fen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.fen_input.read(cx).value();
         if text.trim().is_empty() {
@@ -521,8 +508,7 @@ impl AnalysisPage {
             .then_some((best, analysed))
     }
 
-    /// The best move as an arrow, while the engine is switched on and the move is legal on the
-    /// board shown; switching off removes it at once.
+    /// The best move as an arrow, while the engine is on and the move is legal on the board.
     fn engine_arrow(&self) -> Option<(Square, Square)> {
         if !self.enabled {
             return None;
@@ -611,8 +597,7 @@ impl AnalysisPage {
             ))
     }
 
-    /// Between the fixed top and bottom: the moves, scrolling; once reviewed, the review over
-    /// them, scrolling together.
+    /// Between the fixed top and bottom: the moves, and once reviewed, the review over them.
     fn middle(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> AnyElement {
         let moves = MoveList::new(
             self.history.sans().to_vec(),
@@ -639,9 +624,7 @@ impl AnalysisPage {
         }
     }
 
-    /// Starts a review of the game on the board: the opening table is built off this thread,
-    /// then a few engines of its own search the game's positions. Live analysis pauses until it
-    /// is done.
+    /// Starts a review of the game on the board; live analysis pauses until it is done.
     pub fn start_review(&mut self, cx: &mut Context<Self>) {
         if self.history.sans().is_empty() || self.is_reviewing() {
             return;
@@ -768,8 +751,7 @@ impl AnalysisPage {
         }
     }
 
-    /// Hands the engine the next position to search; once every position has its value, the
-    /// review is ready.
+    /// Hands the engine the next position to search; once all have values, the review is ready.
     fn give_work(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(reviewer) = self.reviewer.as_mut() else {
             return;
@@ -789,8 +771,7 @@ impl AnalysisPage {
         self.send_review(index, &commands, cx);
     }
 
-    /// The review is ready: the engines go, live analysis comes back, and the board starts
-    /// over from the beginning.
+    /// The review is ready: the engines go, live analysis comes back, and the board starts over.
     fn complete_review(&mut self, review: GameReview, cx: &mut Context<Self>) {
         self.review = Some(review);
         self.reviewer = None;
@@ -798,8 +779,7 @@ impl AnalysisPage {
         self.show_position(0, cx);
     }
 
-    /// While the review runs, the board steps forward a move at a time, as far as the engines
-    /// have got; whether to keep stepping.
+    /// Steps the board a move at a time as far as the review has got; whether to keep stepping.
     fn replay_step(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(reviewer) = &self.reviewer else {
             return false;
@@ -811,8 +791,7 @@ impl AnalysisPage {
         true
     }
 
-    /// Shows the game's position at `index`, 0 being the start, with its move's sound as when
-    /// stepping through it.
+    /// Shows the game's position at `index`, 0 being the start, with its move's sound.
     fn show_position(&mut self, index: usize, cx: &mut Context<Self>) {
         self.walk(
             |history| match index.checked_sub(1) {
@@ -840,16 +819,14 @@ impl AnalysisPage {
         }
     }
 
-    /// One of the review's engines died or could not be written to: the review is dropped, its
-    /// button says so, and live analysis comes back.
+    /// A review engine died: the review is dropped, its button says so, and live analysis returns.
     fn review_failed(&mut self, cx: &mut Context<Self>) {
         self.reviewer = None;
         self.review_problem = true;
         self.sync_engine(cx);
     }
 
-    /// A review belongs to one game: any change to the game, or a new one, drops it and any
-    /// review still running.
+    /// A review belongs to one game: any change to the game, or a new one, drops it.
     fn clear_review(&mut self) {
         self.review_problem = false;
         self.review = None;
@@ -864,15 +841,13 @@ impl AnalysisPage {
         })
     }
 
-    /// The engine's choice where the move that led here was not it, as chess.com shows it. The
-    /// live engine's arrow gives way meanwhile, so the board has one arrow to read.
+    /// The engine's choice where the move played was not it, as chess.com shows it.
     fn best_arrow(&self) -> Option<(Square, Square)> {
         let (_, better) = self.better_move()?;
         Some((better.from, better.to))
     }
 
-    /// What the engine preferred to the move that led to the shown position, with that move's
-    /// index: for any move but the best, a Book move or a Forced one.
+    /// What the engine preferred to the move that led to the shown position, with its index.
     fn better_move(&self) -> Option<(usize, Move)> {
         let index = self.history.viewing().checked_sub(1)?;
         let reviewed = self.review.as_ref()?.moves.get(index)?;
@@ -950,8 +925,7 @@ impl AnalysisPage {
         .busy(self.is_reviewing())
     }
 
-    /// At the top of the panel: Game Review until the game has been reviewed, why the last
-    /// review stopped if it did, and Reset board.
+    /// Top of the panel: Game Review until reviewed, why a review stopped, and Reset board.
     fn header(&self, cx: &mut Context<Self>) -> Div {
         let reset = cx.entity().downgrade();
         let reviewable = !self.history.sans().is_empty() && self.review.is_none();

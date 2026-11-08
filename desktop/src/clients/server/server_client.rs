@@ -150,7 +150,7 @@ impl ServerClient {
             .run(async move { read_json(send(request).await?).await })
     }
 
-    /// Friends, online first, and the requests each way.
+    /// Friends with their ratings and last online, requests each way, and the player's ratings.
     pub fn friends(
         &self,
         token: &str,

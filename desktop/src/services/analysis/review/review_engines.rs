@@ -3,8 +3,7 @@ const CORES_EACH: usize = 4;
 /// Never more engines than this, however many cores there are.
 const MOST_ENGINES: usize = 3;
 
-/// How many engines, of one thread each, review a game side by side: a quarter of the cores, at
-/// least one and at most three, so a review never weighs on the computer.
+/// How many one-thread engines review a game side by side: a quarter of the cores, 1 to 3.
 pub fn review_engines(cores: usize) -> usize {
     (cores / CORES_EACH).clamp(1, MOST_ENGINES)
 }

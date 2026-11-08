@@ -4,11 +4,9 @@ use gpui_kit::{
     *,
 };
 
-/// Every player bar's height, and the slot each page keeps above and below its board whether
-/// it fills it or not: the board is the same size on every page.
+/// The player bar's height, and the slot kept above and below every board so boards match in size.
 pub const PLAYER_BAR: Pixels = px(40.);
-/// The space between the bars and the board; what floats beside the board starts this far
-/// below the top bar.
+/// The space between the bars and the board, where what floats beside the board starts.
 const BAR_GAP: Pixels = px(8.);
 
 /// A board between two bar slots, filling the page's height.
@@ -103,8 +101,7 @@ fn bar_slot(bar: Option<AnyElement>) -> Div {
         .when_some(bar, |this, bar| this.child(bar))
 }
 
-/// A page with a board: the board's column on the left and what goes beside it on the right,
-/// with the same room around them on every page.
+/// A page with a board: the board's column on the left and what goes beside it on the right.
 pub fn board_page(board_column: impl IntoElement, side: impl IntoElement) -> Div {
     h_flex()
         .size_full()

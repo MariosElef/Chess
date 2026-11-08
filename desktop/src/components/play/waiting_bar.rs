@@ -10,8 +10,7 @@ use gpui_kit::{
 use super::clock_face::ClockFace;
 use crate::components::board::PLAYER_BAR;
 
-/// A player's bar before the game: their picture, their name, and the clock they will start
-/// on, if the game has one.
+/// A player's bar before the game: their picture, their name, and the clock they will start on.
 #[derive(IntoElement)]
 pub struct WaitingBar {
     name: String,

@@ -19,8 +19,7 @@ type OnChoose = Rc<dyn Fn(Option<TimeControl>, &mut Window, &mut App)>;
 type OnStart = Rc<dyn Fn(&mut Window, &mut App)>;
 type OnRated = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
-/// What changes when the game is against someone online: no game without a clock, a choice
-/// of rated or not (guests play unrated), and waiting for an opponent.
+/// What changes online: a clock is required, rated or not, and waiting for an opponent.
 pub struct OnlineOptions {
     pub rated: bool,
     /// Signed in with an account; a guest's game is never rated.
@@ -38,8 +37,7 @@ pub struct BotOptions {
     pub problem: Option<String>,
 }
 
-/// The choices in the Play panel: rated or not online, a time control by speed (or none, but
-/// not online), and Start Game.
+/// The Play panel's choices: rated or not online, a time control by speed, and Start Game.
 #[derive(IntoElement)]
 pub struct GameSetup {
     /// `None` is a game without a clock.
@@ -77,8 +75,7 @@ impl GameSetup {
 }
 
 impl RenderOnce for GameSetup {
-    /// The panel's content: rated or not online, the speeds, no clock unless online, then
-    /// the button that starts the game.
+    /// The panel's content: rated or not online, the speeds, no clock unless online, then Start.
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let problem = self
             .online

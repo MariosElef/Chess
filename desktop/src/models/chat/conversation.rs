@@ -3,8 +3,7 @@ use serde::Deserialize;
 use super::chat_message::ChatMessage;
 use crate::{enums::chat::ConversationKind, models::social::UserRef};
 
-/// A conversation in the player's list: what it is called for them, who is in it, its last
-/// message and how many they have not read.
+/// A conversation in the player's list: its name, members, last message and unread count.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Conversation {
     pub id: String,

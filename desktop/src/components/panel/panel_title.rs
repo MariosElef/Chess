@@ -12,8 +12,7 @@ use gpui_kit::{
     *,
 };
 
-/// A panel's title, large, with its picture before it, and an arrow back at the left when
-/// the panel opened from another.
+/// A panel's large title with its picture, and a back arrow when it opened from another panel.
 #[derive(IntoElement)]
 pub struct PanelTitle {
     picture: &'static str,

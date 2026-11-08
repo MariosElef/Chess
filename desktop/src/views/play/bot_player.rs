@@ -38,9 +38,7 @@ struct Asked {
     think: Duration,
 }
 
-/// A computer opponent: its own Stockfish, set to play at its strength. Asked for a move, it
-/// searches, chooses as a player of its rating would, waits out a human-feeling pause, and
-/// says what it plays.
+/// A computer opponent: its own Stockfish, choosing moves as a player of its rating would.
 pub struct BotPlayer {
     engine: Engine,
     queue: SearchQueue,

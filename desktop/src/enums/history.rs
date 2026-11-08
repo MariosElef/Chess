@@ -19,8 +19,7 @@ impl NavStep {
     }
 }
 
-/// How fast a walk through the history goes: one move at a time, or several once a key or
-/// button has been held a while.
+/// How fast a walk through the history goes: one move at a time, or several when held.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepPace {
     Normal,

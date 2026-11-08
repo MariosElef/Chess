@@ -14,25 +14,20 @@ use crate::{
     views::sound::play_move_sound,
 };
 
-/// How long a navigation button is held before it starts repeating, and how often it repeats:
-/// as a held key does.
+/// How long a navigation button is held before it repeats, and how often, as a held key does.
 const REPEAT_AFTER: Duration = Duration::from_millis(400);
 const REPEAT_EVERY: Duration = Duration::from_millis(60);
 /// Moves taken per step once holding goes fast.
 const FAST_MOVES: usize = 3;
 
-/// A page's holding of a key or navigation button: the steps so far, and the repeat a held
-/// button keeps going.
+/// A page's holding of a key or navigation button: the steps so far and the repeat it keeps going.
 #[derive(Default)]
 pub struct Holding {
     streak: StepStreak,
     repeat: Option<Task<()>>,
 }
 
-/// A page that walks through a game's history. The keys, buttons and move list all come here:
-/// the history moves, the move that led to the position reached makes its sound, and the page
-/// then does what reaching a position means for it. Held for two seconds, a key or button goes
-/// fast: several moves a step, each step with the sound of the move it lands on.
+/// A page that walks through a game's history by keys, buttons and move list; held, it goes fast.
 pub trait HistoryNavigation: Sized + 'static {
     /// The history being walked; `None` while the page has none.
     fn history_mut(&mut self) -> Option<&mut GameHistory>;
@@ -96,8 +91,7 @@ pub trait HistoryNavigation: Sized + 'static {
     }
 }
 
-/// The sound of the move that led to the shown position, as if it were played now: a capture,
-/// a castle, a check, and the end when it ended the game. The start makes none.
+/// The sound of the move that led to the shown position, as if played now; the start makes none.
 fn sound_of_shown_move(history: &GameHistory, cx: &App) {
     let Some(index) = history.viewing().checked_sub(1) else {
         return;

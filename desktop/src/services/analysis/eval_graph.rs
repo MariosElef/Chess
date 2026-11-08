@@ -1,7 +1,6 @@
 //! The review's graph of the evaluation, as fractions of its width and height.
 
-/// Each position's point on the top edge of White's area: across from the start to the end,
-/// and down from the top, a share of 1 at the very top and a share of 0 at the bottom.
+/// Each position's point on the top edge of White's area, from start to end, share 1 at top.
 pub fn graph_points(shares: &[f64]) -> Vec<(f32, f32)> {
     let last = shares.len().saturating_sub(1).max(1);
     shares

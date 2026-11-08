@@ -1,7 +1,6 @@
 use chess_domain::{Move, Position};
 
-/// A puzzle to solve: the position after the opponent's last move, and the moves that win
-/// from it, the player's and the opponent's answers in turn.
+/// A puzzle to solve: the position after the opponent's last move, and the moves that win.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Puzzle {
     pub id: String,

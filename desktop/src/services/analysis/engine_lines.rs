@@ -22,8 +22,7 @@ pub fn line_view(info: &SearchInfo, analysed: &Position) -> LineView {
     }
 }
 
-/// Whether the evaluation favours Black: below zero, or a mate Black delivers. Its chip is
-/// drawn dark then, and light for White.
+/// Whether the evaluation favours Black: below zero, or a mate Black delivers.
 pub fn favours_black(eval: Eval) -> bool {
     match eval {
         Eval::Centipawns(centipawns) => centipawns < 0,
@@ -40,8 +39,7 @@ pub fn format_nps(nps: u64) -> String {
     }
 }
 
-/// Moves with their numbers, starting from the position's move number and side:
-/// `12. e4 e5 13. Nf3`, or `12… Nf6 13. Bd3` when Black moves first.
+/// Moves with their numbers from the position's move and side: `12. e4 e5 13. Nf3`.
 pub fn numbered_line(fullmove: u32, side_to_move: Side, sans: &[String]) -> String {
     let mut number = fullmove;
     let mut side = side_to_move;

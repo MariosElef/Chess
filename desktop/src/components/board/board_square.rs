@@ -10,8 +10,7 @@ pub type OnSquareClick = Rc<dyn Fn(Square, &mut Window, &mut App)>;
 /// A piece pressed on its square, with where the cursor is on the window.
 pub type OnPieceGrab = Rc<dyn Fn(Square, Point<Pixels>, &mut Window, &mut App)>;
 
-/// Moved this far from where it was pressed, a held piece is being dragged, and a press and
-/// release this far apart was a drag, not a click.
+/// How far a held piece must move from where it was pressed to count as a drag, not a click.
 pub const DRAG_START: Pixels = px(4.);
 
 /// The right button pressed and released over squares, for marks and arrows.
@@ -191,7 +190,7 @@ fn piece_picture(piece: Piece, square: Square, pieces: PieceSet) -> Img {
         .debug_selector(|| format!("piece-{square}"))
 }
 
-/// A dot on an empty square; a ring around a piece that can be captured, so the piece stays visible.
+/// A dot on an empty square; a ring around a capturable piece, so it stays visible.
 fn move_marker(is_capture: bool, colors: BoardColors) -> Div {
     if is_capture {
         capture_ring(colors)

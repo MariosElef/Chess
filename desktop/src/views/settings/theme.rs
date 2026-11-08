@@ -6,8 +6,7 @@ use gpui_kit::{
 
 use crate::enums::settings::Appearance;
 
-/// Puts the window in the chosen appearance; System follows the Mac's own setting. Either way
-/// the greys are mc2's: the page darkest in dark mode, the chrome around it a step lighter.
+/// Puts the window in the chosen appearance; System follows the Mac's own setting.
 pub fn apply_appearance(appearance: Appearance, window: &mut Window, cx: &mut App) {
     match appearance {
         Appearance::System => Theme::sync_system_appearance(Some(window), cx),

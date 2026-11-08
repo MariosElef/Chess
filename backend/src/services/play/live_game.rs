@@ -20,8 +20,7 @@ use crate::{
 
 /// Commands waiting for a game; a player sending faster than this waits.
 const COMMANDS_AHEAD: usize = 32;
-/// The least a move costs on the clock, so a premove played the instant the turn comes takes
-/// a second, as the clock shows it: 5:02 becomes 5:01.
+/// The least a move costs on the clock, so an instant premove still takes a second.
 const LEAST_MOVE_TIME: Duration = Duration::from_secs(1);
 /// How long each side has for its first move before the game is called off.
 pub const FIRST_MOVE_WAIT: Duration = Duration::from_secs(30);
@@ -72,16 +71,14 @@ pub struct GameStart {
     pub ratings: (Rating, Rating),
 }
 
-/// Runs the game on a task of its own, which alone holds its board and clock; the commands
-/// arrive through the returned sender, one at a time, so no lock is ever needed.
+/// Runs the game on a task that alone holds its board and clock, taking commands one at a time.
 pub fn spawn_game(start: GameStart, hub: PlayHub, db: Db) -> mpsc::Sender<GameCommand> {
     let (sender, commands) = mpsc::channel(COMMANDS_AHEAD);
     tokio::spawn(run(LiveGame::new(start, hub, db), commands));
     sender
 }
 
-/// Plays commands until the game is over, ending it on a flag when the side to move's time
-/// runs out first, or calling it off when a first move does not come in time.
+/// Plays commands until the game is over, by a flag, or called off when no first move comes.
 async fn run(mut live: LiveGame, mut commands: mpsc::Receiver<GameCommand>) {
     live.broadcast();
     while !live.game.is_over() && !live.aborted {
@@ -151,8 +148,7 @@ impl LiveGame {
         }
     }
 
-    /// The side to move's move: refused unless it is theirs and legal; their time is
-    /// charged and the opponent's clock starts.
+    /// The side to move's move, if legal: their time is charged and the opponent's clock starts.
     async fn play(&mut self, player: Uuid, uci: &str) {
         let Some(side) = self.refuse_unless_playing(player) else {
             return;
@@ -350,8 +346,7 @@ impl LiveGame {
         self.game.live().side_to_move()
     }
 
-    /// What the move being played costs: the time since the turn began, and at least
-    /// `LEAST_MOVE_TIME` once the clock is running.
+    /// What the move costs: the time since the turn began, at least `LEAST_MOVE_TIME` once running.
     fn move_time(&self) -> Duration {
         self.turn_started.map_or(Duration::ZERO, |started| {
             started.elapsed().max(LEAST_MOVE_TIME)

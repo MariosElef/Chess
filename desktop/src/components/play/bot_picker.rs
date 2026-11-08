@@ -92,8 +92,7 @@ impl RenderOnce for BotPicker {
 }
 
 impl BotPicker {
-    /// A bot's photo, name and rating, on a soft tile; once picked, the tile takes the
-    /// theme's colour and the photo a ring of it.
+    /// A bot's photo, name and rating on a soft tile, taking the theme's colour once picked.
     fn card(&self, place: Option<usize>, bot: &Bot, cx: &App) -> Stateful<Div> {
         let on_pick = Rc::clone(&self.on_pick);
         let picked = self.picked == place;

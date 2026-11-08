@@ -16,8 +16,7 @@ use crate::enums::account::AccountForm;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The card that holds the sign-in or create-account form: its fields, the form's own
-/// complaint, the button, and the link to the other form.
+/// The sign-in or create-account card: its fields, its complaint, the button, and the other form.
 #[derive(IntoElement)]
 pub struct AccountCard {
     form: AccountForm,
@@ -201,8 +200,7 @@ impl RenderOnce for SignedInCard {
     }
 }
 
-/// Deleting the account, once the password is typed again: what goes, what stays for the
-/// other players, and the red button.
+/// Deleting the account once the password is typed again: what goes, what stays, the red button.
 #[derive(IntoElement)]
 pub struct CloseAccountCard {
     password: FormField,

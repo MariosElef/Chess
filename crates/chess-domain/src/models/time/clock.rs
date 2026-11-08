@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::{Category, Side};
 
-/// Starting time per player plus the increment added after each of their moves: 3 | 2 is 3 minutes + 2 seconds.
+/// Starting time per player, and the increment after each of their moves: 3 | 2 is 3 min + 2 s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TimeControl {
     pub initial: Duration,

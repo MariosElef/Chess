@@ -16,8 +16,7 @@ const BATCHES_AHEAD: usize = 4;
 /// A progress line every this many puzzles.
 const REPORT_EVERY: u64 = 200_000;
 
-/// Loads the Lichess puzzle database file into `puzzle.puzzles`: the file is read on a thread
-/// of its own while batches are written. Returns how many puzzles were written.
+/// Loads the Lichess puzzle database file into `puzzle.puzzles`; returns how many were written.
 pub async fn import_puzzles(db: &Db, path: PathBuf) -> anyhow::Result<u64> {
     let (sender, mut batches) = mpsc::channel::<Vec<NewPuzzle>>(BATCHES_AHEAD);
     let reading = task::spawn_blocking(move || {

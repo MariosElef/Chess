@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -18,18 +20,24 @@ pub struct FoundUserModel {
     pub relation: Relation,
 }
 
-/// A friend, and whether they have the app open now.
+/// A friend: whether they have the app open now, when they last had, and their ratings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FriendModel {
     pub id: Uuid,
     pub username: String,
     pub online: bool,
+    /// Seconds since they last had the app open or used a session; `None` if neither is known.
+    pub away_s: Option<i64>,
+    /// Their rating in each category they have one, by the category's id.
+    pub ratings: BTreeMap<String, i32>,
 }
 
 /// The Social tab: friends, and the requests each way.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GetFriendsModel {
     pub friends: Vec<FriendModel>,
+    /// The signed-in player's own ratings, for the friends' leaderboard.
+    pub my_ratings: BTreeMap<String, i32>,
     /// Asked by others, waiting for the signed-in player.
     pub incoming: Vec<UserRef>,
     /// Asked by the signed-in player, waiting for the others.
@@ -59,11 +67,22 @@ pub struct PairRow {
     pub requester_id: Uuid,
 }
 
-/// A row about another player and the friendship with them, if any.
+/// A player found by search, and the friendship with them, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FriendshipRow {
     pub user_id: Uuid,
     pub username: String,
+    pub status: Option<String>,
+    pub requester_id: Option<Uuid>,
+}
+
+/// A friend or someone with a request each way, the friendship, and when they were last online.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedFriendRow {
+    pub user_id: Uuid,
+    pub username: String,
+    /// Seconds since they last had the app open or used a session; `None` if neither is known.
+    pub away_s: Option<i64>,
     pub status: Option<String>,
     pub requester_id: Option<Uuid>,
 }

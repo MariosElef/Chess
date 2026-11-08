@@ -27,8 +27,7 @@ const LONGEST_TITLE: usize = 60;
 /// Messages sent per page.
 const PAGE: i64 = 50;
 
-/// Conversations between friends, one to one or in groups, and each online game's chat. Only
-/// members read or write one; a message reaches every member online at once.
+/// Chats between friends, one to one or in groups, and in online games; only members take part.
 #[derive(Clone)]
 pub struct ChatService {
     db: Db,
@@ -311,8 +310,7 @@ fn direct_key(first: Uuid, second: Uuid) -> String {
     format!("{}:{}", first.min(second), first.max(second))
 }
 
-/// What the player sees a conversation called: a group's name, the other player in a direct
-/// chat, "Game chat" for a game's.
+/// What the player sees a conversation called: a group's name, the other player, or "Game chat".
 fn title_for(
     user_id: Uuid,
     kind: ConversationKind,

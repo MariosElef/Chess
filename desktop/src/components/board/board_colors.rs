@@ -4,8 +4,7 @@ use gpui_kit::{App, Hsla, component::ActiveTheme as _, hsla, rgb, rgba};
 use super::board_style::BoardStyle;
 use crate::enums::{board::SquareHighlight, settings::BoardTheme};
 
-/// The board's own colour roles, one set per theme mode with the squares from the chosen board
-/// theme, so no view writes a colour literal.
+/// The board's colour roles per theme mode, with the chosen theme's squares.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoardColors {
     pub light_square: Hsla,
@@ -113,8 +112,7 @@ impl BoardColors {
     }
 }
 
-/// The light and dark squares of `theme`. Only Slate has a darker version for dark mode; the
-/// others keep the colours they are known by: Lichess's brown, chess.com's blue and green.
+/// The light and dark squares of `theme`; only Slate has a darker version for dark mode.
 pub fn square_colors(theme: BoardTheme, is_dark: bool) -> (Hsla, Hsla) {
     let (light, dark) = match (theme, is_dark) {
         (BoardTheme::Slate, false) => (0xe9e5dc, 0x9fb1c4),

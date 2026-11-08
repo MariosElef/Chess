@@ -11,8 +11,7 @@ use crate::{
     services::account::{category_of, rating_text, solved_share},
 };
 
-/// The player's ratings in every game mode and in puzzles, each on a tile with its best and
-/// how the games or puzzles went.
+/// The player's ratings in every mode and in puzzles, each on a tile with its best and record.
 #[derive(IntoElement)]
 pub struct StatsPanel {
     stats: Stats,

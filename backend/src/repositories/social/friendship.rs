@@ -1,7 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::models::social::friend::{FriendshipRow, PairRow};
+use crate::models::social::friend::{FriendshipRow, ListedFriendRow, PairRow};
 
 /// The friendship of a pair, given smaller id first.
 pub async fn between(
@@ -71,9 +71,9 @@ pub async fn remove(
 pub async fn of_user(
     db: impl PgExecutor<'_>,
     user: Uuid,
-) -> Result<Vec<FriendshipRow>, sqlx::Error> {
+) -> Result<Vec<ListedFriendRow>, sqlx::Error> {
     sqlx::query_file_as!(
-        FriendshipRow,
+        ListedFriendRow,
         "src/repositories/sql/social/friendship/of_user.sql",
         user
     )

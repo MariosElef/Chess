@@ -1,7 +1,6 @@
 use crate::models::puzzles::{PuzzleRating, PuzzleSummary};
 
-/// The menu's line about the puzzle rating: the rating, that there is none yet, or that a
-/// guest keeps none.
+/// The menu's line about the puzzle rating: the rating, none yet, or that a guest keeps none.
 pub fn rating_line(summary: &PuzzleSummary) -> String {
     match (summary.guest, summary.rating) {
         (true, _) => "Playing as a guest: sign up to keep a rating and best scores.".to_owned(),

@@ -43,9 +43,7 @@ pub struct BattleBegan;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BattleEnded;
 
-/// Puzzle Battle: its panel, to pick a random opponent or a friend online and answer
-/// invitations, then the battle on the shared puzzles with both scores live, over the live
-/// socket.
+/// Puzzle Battle: pick a random opponent or an online friend, then race on shared puzzles live.
 pub struct BattleView {
     connection: Entity<LiveConnection>,
     session: SessionSource,
@@ -57,8 +55,7 @@ pub struct BattleView {
     battle: Option<(BattleSnapshot, Instant)>,
     /// Its puzzles, read once when it began.
     puzzles: Vec<Puzzle>,
-    /// The player's own answers and mistakes, counted as they are made so the next puzzle
-    /// comes at once.
+    /// The player's own answers and mistakes, counted as made so the next puzzle comes at once.
     answered: u32,
     mistakes: u32,
     /// The puzzle on the board, by its place in the battle.
@@ -284,8 +281,7 @@ impl BattleView {
         cx.notify();
     }
 
-    /// The battle as the server has it now: a new one begins on its first puzzle; the score,
-    /// the clock and the result follow it.
+    /// The battle as the server has it: a new one starts on its first puzzle; the rest follows.
     fn arrived(&mut self, battle: BattleSnapshot, cx: &mut Context<Self>) {
         let is_new = self
             .battle
@@ -353,8 +349,7 @@ impl BattleView {
         }
     }
 
-    /// A solved puzzle scores and a wrong move is a mistake; either way the server hears it
-    /// and the next puzzle follows.
+    /// A solved puzzle scores, a wrong move is a mistake; the server hears it and the next follows.
     fn judged(&mut self, verdict: PuzzleVerdict, cx: &mut Context<Self>) {
         let Some(battle_id) = self.battle.as_ref().map(|(battle, _)| battle.id.clone()) else {
             return;

@@ -10,7 +10,7 @@ use gpui_kit::{
 
 type OnSelect = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-/// The game's moves in numbered rows, White's then Black's; clicking one shows the position after it.
+/// The moves in numbered rows, White's then Black's; clicking one shows the position after it.
 #[derive(IntoElement)]
 pub struct MoveList {
     sans: Vec<String>,
@@ -18,8 +18,7 @@ pub struct MoveList {
     viewing: usize,
     /// Each move's class once the game is reviewed; empty otherwise.
     classes: Vec<MoveClass>,
-    /// Every move shown at its full height, for a list inside a scroll of its own; otherwise it
-    /// fills the room it has and scrolls.
+    /// Every move at full height, for a list inside a scroll of its own.
     unbounded: bool,
     on_select: OnSelect,
 }
@@ -93,8 +92,7 @@ impl MoveList {
             })
     }
 
-    /// One move, with its review icon once reviewed; highlighted while the board shows the
-    /// position after it.
+    /// One move with its review icon, highlighted while the board shows the position after it.
     fn move_cell(&self, (index, san): (usize, &str), cx: &App) -> Stateful<Div> {
         let on_select = Rc::clone(&self.on_select);
         let class = self.classes.get(index).copied();

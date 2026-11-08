@@ -25,8 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/rush", post(create_rush))
 }
 
-/// A puzzle to solve, rated within `min_rating..=max_rating` when given, that the player has
-/// not attempted; for anyone signed in, guests included.
+/// A puzzle the player has not attempted, rated within `min_rating..=max_rating` when given.
 async fn next(
     State(state): State<AppState>,
     signed_in: SignedIn,

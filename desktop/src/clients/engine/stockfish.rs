@@ -18,8 +18,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Starts the engine at `path`; its lines arrive on the returned receiver, read by a
-    /// thread of their own so the app's executors never block on the process.
+    /// Starts the engine at `path`; its lines arrive on the returned receiver, read off-thread.
     pub fn spawn(path: &Path) -> io::Result<(Self, Receiver<EngineEvent>)> {
         let mut child = Process::new(path)
             .stdin(Stdio::piped())
@@ -51,8 +50,7 @@ impl Drop for Engine {
     }
 }
 
-/// Forwards every line until the engine's output ends or the app stops listening. A line that
-/// is not valid UTF-8 is read leniently rather than taken for the engine ending.
+/// Forwards every line until the engine's output ends or the app stops listening.
 fn read_lines(stdout: ChildStdout, sender: &Sender<EngineEvent>) {
     let mut reader = BufReader::new(stdout);
     let mut bytes = Vec::new();

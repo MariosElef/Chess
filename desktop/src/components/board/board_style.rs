@@ -2,8 +2,7 @@ use gpui_kit::{App, Global};
 
 use crate::enums::settings::{BoardTheme, PieceSet};
 
-/// The board's theme and pieces, chosen in Settings and read by everything that draws a board,
-/// the way the kit's own theme is read.
+/// The board's theme and pieces, chosen in Settings and read by everything that draws a board.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BoardStyle {
     pub theme: BoardTheme,

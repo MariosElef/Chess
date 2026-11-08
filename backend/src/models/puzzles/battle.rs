@@ -7,8 +7,7 @@ use crate::{
     models::social::friend::UserRef,
 };
 
-/// A battle as one of its players sees it: both sides' scores, the puzzles, the time left,
-/// and once over, how it ended for them.
+/// A battle as one of its players sees it: both scores, the puzzles, the time left, and the result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BattleSnapshot {
     pub id: Uuid,

@@ -3,8 +3,7 @@ use chess_domain::{Outcome, Side};
 
 use crate::services::board::side_name;
 
-/// "You Beat Danis!", "Danis Won", "You Won!", "You Lost", "White Won" or "Draw": `me` is
-/// the player's side, `None` for two players at one computer; `opponent` names a bot.
+/// The card's title, as "You Won!" or "Draw": `me` is the player's side, `opponent` a bot's name.
 pub fn result_title(winner: Option<Side>, me: Option<Side>, opponent: Option<&str>) -> String {
     match (winner, me) {
         (None, _) => "Draw".to_owned(),
@@ -18,8 +17,7 @@ pub fn result_title(winner: Option<Side>, me: Option<Side>, opponent: Option<&st
     }
 }
 
-/// How it ended, under the card's title: "by checkmate", "by time", "by the fifty-move rule",
-/// as an online game's panel says it.
+/// How it ended, under the card's title: "by checkmate", "by time", "by the fifty-move rule".
 pub fn outcome_reason(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Checkmate { .. } => "by checkmate",

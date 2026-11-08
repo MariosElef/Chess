@@ -61,9 +61,7 @@ impl UserService {
         Ok(response)
     }
 
-    /// Closes the account, once its password is typed again: signed out everywhere, its
-    /// friends, chats, ratings and puzzles gone. Its games and battles stay for the other
-    /// players, under a scrubbed name. A shared guest cannot be closed.
+    /// Closes the account once its password is typed again; its games stay for the others.
     pub async fn close(&self, user_id: Uuid, password: String) -> Result<(), AppError> {
         let check = closure::password_hash(&self.db, user_id)
             .await?

@@ -1,6 +1,6 @@
 use crate::{ParseMoveError, PieceKind, Square};
 
-/// A piece going from one square to another; `promotion` is set only for a pawn reaching the last rank.
+/// A piece going from one square to another; `promotion` only for a pawn reaching the last rank.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Move {
     pub from: Square,

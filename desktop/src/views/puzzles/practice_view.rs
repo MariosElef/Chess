@@ -25,8 +25,7 @@ use crate::{
 /// How often the puzzle's timer is redrawn.
 const TICK: Duration = Duration::from_millis(500);
 
-/// One puzzle at a time, from the difficulty range the player picks; a wrong move means
-/// trying again. The first try at each puzzle counts for the puzzle rating.
+/// One puzzle at a time in the player's difficulty range; the first try counts for the rating.
 pub struct PracticeView {
     client: ServerClient,
     token: TokenSource,
@@ -141,8 +140,7 @@ impl PracticeView {
         cx.notify();
     }
 
-    /// The first try decides: a wrong move loses, solving without one wins. Later moves on the
-    /// same puzzle change nothing.
+    /// The first try decides: a wrong move loses, solving cleanly wins; later moves change nothing.
     fn judged(&mut self, verdict: PuzzleVerdict, cx: &mut Context<Self>) {
         let first_try = match verdict {
             PuzzleVerdict::Wrong => Some(false),
@@ -226,8 +224,7 @@ impl PracticeView {
 }
 
 impl PracticeView {
-    /// Practice is left: its timer stops ticking, a puzzle still on its way is not wanted, and
-    /// the one on the board goes, so coming back finds a new one rather than a stale one.
+    /// Leaving Practice stops its timer and drops its puzzles, so coming back finds a new one.
     pub fn leave(&mut self, cx: &mut Context<Self>) {
         self.solver.update(cx, |solver, cx| solver.clear(cx));
         self._ticker = None;

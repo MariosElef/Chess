@@ -40,9 +40,7 @@ impl FileRow {
     }
 }
 
-/// Reads the file from start to end without unpacking it to disk, handing over `batch_size`
-/// puzzles at a time; `deliver` returning `false` stops the reading. Blocking: run it off the
-/// async runtime.
+/// Reads the packed file `batch_size` puzzles at a time until `deliver` says stop; blocking.
 pub fn read_batches(
     path: &Path,
     batch_size: usize,

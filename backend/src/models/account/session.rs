@@ -11,8 +11,7 @@ pub struct CreateSessionModel {
     pub password: String,
 }
 
-/// A new session: the token the client sends from now on, when it stops working, and whose
-/// it is. The token is shown this once; the server keeps only its hash. No `Debug`.
+/// A new session: its token, shown this once, when it expires, and whose it is; no `Debug`.
 #[derive(Serialize)]
 pub struct GetSessionModel {
     pub token: String,

@@ -2,8 +2,7 @@ use chess_domain::{Board, Outcome, Side, Square};
 
 use crate::enums::board::EndBadge;
 
-/// The kings' badges for how the game ended: the winner's crown and the loser's reason, or a
-/// draw on both.
+/// The kings' badges for how the game ended: the winner's crown and the loser's reason, or a draw.
 pub fn end_badges(board: &Board, outcome: Outcome) -> Vec<(Square, EndBadge)> {
     let badges = match outcome {
         Outcome::Checkmate { winner } => won(winner, EndBadge::Checkmated(winner.opponent())),

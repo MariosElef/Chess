@@ -17,5 +17,5 @@ pub use panel_header::PanelHeader;
 pub use panel_title::PanelTitle;
 pub use rated_switch::RatedSwitch;
 pub use side_panel::SidePanel;
-pub use start_button::StartButton;
+pub use start_button::{START_GREEN, StartButton};
 pub use stat_card::StatCard;

@@ -2,7 +2,7 @@ use chess_domain::{Move, Position, Square};
 
 use crate::enums::board::ClickOutcome;
 
-/// Clicking a marked square plays the move (or asks for a promotion); any other click changes the selection.
+/// Clicking a marked square plays the move or asks for a promotion; others change the selection.
 pub fn click_outcome(
     position: &Position,
     selected: Option<Square>,
@@ -32,7 +32,6 @@ fn moves_to(position: &Position, selected: Option<Square>, clicked: Square) -> V
 }
 
 /// What is selected after clicking `clicked`: a piece of the side to move, or nothing.
-/// Clicking the selected piece again lets go of it.
 pub fn next_selection(
     position: &Position,
     selected: Option<Square>,

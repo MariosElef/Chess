@@ -1,16 +1,19 @@
 use gpui_kit::{
-    component::{ActiveTheme as _, h_flex, label::Label, v_flex},
+    component::{ActiveTheme as _, h_flex, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
 
-/// One player in a list: a dot for online or not, their name, a line about them, and the
-/// buttons for what can be done.
+use super::avatar::avatar;
+
+/// How big a person's avatar is in a list.
+const AVATAR: Pixels = px(40.);
+
+/// One player in a list: their avatar, their name, a line about them, and their buttons.
 #[derive(IntoElement)]
 pub struct PersonRow {
     name: SharedString,
     detail: Option<SharedString>,
-    online: Option<bool>,
     actions: Vec<AnyElement>,
 }
 
@@ -19,19 +22,12 @@ impl PersonRow {
         Self {
             name: name.into(),
             detail: None,
-            online: None,
             actions: Vec::new(),
         }
     }
 
     pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
         self.detail = Some(detail.into());
-        self
-    }
-
-    /// Shows the dot: green online, grey not.
-    pub fn online(mut self, online: bool) -> Self {
-        self.online = Some(online);
         self
     }
 
@@ -43,32 +39,30 @@ impl PersonRow {
 
 impl RenderOnce for PersonRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let muted = cx.theme().muted_foreground;
+        let theme = cx.theme();
+        let (muted, hover) = (theme.muted_foreground, theme.accent);
         h_flex()
             .w_full()
             .justify_between()
             .gap_3()
             .px_3()
             .py_2()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().border)
+            .rounded(px(6.))
+            .hover(move |this| this.bg(hover))
             .child(
                 h_flex()
+                    .min_w_0()
                     .gap_3()
-                    .when_some(self.online, |this, online| {
-                        let colour = if online { cx.theme().success } else { muted };
-                        this.child(div().size_2().rounded_full().bg(colour))
-                    })
+                    .child(avatar(&self.name, AVATAR, cx))
                     .child(
-                        v_flex().child(Label::new(self.name)).when_some(
-                            self.detail,
-                            |this, detail| {
+                        v_flex()
+                            .min_w_0()
+                            .child(div().font_weight(FontWeight::SEMIBOLD).child(self.name))
+                            .when_some(self.detail, |this, detail| {
                                 this.child(div().text_xs().text_color(muted).child(detail))
-                            },
-                        ),
+                            }),
                     ),
             )
-            .child(h_flex().gap_2().children(self.actions))
+            .child(h_flex().flex_shrink_0().gap_1().children(self.actions))
     }
 }

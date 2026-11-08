@@ -1,7 +1,7 @@
 use sqlx::{PgConnection, PgExecutor};
 use uuid::Uuid;
 
-use crate::models::rating::{RatingRow, RatingSource};
+use crate::models::rating::{RatingRow, RatingSource, UserRatingRow};
 
 /// The player's rating in `category`, or `None` before their first result in it.
 pub async fn get(
@@ -27,6 +27,20 @@ pub async fn lock_players(db: &mut PgConnection, players: &[Uuid]) -> Result<(),
     Ok(())
 }
 
+/// Every rating the players have, in any category.
+pub async fn of_users(
+    db: impl PgExecutor<'_>,
+    players: &[Uuid],
+) -> Result<Vec<UserRatingRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        UserRatingRow,
+        "src/repositories/sql/rating/of_users.sql",
+        players
+    )
+    .fetch_all(db)
+    .await
+}
+
 /// As `get`, locked for the caller's transaction.
 pub async fn get_for_update(
     db: &mut PgConnection,
@@ -43,8 +57,7 @@ pub async fn get_for_update(
     .await
 }
 
-/// Stores the new rating, counting one more result, and its row in the rating history, which
-/// names the game, puzzle attempt or battle that moved it.
+/// Stores the new rating, one more result, and a history row naming what moved it.
 pub async fn record_result(
     db: &mut PgConnection,
     user_id: Uuid,

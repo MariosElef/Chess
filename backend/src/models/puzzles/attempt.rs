@@ -3,8 +3,7 @@ use uuid::Uuid;
 
 use super::rating::PuzzleRatingModel;
 
-/// How a puzzle went: solved without a mistake or not, and whether it counts for the rating
-/// (Practice does; Puzzle Rush does not).
+/// How a puzzle went: solved cleanly or not, and whether it counts for the rating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct CreateAttemptModel {
     pub solved: bool,

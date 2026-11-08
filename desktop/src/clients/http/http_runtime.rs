@@ -8,9 +8,7 @@ use crate::models::server::ServerError;
 /// A request that takes longer than this counts as the other side being unreachable.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The app's one HTTP client and the small Tokio runtime it runs on, shared by every client
-/// that talks to the internet. The app's executors never wait on the network: each request
-/// returns a future that can be awaited from anywhere. Cloning shares both.
+/// The app's one HTTP client and the small Tokio runtime it runs on, shared by every client.
 #[derive(Clone)]
 pub struct HttpRuntime {
     http: Client,

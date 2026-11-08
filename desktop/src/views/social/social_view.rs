@@ -4,11 +4,10 @@ use chess_domain::TimeControl;
 use gpui_kit::{
     assets::IconName,
     component::{
-        ActiveTheme as _, Disableable as _, Sizable as _,
+        ActiveTheme as _, Icon, Sizable as _,
         button::{Button, ButtonVariants},
         h_flex,
         input::{Input, InputEvent, InputState},
-        label::Label,
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -17,8 +16,17 @@ use gpui_kit::{
 
 use crate::{
     clients::server::ServerClient,
-    components::social::{ChallengePicker, PersonRow},
-    enums::{social::Relation, sound::Sound},
+    components::{
+        shell::SOCIAL_PICTURE,
+        social::{
+            ActionTile, ChallengePicker, EmptyState, FriendRow, Leaderboard, PeopleList, PersonRow,
+            SortMenu,
+        },
+    },
+    enums::{
+        social::{FriendSort, LeaderBoard, Relation, SocialStage},
+        sound::Sound,
+    },
     models::{
         play::{Challenge, ClientMessage, LiveEvent, ServerMessage},
         server::ServerError,
@@ -27,6 +35,7 @@ use crate::{
     services::{
         play::{DEFAULT_TIME_CONTROL, challenge_terms},
         server::error_message,
+        social::{last_online_text, leaderboard, sorted_friends},
     },
     views::{
         chat::ChatsView,
@@ -40,9 +49,11 @@ const SEARCH_PAUSE: Duration = Duration::from_millis(250);
 /// The fewest letters worth searching for.
 const SHORTEST_SEARCH: usize = 2;
 
-/// Friends and who of them is online, friend requests, finding players by name, and
-/// challenging a friend to a game. Lists come over HTTP; the live connection says when to
-/// fetch them again, and carries the challenges.
+/// A friend's Message button was pressed: their chat is open on the Messages page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenMessages;
+
+/// The Friends page: friends and last online, requests, search, challenges and the leaderboard.
 pub struct SocialView {
     client: ServerClient,
     session: SessionSource,
@@ -64,37 +75,33 @@ pub struct SocialView {
     rated: bool,
     /// A challenge went out or was answered, and the server's word on it is still to come.
     awaiting: bool,
-    /// The player's conversations and the one open, beside the friends.
+    /// The friends, or the requests each way.
+    stage: SocialStage,
+    sort: FriendSort,
+    /// The player's chats, shown on the Messages page: a friend's Message button opens theirs.
     chats: Entity<ChatsView>,
-    _chat_changes: Subscription,
 }
+
+impl EventEmitter<OpenMessages> for SocialView {}
 
 impl SocialView {
     pub fn new(
         client: ServerClient,
-        session: SessionSource,
-        connection: Entity<LiveConnection>,
+        (session, connection): (SessionSource, Entity<LiveConnection>),
+        chats: Entity<ChatsView>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let _live = cx.subscribe(&connection, |view, _, event: &LiveEvent, cx| {
             view.on_event(event, cx);
         });
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Find players by name"));
+        let search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search by name or username"));
         let _search_changes = cx.subscribe(&search, |view, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
                 view.search_changed(cx);
             }
         });
-        let chats = cx.new(|cx| {
-            ChatsView::new(
-                client.clone(),
-                (session.clone(), connection.clone()),
-                window,
-                cx,
-            )
-        });
-        let _chat_changes = cx.observe(&chats, |_, _, cx| cx.notify());
         Self {
             client,
             session,
@@ -113,20 +120,25 @@ impl SocialView {
             choice: DEFAULT_TIME_CONTROL.unwrap_or(TimeControl::new(3, 2)),
             rated: true,
             awaiting: false,
+            stage: SocialStage::default(),
+            sort: FriendSort::default(),
             chats,
-            _chat_changes,
         }
     }
 
     /// The page came on screen: its lists are fetched afresh.
     pub fn opened(&mut self, cx: &mut Context<Self>) {
         self.refresh(cx);
-        self.chats.update(cx, |chats, cx| chats.refresh(cx));
     }
 
-    /// What waits for the player: challenges, friend requests and unread messages.
-    pub fn waiting_for_me(&self, cx: &App) -> usize {
-        self.received.len() + self.friends.incoming.len() + self.chats.read(cx).unread()
+    /// What waits for the player here: challenges and friend requests.
+    pub fn waiting_for_me(&self) -> usize {
+        self.received.len() + self.friends.incoming.len()
+    }
+
+    /// The signed-in player's name, for their place on the leaderboard.
+    fn my_name(&self, cx: &App) -> String {
+        (self.session)(cx).map_or_else(String::new, |session| session.user.username)
     }
 
     /// Signed in with an account: guests play unrated only.
@@ -304,7 +316,65 @@ impl SocialView {
         self.send_live(message, cx);
     }
 
-    fn challenges_section(&self, cx: &mut Context<Self>) -> Option<Div> {
+    fn pick_stage(&mut self, stage: SocialStage, cx: &mut Context<Self>) {
+        self.stage = stage;
+        self.picking_for = None;
+        cx.notify();
+    }
+
+    /// The requests, in place of anything a search had found.
+    fn open_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.pick_stage(SocialStage::Requests, cx);
+    }
+
+    fn pick_sort(&mut self, sort: FriendSort, cx: &mut Context<Self>) {
+        self.sort = sort;
+        cx.notify();
+    }
+
+    /// A search long enough to go out is in the box: its results take the friends' place.
+    fn searching(&self, cx: &App) -> bool {
+        self.search.read(cx).value().trim().chars().count() >= SHORTEST_SEARCH
+    }
+
+    /// Opens the friend's chat and asks for the Messages page.
+    fn message(&mut self, friend_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.chats
+            .update(cx, |chats, cx| chats.message_friend(friend_id, window, cx));
+        cx.emit(OpenMessages);
+    }
+
+    /// Find Friends and Friend Requests, side by side, as chess.com's tiles.
+    fn tiles(&self, cx: &mut Context<Self>) -> Div {
+        let view = cx.entity().downgrade();
+        let search = self.search.clone();
+        let (find, requests) = (view.clone(), view);
+        h_flex()
+            .gap_3()
+            .child(ActionTile::new(
+                "find-friends",
+                (IconName::Search, "Find Friends"),
+                move |window, cx| {
+                    search.update(cx, |input, cx| input.focus(window, cx));
+                    let _ = find.update(cx, |view, cx| view.pick_stage(SocialStage::Friends, cx));
+                },
+            ))
+            .child(
+                ActionTile::new(
+                    "friend-requests",
+                    (IconName::UserPlus, "Friend Requests"),
+                    move |window, cx| {
+                        let _ = requests.update(cx, |view, cx| view.open_requests(window, cx));
+                    },
+                )
+                .count(self.friends.incoming.len()),
+            )
+    }
+
+    /// Challenges waiting either way, above the friends.
+    fn challenges(&self, cx: &mut Context<Self>) -> Option<PeopleList> {
         if self.sent.is_empty() && self.received.is_empty() {
             return None;
         }
@@ -315,8 +385,9 @@ impl SocialView {
                 .detail(format!("Challenges you · {}", challenge_terms(challenge)))
                 .action(
                     Button::new(SharedString::from(format!("accept-challenge-{accept}")))
-                        .primary()
+                        .success()
                         .small()
+                        .icon(IconName::Check)
                         .label("Accept")
                         .on_click(cx.listener(move |view, _, _, cx| {
                             let message = ClientMessage::AcceptChallenge {
@@ -326,10 +397,7 @@ impl SocialView {
                         })),
                 )
                 .action(
-                    Button::new(SharedString::from(format!("decline-challenge-{decline}")))
-                        .ghost()
-                        .small()
-                        .label("Decline")
+                    icon_button(("decline-challenge", &decline), IconName::Close, "Decline")
                         .on_click(cx.listener(move |view, _, _, cx| {
                             let message = ClientMessage::DeclineChallenge {
                                 challenge_id: decline.clone(),
@@ -347,103 +415,105 @@ impl SocialView {
                     challenge_terms(challenge)
                 ))
                 .action(
-                    Button::new(SharedString::from(format!("cancel-challenge-{id}")))
-                        .ghost()
-                        .small()
-                        .label("Cancel")
-                        .on_click(cx.listener(move |view, _, _, cx| {
+                    icon_button(("cancel-challenge", &id), IconName::Close, "Cancel").on_click(
+                        cx.listener(move |view, _, _, cx| {
                             let message = ClientMessage::CancelChallenge {
                                 challenge_id: id.clone(),
                             };
                             view.send_live(message, cx);
-                        })),
+                        }),
+                    ),
                 );
             rows.push(row);
         }
-        Some(section("Challenges", cx).children(rows))
+        Some(PeopleList::new().heading("Challenges").children(rows))
     }
 
-    fn requests_section(&self, cx: &mut Context<Self>) -> Option<Div> {
-        let Friends {
-            incoming, outgoing, ..
-        } = &self.friends;
-        if incoming.is_empty() && outgoing.is_empty() {
-            return None;
+    /// Under the search box: what it found, or else the friends or the requests.
+    fn listing(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.searching(cx) {
+            return self.found_list(cx).into_any_element();
         }
-        let mut rows: Vec<PersonRow> = Vec::new();
-        for person in incoming {
-            let row = PersonRow::new(person.username.clone())
-                .detail("Wants to be friends")
-                .action(self.friend_button("accept-friend", "Accept", person, cx))
-                .action(self.remove_button("decline-friend", "Decline", person, cx));
-            rows.push(row);
+        match self.stage {
+            SocialStage::Friends => self.friends_list(cx).into_any_element(),
+            SocialStage::Requests => self.requests_list(cx).into_any_element(),
         }
-        for person in outgoing {
-            let row = PersonRow::new(person.username.clone())
-                .detail("Request sent")
-                .action(self.remove_button("withdraw-friend", "Cancel", person, cx));
-            rows.push(row);
-        }
-        Some(section("Friend requests", cx).children(rows))
     }
 
-    fn friends_section(&self, cx: &mut Context<Self>) -> Div {
-        let title = format!("Friends ({})", self.friends.friends.len());
-        let section = section(title, cx);
+    /// "Friends 45" and the order they are in, then each friend.
+    fn friends_list(&self, cx: &mut Context<Self>) -> Div {
+        let view = cx.entity().downgrade();
+        let heading = h_flex()
+            .justify_between()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_lg()
+                            .font_weight(FontWeight::BOLD)
+                            .child("Friends"),
+                    )
+                    .child(count_chip(self.friends.friends.len(), cx)),
+            )
+            .child(SortMenu::new(self.sort, move |sort, _, cx| {
+                let _ = view.update(cx, |view, cx| view.pick_sort(sort, cx));
+            }));
         if !self.loaded {
-            return section.child(muted_line("Loading…", cx));
+            return v_flex()
+                .gap_2()
+                .child(heading)
+                .child(muted_line("Loading…", cx));
         }
         if self.friends.friends.is_empty() {
-            return section.child(muted_line(
-                "No friends yet: find players by name below.",
-                cx,
+            return v_flex().gap_2().child(heading).child(EmptyState::new(
+                IconName::Users,
+                "No friends yet",
+                "Search for players by name above and add them as friends.",
             ));
         }
-        let rows: Vec<Div> = self
-            .friends
-            .friends
-            .iter()
+        let rows: Vec<Div> = sorted_friends(&self.friends.friends, self.sort)
+            .into_iter()
             .map(|friend| self.friend_row(friend, cx))
             .collect();
-        section.children(rows)
+        v_flex().gap_2().child(heading).children(rows)
     }
 
-    /// A friend, with Challenge while they are online, and the picker under them once opened.
+    /// A friend, and the challenge picker under them once Challenge is pressed.
     fn friend_row(&self, friend: &Friend, cx: &mut Context<Self>) -> Div {
         let picking = self.picking_for.as_deref() == Some(friend.id.as_str());
-        let id = friend.id.clone();
-        let challenge = Button::new(SharedString::from(format!("challenge-{id}")))
-            .outline()
-            .small()
-            .icon(IconName::Swords)
-            .label("Challenge")
-            .disabled(!friend.online)
-            .on_click(cx.listener(move |view, _, _, cx| {
-                view.picking_for = Some(id.clone());
-                cx.notify();
-            }));
-        let person = UserRef {
-            id: friend.id.clone(),
-            username: friend.username.clone(),
-        };
-        let to_message = friend.id.clone();
-        let message = Button::new(SharedString::from(format!("message-{to_message}")))
-            .outline()
-            .small()
-            .label("Message")
-            .on_click(cx.listener(move |view, _, window, cx| {
-                view.chats.update(cx, |chats, cx| {
-                    chats.message_friend(&to_message, window, cx)
+        let view = cx.entity().downgrade();
+        let (challenge, message, remove) = (view.clone(), view.clone(), view);
+        let (to_challenge, to_message, to_remove) =
+            (friend.id.clone(), friend.id.clone(), friend.id.clone());
+        let row = FriendRow::new(
+            (friend.id.clone(), friend.username.clone()),
+            (
+                friend.online,
+                last_online_text(friend.online, friend.away_s),
+            ),
+            move |_, cx| {
+                let _ = challenge.update(cx, |view, cx| {
+                    view.picking_for = Some(to_challenge.clone());
+                    cx.notify();
                 });
-            }));
-        let row = PersonRow::new(friend.username.clone())
-            .online(friend.online)
-            .detail(if friend.online { "Online" } else { "Offline" })
-            .action(message)
-            .action(challenge)
-            .action(self.remove_button("unfriend", "Remove", &person, cx));
-        v_flex().gap_2().child(row).when(picking, |this| {
-            this.child(self.picker(friend.id.clone(), cx))
+            },
+            (
+                move |window, cx| {
+                    let _ = message.update(cx, |view, cx| view.message(&to_message, window, cx));
+                },
+                move |_, cx| {
+                    let _ = remove.update(cx, |view, cx| view.remove_friend(&to_remove, cx));
+                },
+            ),
+        );
+        v_flex().child(row).when(picking, |this| {
+            this.child(
+                div()
+                    .pl(px(88.))
+                    .pb_2()
+                    .child(self.picker(friend.id.clone(), cx)),
+            )
         })
     }
 
@@ -478,15 +548,87 @@ impl SocialView {
         )
     }
 
-    fn search_section(&self, cx: &mut Context<Self>) -> Div {
+    /// Requests to accept or decline, and ones the player sent, to call off; with a way back.
+    fn requests_list(&self, cx: &mut Context<Self>) -> Div {
+        let back = Button::new("requests-back")
+            .ghost()
+            .small()
+            .icon(IconName::ArrowLeft)
+            .on_click(cx.listener(|view, _, _, cx| view.pick_stage(SocialStage::Friends, cx)));
+        let heading = h_flex().gap_2().child(back).child(
+            div()
+                .text_lg()
+                .font_weight(FontWeight::BOLD)
+                .child("Friend Requests"),
+        );
+        let Friends {
+            incoming, outgoing, ..
+        } = &self.friends;
+        if incoming.is_empty() && outgoing.is_empty() {
+            return v_flex().gap_2().child(heading).child(EmptyState::new(
+                IconName::UserPlus,
+                "No requests",
+                "Requests to and from you show up here.",
+            ));
+        }
+        let received: Vec<PersonRow> = incoming
+            .iter()
+            .map(|person| {
+                PersonRow::new(person.username.clone())
+                    .detail("Wants to be friends")
+                    .action(self.accept_button("accept-friend", person, cx))
+                    .action(self.remove_button(
+                        ("decline-friend", IconName::UserX, "Decline"),
+                        person,
+                        cx,
+                    ))
+            })
+            .collect();
+        let sent: Vec<PersonRow> = outgoing
+            .iter()
+            .map(|person| {
+                PersonRow::new(person.username.clone())
+                    .detail("Request sent")
+                    .action(self.remove_button(
+                        ("withdraw-friend", IconName::Close, "Cancel request"),
+                        person,
+                        cx,
+                    ))
+            })
+            .collect();
+        v_flex()
+            .gap_4()
+            .child(heading)
+            .when(!received.is_empty(), |this| {
+                this.child(PeopleList::new().heading("Received").children(received))
+            })
+            .when(!sent.is_empty(), |this| {
+                this.child(PeopleList::new().heading("Sent").children(sent))
+            })
+    }
+
+    /// The players the search found.
+    fn found_list(&self, cx: &mut Context<Self>) -> Div {
+        let heading = div()
+            .text_lg()
+            .font_weight(FontWeight::BOLD)
+            .child("Players");
+        if self.found.is_empty() {
+            return v_flex().gap_2().child(heading).child(EmptyState::new(
+                IconName::Search,
+                "No one found",
+                "No player has a name like that.",
+            ));
+        }
         let rows: Vec<PersonRow> = self
             .found
             .iter()
             .map(|found| self.found_row(found, cx))
             .collect();
-        section("Find players", cx)
-            .child(Input::new(&self.search))
-            .children(rows)
+        v_flex()
+            .gap_2()
+            .child(heading)
+            .child(PeopleList::new().children(rows))
     }
 
     /// A player found, with what can be done next with them.
@@ -497,96 +639,137 @@ impl SocialView {
         };
         let row = PersonRow::new(found.username.clone());
         match found.relation {
-            Relation::None => {
-                row.action(self.friend_button("add-friend", "Add friend", &person, cx))
-            }
+            Relation::None => row.action(self.add_button(&person, cx)),
             Relation::RequestReceived => row
                 .detail("Wants to be friends")
-                .action(self.friend_button("accept-found", "Accept", &person, cx)),
+                .action(self.accept_button("accept-found", &person, cx)),
             Relation::RequestSent => row.detail("Request sent"),
             Relation::Friends => row.detail("Friends"),
         }
     }
 
-    /// Asks to be friends, which accepts a request they sent.
-    fn friend_button(
-        &self,
-        id: &str,
-        label: &'static str,
-        person: &UserRef,
-        cx: &mut Context<Self>,
-    ) -> Button {
+    /// Asks to be friends.
+    fn add_button(&self, person: &UserRef, cx: &mut Context<Self>) -> Button {
         let user_id = person.id.clone();
-        let accepting = label == "Accept";
-        Button::new(SharedString::from(format!("{id}-{user_id}")))
+        Button::new(SharedString::from(format!("add-friend-{user_id}")))
             .primary()
             .small()
-            .when(!accepting, |this| this.icon(IconName::UserPlus))
-            .label(label)
-            .on_click(cx.listener(move |view, _, _, cx| {
-                if accepting {
-                    view.accept_friend(&user_id, cx);
-                } else {
-                    view.add_friend(&user_id, cx);
-                }
-            }))
+            .icon(IconName::UserPlus)
+            .label("Add friend")
+            .on_click(cx.listener(move |view, _, _, cx| view.add_friend(&user_id, cx)))
     }
 
+    /// Accepts a request they sent.
+    fn accept_button(&self, id: &str, person: &UserRef, cx: &mut Context<Self>) -> Button {
+        let user_id = person.id.clone();
+        Button::new(SharedString::from(format!("{id}-{user_id}")))
+            .success()
+            .small()
+            .icon(IconName::UserCheck)
+            .label("Accept")
+            .on_click(cx.listener(move |view, _, _, cx| view.accept_friend(&user_id, cx)))
+    }
+
+    /// Ends the request, whichever way it went.
     fn remove_button(
         &self,
-        id: &str,
-        label: &'static str,
+        (id, icon, tooltip): (&str, IconName, &'static str),
         person: &UserRef,
         cx: &mut Context<Self>,
     ) -> Button {
         let user_id = person.id.clone();
-        Button::new(SharedString::from(format!("{id}-{user_id}")))
-            .ghost()
-            .small()
-            .label(label)
+        icon_button((id, &user_id), icon, tooltip)
             .on_click(cx.listener(move |view, _, _, cx| view.remove_friend(&user_id, cx)))
+    }
+
+    /// The friends' leaderboard: each board's best three among them and the player.
+    fn leaderboard(&self, cx: &App) -> Leaderboard {
+        let name = self.my_name(cx);
+        let boards = LeaderBoard::ALL
+            .into_iter()
+            .map(|board| {
+                let rows = leaderboard(
+                    &self.friends.friends,
+                    (&name, &self.friends.my_ratings),
+                    board,
+                );
+                (board, rows)
+            })
+            .collect();
+        Leaderboard::new(boards)
     }
 }
 
 impl Render for SocialView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let people = v_flex()
-            .flex_1()
-            .gap_6()
+        let card = v_flex()
+            .gap_5()
+            .p_5()
+            .rounded(px(8.))
+            .bg(cx.theme().muted)
+            .child(self.tiles(cx))
+            .child(
+                Input::new(&self.search)
+                    .large()
+                    .prefix(Icon::from(IconName::Search).size_5()),
+            )
             .when_some(self.problem.clone(), |this, problem| {
                 this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
             })
-            .children(self.challenges_section(cx))
-            .children(self.requests_section(cx))
-            .child(self.friends_section(cx))
-            .child(self.search_section(cx));
-        page_frame().child(
-            h_flex()
-                .flex_1()
-                .min_h_0()
-                .items_start()
-                .gap_6()
-                .child(people)
-                .child(self.chats.clone()),
-        )
+            .children(self.challenges(cx))
+            .child(self.listing(cx));
+        let main = v_flex()
+            .flex_1()
+            .min_w_0()
+            .max_w(px(820.))
+            .gap_5()
+            .child(heading())
+            .child(card);
+        div()
+            .id("social-page")
+            .size_full()
+            .overflow_y_scroll()
+            .child(
+                h_flex()
+                    .w_full()
+                    .items_start()
+                    .justify_center()
+                    .gap_6()
+                    .p_6()
+                    .child(main)
+                    .child(div().pt(px(64.)).child(self.leaderboard(cx))),
+            )
     }
 }
 
-fn page_frame() -> Div {
-    v_flex()
-        .size_full()
-        .p_6()
-        .gap_6()
-        .child(Label::new("Social").text_2xl())
+/// The page's title: its picture and "Friends", large.
+fn heading() -> Div {
+    h_flex().gap_3().child(img(SOCIAL_PICTURE).size_10()).child(
+        div()
+            .text_3xl()
+            .font_weight(FontWeight::BOLD)
+            .child("Friends"),
+    )
 }
 
-fn section(title: impl Into<SharedString>, cx: &App) -> Div {
-    v_flex().w_full().max_w(px(640.)).gap_2().child(
-        div()
-            .text_sm()
-            .text_color(cx.theme().muted_foreground)
-            .child(title.into()),
-    )
+/// A small grey count beside a heading.
+fn count_chip(count: usize, cx: &App) -> Div {
+    div()
+        .px_2()
+        .rounded(px(4.))
+        .bg(cx.theme().secondary)
+        .text_sm()
+        .text_color(cx.theme().muted_foreground)
+        .child(count.to_string())
+}
+
+/// A round icon button with its name on hover: the row actions.
+fn icon_button((id, key): (&str, &str), icon: IconName, tooltip: &'static str) -> Button {
+    Button::new(SharedString::from(format!("{id}-{key}")))
+        .ghost()
+        .small()
+        .icon(icon)
+        .tooltip(tooltip)
 }
 
 fn muted_line(text: &'static str, cx: &App) -> Div {
@@ -619,13 +802,14 @@ mod tests {
     use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
 
-    use super::SocialView;
+    use super::{OpenMessages, SocialStage, SocialView};
     use crate::{
         clients::server::ServerClient,
         enums::sound::Sound,
         models::account::{Session, User},
-        testing::wait_until,
+        testing::{click, wait_until},
         views::{
+            chat::ChatsView,
             live::{LiveConnection, SessionSource},
             sound::{played_sounds, record_sounds},
         },
@@ -634,8 +818,7 @@ mod tests {
     /// What the fake server was asked, in order.
     type Asked = Arc<Mutex<Vec<String>>>;
 
-    /// Ann has Bob as a friend, online, and a request from Cat; Bob challenges her as soon as
-    /// she connects, and accepting it is recorded.
+    /// Ann has Bob online and a request from Cat; Bob challenges her, and accepting is recorded.
     fn server(asked: Asked) -> ServerClient {
         let accepted = Arc::clone(&asked);
         let socket_asked = Arc::clone(&asked);
@@ -720,7 +903,9 @@ mod tests {
         let (view, cx) = cx.add_window_view(|window, cx| {
             let session = signed_in(guest);
             let live = cx.new(|_| LiveConnection::new(client.clone(), Rc::clone(&session)));
-            SocialView::new(client, session, live, window, cx)
+            let chats = cx
+                .new(|cx| ChatsView::new(client.clone(), (Rc::clone(&session), live.clone()), cx));
+            SocialView::new(client, (session, live), chats, window, cx)
         });
         (view, asked, cx)
     }
@@ -738,10 +923,10 @@ mod tests {
         let (view, asked, cx) = social(cx, false);
         view.update(cx, |view, cx| view.opened(cx));
         wait_until(cx, |cx| view.read_with(cx, |view, _| view.loaded));
-        view.read_with(cx, |view, cx| {
+        view.read_with(cx, |view, _| {
             assert_eq!(view.friends.friends[0].username, "bob");
             assert!(view.friends.friends[0].online);
-            assert_eq!(view.waiting_for_me(cx), 1, "Cat's request waits");
+            assert_eq!(view.waiting_for_me(), 1, "Cat's request waits");
         });
         view.update(cx, |view, cx| view.accept_friend("cat", cx));
         wait_until(cx, |_| asked_for(&asked, "accept cat"));
@@ -774,5 +959,37 @@ mod tests {
         let (view, _, cx) = social(cx, true);
         view.update(cx, |view, cx| view.opened(cx));
         wait_until(cx, |cx| view.read_with(cx, |view, _| view.loaded));
+    }
+
+    #[gpui_kit::test]
+    fn friend_requests_open_from_their_tile_and_go_back(cx: &mut TestAppContext) {
+        let (view, _, cx) = social(cx, false);
+        view.update(cx, |view, cx| view.opened(cx));
+        wait_until(cx, |cx| view.read_with(cx, |view, _| view.loaded));
+        let stage = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.stage);
+        assert_eq!(stage(cx), SocialStage::Friends, "friends come first");
+        view.update_in(cx, |view, window, cx| {
+            view.search
+                .update(cx, |input, cx| input.set_value("bo", window, cx));
+        });
+        click(cx, "friend-requests");
+        assert_eq!(stage(cx), SocialStage::Requests);
+        assert!(
+            !view.read_with(cx, |view, cx| view.searching(cx)),
+            "the requests show, not what the search found"
+        );
+        click(cx, "find-friends");
+        assert_eq!(stage(cx), SocialStage::Friends);
+    }
+
+    #[gpui_kit::test]
+    fn messaging_a_friend_asks_for_the_messages_page(cx: &mut TestAppContext) {
+        let (view, _, cx) = social(cx, false);
+        let asked = Rc::new(std::cell::Cell::new(false));
+        let heard = Rc::clone(&asked);
+        let _listening =
+            cx.update(|_, cx| cx.subscribe(&view, move |_, _: &OpenMessages, _| heard.set(true)));
+        view.update_in(cx, |view, window, cx| view.message("bob", window, cx));
+        assert!(asked.get(), "the shell is asked to open Messages");
     }
 }

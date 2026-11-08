@@ -1,7 +1,6 @@
 use serde::Serialize;
 
-/// How a puzzle went, for the server: solved without a mistake or not, whether it counts for
-/// the rating, and how long it took.
+/// How a puzzle went, for the server: solved cleanly or not, if it is rated, and how long.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct AttemptReport {
     pub solved: bool,

@@ -77,8 +77,7 @@ pub fn classify(facts: &MoveFacts) -> MoveClass {
     band(facts.loss())
 }
 
-/// A good piece sacrifice: best or nearly best, not leaving the mover worse off, and not
-/// played from a position that was completely winning anyway.
+/// A good piece sacrifice: nearly best, not worse off, and not from an already won position.
 fn is_brilliant(facts: &MoveFacts) -> bool {
     let winning_without = facts.second_points.unwrap_or(facts.best_points) >= COMPLETELY_WINNING;
     facts.sacrifice
@@ -87,9 +86,7 @@ fn is_brilliant(facts: &MoveFacts) -> bool {
         && !winning_without
 }
 
-/// The best move when it was the only good one: anything else gave up a tenth of a point or
-/// more. Turning a lost position into an equal one, or an equal one into a win, comes to this
-/// in expected points: the position's value is the best move's, and only this move kept it.
+/// The best move when it was the only good one: anything else gave up a tenth of a point.
 fn is_great(facts: &MoveFacts) -> bool {
     facts.played_best
         && facts

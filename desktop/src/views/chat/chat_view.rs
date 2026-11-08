@@ -23,7 +23,6 @@ use crate::{
 };
 
 /// One conversation: its messages, the player's own on the right, and a field to write in.
-/// Messages arrive live; while it is open, they count as read.
 pub struct ChatView {
     client: ServerClient,
     session: SessionSource,
@@ -34,6 +33,8 @@ pub struct ChatView {
     input: Entity<InputState>,
     _input_events: Subscription,
     _live: Subscription,
+    /// On screen: what arrives is read. Off it, as while another page shows, it stays unread.
+    reading: bool,
 }
 
 impl ChatView {
@@ -62,9 +63,19 @@ impl ChatView {
             input,
             _input_events,
             _live,
+            reading: true,
         };
         view.load(cx);
         view
+    }
+
+    /// Comes on screen or goes off it; coming back reads what arrived meanwhile.
+    pub fn set_reading(&mut self, reading: bool, cx: &mut Context<Self>) {
+        let back = reading && !self.reading;
+        self.reading = reading;
+        if back {
+            self.mark_read(cx);
+        }
     }
 
     pub fn conversation_id(&self) -> &str {
@@ -92,7 +103,7 @@ impl ChatView {
         (self.session)(cx).map(|session| session.token)
     }
 
-    /// Fetches the newest messages and marks them read.
+    /// Fetches the newest messages, and marks them read while on screen.
     fn load(&mut self, cx: &mut Context<Self>) {
         let Some(token) = self.token(cx) else {
             return;
@@ -106,20 +117,24 @@ impl ChatView {
                     Ok(messages) => view.messages = messages,
                     Err(error) => view.problem = Some(error_message(&error)),
                 }
-                view.mark_read(cx);
+                if view.reading {
+                    view.mark_read(cx);
+                }
                 cx.notify();
             });
         })
         .detach();
     }
 
-    /// A message from the live connection: kept if it is this conversation's, and read.
+    /// A live message: kept if it is this conversation's, and read while on screen.
     fn arrived(&mut self, message: ChatMessage, cx: &mut Context<Self>) {
         if message.conversation_id != self.conversation_id {
             return;
         }
         self.add(message);
-        self.mark_read(cx);
+        if self.reading {
+            self.mark_read(cx);
+        }
         cx.notify();
     }
 

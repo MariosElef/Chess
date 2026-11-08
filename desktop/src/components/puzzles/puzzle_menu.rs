@@ -16,8 +16,7 @@ use crate::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The Puzzles panel: the puzzle rating, Practice at a chosen difficulty, and the ways into
-/// Puzzle Rush and Puzzle Battle.
+/// The Puzzles panel: the puzzle rating, Practice at a difficulty, and Puzzle Rush and Battle.
 #[derive(IntoElement)]
 pub struct PuzzleMenu {
     rating_line: String,
@@ -57,8 +56,7 @@ impl PuzzleMenu {
 }
 
 impl RenderOnce for PuzzleMenu {
-    /// As chess.com lays it out: the heading with the rating, the difficulty and Solve
-    /// Puzzles, then a tile for each other way to play.
+    /// The heading with the rating, the difficulty and Solve Puzzles, then a tile per other mode.
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_practice, on_rush, on_battle) = (self.on_practice, self.on_rush, self.on_battle);
         v_flex()

@@ -84,8 +84,7 @@ impl SettingsPage {
         )
     }
 
-    /// The squares' colours and the pieces, for every board in the app, each choice shown as
-    /// it looks.
+    /// The squares' colours and the pieces for every board, each choice shown as it looks.
     fn board_section(&self, cx: &App) -> Div {
         section("Board")
             .child(Label::new("Theme").text_sm())

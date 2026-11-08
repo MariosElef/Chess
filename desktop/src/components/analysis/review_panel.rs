@@ -20,8 +20,7 @@ pub struct ShownVerdict {
     pub best: Option<String>,
 }
 
-/// A finished review, laid out as chess.com's: the evaluation over the game, then each side's
-/// accuracy, how many of each kind of move they made, and the rating they played like.
+/// A finished review: the evaluation graph, then each side's accuracy, move kinds and rating.
 #[derive(IntoElement)]
 pub struct ReviewPanel {
     /// White's, then Black's.

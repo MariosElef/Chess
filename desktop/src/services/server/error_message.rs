@@ -3,8 +3,7 @@ use crate::models::server::ServerError;
 const UNREACHABLE: &str = "Can't reach the server. Check that it is running.";
 const UNEXPECTED: &str = "Something went wrong. Try again.";
 
-/// The sentence a person reads for a request that did not succeed: the server's own words
-/// when it refused, or what went wrong on the way.
+/// The sentence a person reads for a failed request: the server's own words, or what went wrong.
 pub fn error_message(error: &ServerError) -> String {
     match error {
         ServerError::Refused(problem) => problem.message().to_owned(),

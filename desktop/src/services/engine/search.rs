@@ -22,8 +22,7 @@ enum SearchState {
     },
 }
 
-/// Keeps exactly one search running, so every `info` line belongs to the position being
-/// analysed. Each method returns the commands to send to the engine, in order.
+/// Keeps exactly one search running; each method returns the commands to send, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchQueue {
     state: SearchState,

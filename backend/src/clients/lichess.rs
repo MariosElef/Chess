@@ -33,8 +33,7 @@ impl LichessClient {
         })
     }
 
-    /// A random puzzle at `difficulty`: easiest, easier, normal, harder or hardest, measured
-    /// against a player of about 1500, as this server has no Lichess account.
+    /// A random Lichess puzzle at `difficulty`, easiest to hardest, as for a 1500 player.
     pub async fn next_puzzle(&self, difficulty: &str) -> Result<GetPuzzleModel, AppError> {
         let response = self
             .http

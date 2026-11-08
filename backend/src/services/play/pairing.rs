@@ -10,8 +10,7 @@ pub struct Seek {
     pub rated: bool,
 }
 
-/// The waiting seek `new` pairs with: someone else's, for the same time control, rated alike.
-/// It leaves the queue; the oldest such seek is taken first.
+/// Takes the oldest waiting seek `new` pairs with: someone else's, same time control, rated alike.
 pub fn take_match(seeks: &mut Vec<Seek>, new: &Seek) -> Option<Seek> {
     let index = seeks.iter().position(|waiting| {
         waiting.player.id != new.player.id

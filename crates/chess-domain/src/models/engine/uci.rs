@@ -12,8 +12,7 @@ pub struct SearchInfo {
     pub pv: Vec<Move>,
 }
 
-/// An `info` line worth showing: it has a score that is exact and a line to play. Bound scores
-/// (`lowerbound`/`upperbound`) are interim guesses, and `info string` lines are messages.
+/// An `info` line worth showing: an exact score and a line to play.
 pub(crate) fn parse_info<'a>(mut words: impl Iterator<Item = &'a str>) -> Option<SearchInfo> {
     let mut fields = InfoFields::default();
     while let Some(word) = words.next() {

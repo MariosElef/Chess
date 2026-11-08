@@ -1,7 +1,6 @@
 use super::problem::Problem;
 
-/// Why a request to the server did not succeed. It carries the server's problem, so it sits
-/// with the models rather than among the plain enums.
+/// Why a request to the server did not succeed, carrying the server's problem if it had one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerError {
     /// The server answered and said no.

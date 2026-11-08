@@ -34,13 +34,15 @@ icon_assets!(
         Signal,
         RotateCcw,
         Fish,
-        Upload
+        Upload,
+        UserMinus,
+        UserCheck,
+        UserX,
+        Mail
     ]
 );
 
-/// The kit's default icons, the Lucide icons only this app uses, the piece images, and the
-/// app's pictures: the review's icons, the rail's, the speeds', the bots', the end-of-game
-/// badges and the Puzzles page's own.
+/// The kit's icons, this app's Lucide icons, the piece images and the app's own pictures.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {

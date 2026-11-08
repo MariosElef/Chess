@@ -1,8 +1,7 @@
 //! Which pieces slide when the board goes from one shown position to the next.
 use chess_domain::{Move, PieceKind, Position, Square};
 
-/// The pieces to slide, each from its old square to its new one, when the board moves one move
-/// forward or one move back; none for a jump or a new position. Castling slides the rook too.
+/// The pieces to slide when the board steps one move forward or back; none for a jump.
 pub fn move_slides(
     (before, before_last): (&Position, Option<Move>),
     (after, after_last): (&Position, Option<Move>),

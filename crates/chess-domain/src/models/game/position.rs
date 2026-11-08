@@ -60,7 +60,7 @@ impl Position {
         self.counters
     }
 
-    /// The same position for repetition: pieces, side to move, castling and en passant, but not the counters.
+    /// The same position for repetition: pieces, side to move, castling, en passant; no counters.
     pub fn is_same_position(&self, other: &Self) -> bool {
         self.board == other.board
             && self.side_to_move == other.side_to_move
@@ -68,7 +68,7 @@ impl Position {
             && self.en_passant == other.en_passant
     }
 
-    /// Fifty moves by each side without a capture or a pawn move; either player may then claim a draw.
+    /// Fifty moves each without a capture or pawn move; either player may then claim a draw.
     pub fn is_fifty_move_draw(&self) -> bool {
         self.counters.halfmove_clock >= 100
     }
@@ -102,7 +102,7 @@ impl Position {
             .collect()
     }
 
-    /// The legal moves of whatever stands on `from`; empty for an empty square or the side not to move.
+    /// The legal moves of the piece on `from`; none for an empty square or the side not to move.
     pub fn legal_moves_from(&self, from: Square) -> Vec<Move> {
         self.legal_moves()
             .into_iter()

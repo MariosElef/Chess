@@ -109,12 +109,15 @@ right-click puts it back. Your own moves do not slide: you already put the piece
 
 ## Social
 
-The Social page lists your friends, with who is online, and the friend requests each way.
-Find players by name to add them; a friend who is online can be challenged to a game with the
-time control and rating you pick. A challenge waits a minute for an answer, and accepting it
-opens the game on Play for both. Challenges and requests waiting for you show as a count on
-Social in the rail. Guests have friends too; a guest's friends stay with that guest account,
-so the next person to get it has them.
+The Social page is a Friends page, as chess.com's: your friends with who is online now and when
+the others last were, sorted by the most recently online or by name, and a Friends Leaderboard
+beside them: the best three among your friends and you in bullet, blitz, rapid, classical and
+puzzles, with your own place under them when you are lower. Search by name to find players and
+add them; Friend Requests opens the requests each way. A friend who is online can be challenged
+to a game with the time control and rating you pick. A challenge waits a minute for an answer,
+and accepting it opens the game on Play for both. Challenges and requests waiting for you show
+as a count on Social in the rail. Guests have friends too; a guest's friends stay with that
+guest account, so the next person to get it has them.
 
 ## Puzzle Battle
 
@@ -144,10 +147,12 @@ cannot be deleted.
 
 ## Chat
 
-Beside your friends on the Social page are your chats. Message a friend to start one, or make a
-group of friends with a name; anyone in a group can add their own friends to it, and leave it.
-Messages arrive at once while you are online, and unread ones count on Social in the rail.
-During an online game the two players have a chat of their own beside the moves.
+Your chats have a page of their own, Messages: hover Social in the rail and pick Friends or
+Messages. Messages has the chats on the left and the one open on the right. A friend's Message
+button opens theirs, or make a group of friends with a name; anyone in a group can add their own
+friends to it, and leave it. Messages arrive at once while you are online, and unread ones count
+on Social in the rail and on Messages in its menu. During an online game the two players have a
+chat of their own beside the moves.
 
 ## Known limits
 

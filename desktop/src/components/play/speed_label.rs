@@ -39,7 +39,8 @@ pub fn speed_label(category: Category) -> Div {
         .child(category.name())
 }
 
-fn speed_picture(category: Category) -> Option<&'static str> {
+/// A speed's picture, by asset path, where it has one.
+pub fn speed_picture(category: Category) -> Option<&'static str> {
     PICTURES
         .iter()
         .find(|(pictured, _, _)| *pictured == category)

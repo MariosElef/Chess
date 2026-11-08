@@ -2,8 +2,7 @@ use serde::Serialize;
 
 use super::{battle::BattleSummaryModel, rating::PuzzleRatingModel};
 
-/// What the Puzzles menu shows: the puzzle rating, the best rush of each kind, ever and today,
-/// and the battle rating with this month's wins. A guest has none of them, and is told so.
+/// What the Puzzles menu shows: the puzzle rating, best rushes, and the battle rating and wins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct GetPuzzleSummaryModel {
     pub guest: bool,

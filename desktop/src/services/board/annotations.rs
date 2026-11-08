@@ -16,8 +16,7 @@ impl Annotations {
         &self.arrows
     }
 
-    /// The right button went down on `start` and came up on `end`:
-    /// the same square toggles a mark, two squares toggle an arrow.
+    /// A right-drag from `start` to `end`: the same square toggles a mark, two toggle an arrow.
     pub fn release(&mut self, start: Square, end: Square) {
         if start == end {
             toggle(&mut self.marks, start);

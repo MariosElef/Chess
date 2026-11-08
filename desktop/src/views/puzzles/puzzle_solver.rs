@@ -22,8 +22,7 @@ use crate::{
 /// How long the opponent seems to think before its scripted answer, so the move is seen.
 pub const ANSWER_DELAY: Duration = Duration::from_millis(400);
 
-/// One puzzle on the shared board, for Practice and Puzzle Rush alike: the player's moves are
-/// judged, the opponent answers, and every verdict goes to whichever mode is listening.
+/// One puzzle on the shared board for Practice and Rush: moves are judged and the opponent answers.
 pub struct PuzzleSolver {
     run: Option<PuzzleRun>,
     /// The player's last move, for the status line.
@@ -98,8 +97,7 @@ impl PuzzleSolver {
         self.run.as_ref()
     }
 
-    /// Milliseconds from the puzzle appearing to now, or to its solving, for the attempt the
-    /// server keeps.
+    /// Milliseconds from the puzzle appearing to now, or to its solving, for the server's attempt.
     pub fn elapsed_ms(&self) -> i32 {
         let until = self.solved_at.unwrap_or_else(Instant::now);
         self.loaded_at.map_or(0, |loaded| {
@@ -119,8 +117,7 @@ impl PuzzleSolver {
         &self.board
     }
 
-    /// The player's move: a wrong one is refused with its sound; a right one is played and
-    /// the opponent answers a moment later.
+    /// The player's move: a wrong one is refused with a sound; a right one is played and answered.
     fn play(&mut self, mv: Move, cx: &mut Context<Self>) {
         let Some(run) = self.run.as_mut() else {
             return;
@@ -158,8 +155,7 @@ impl PuzzleSolver {
         }));
     }
 
-    /// The opponent's answer; then the player's premove, if they queued one, is played and
-    /// judged like any move.
+    /// The opponent's answer; then the player's queued premove, if any, is played and judged.
     fn play_answer(&mut self, cx: &mut Context<Self>) {
         let Some(run) = self.run.as_mut() else {
             return;
@@ -185,8 +181,7 @@ impl PuzzleSolver {
         }
     }
 
-    /// The puzzle's position, taking only the player's own pieces: moved on their turn, or
-    /// premoved while the opponent's answer is on its way.
+    /// The puzzle's position, taking only the player's pieces: moved on their turn or premoved.
     fn shown_position(&self) -> ShownPosition {
         match &self.run {
             Some(run) => ShownPosition {

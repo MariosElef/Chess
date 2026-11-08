@@ -6,8 +6,7 @@ use crate::models::puzzles::{
     rating::PuzzleStrength,
 };
 
-/// Stores the batch in one statement; a puzzle already stored is updated, so importing a newer
-/// file refreshes ratings instead of duplicating rows. Returns how many rows were written.
+/// Stores the batch, updating puzzles already stored; returns how many rows were written.
 pub async fn upsert_batch(
     db: impl PgExecutor<'_>,
     puzzles: &[NewPuzzle],
@@ -52,8 +51,7 @@ pub async fn upsert_batch(
     Ok(result.rows_affected())
 }
 
-/// The first puzzle rated `min..=max` at or after the point (`from_rating`, `from_id`), in
-/// rating then id order, that `user_id` has not attempted.
+/// The first puzzle rated `min..=max` from (`from_rating`, `from_id`) that `user_id` has not tried.
 pub async fn first_from(
     db: impl PgExecutor<'_>,
     (min, max): (i32, i32),

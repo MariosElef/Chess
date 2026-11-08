@@ -79,10 +79,7 @@ mod tests {
     #[test]
     fn stalemate_is_a_draw() {
         let position: Position = "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1".parse().expect("valid");
-        assert_eq!(
-            status_text(&Game::from_position(position)),
-            "Stalemate"
-        );
+        assert_eq!(status_text(&Game::from_position(position)), "Stalemate");
     }
 
     #[test]

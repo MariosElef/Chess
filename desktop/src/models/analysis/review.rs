@@ -34,10 +34,8 @@ pub struct GameReview {
     pub moves: Vec<MoveReview>,
     /// White's, then Black's, from 0 to 100.
     pub accuracy: [f64; 2],
-    /// The rating each side played like, White's then Black's; `None` with too few moves of
-    /// their own to go on.
+    /// The rating each side played like, White's then Black's; `None` with too few moves.
     pub ratings: [Option<u32>; 2],
-    /// White's share of the evaluation at every position, from the start to the end, from 0
-    /// to 1: the review's graph.
+    /// White's share of the evaluation at every position, from 0 to 1: the review's graph.
     pub shares: Vec<f64>,
 }

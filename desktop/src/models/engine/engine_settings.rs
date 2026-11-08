@@ -27,8 +27,7 @@ impl EngineSettings {
         }
     }
 
-    /// Settings saved as `threads=4 hash=256 depth=24` (or `depth=infinite`); anything missing
-    /// or unreadable keeps the device default, and threads never exceed the device's cores.
+    /// Settings saved as `threads=4 hash=256 depth=24`; anything unreadable keeps the default.
     pub fn from_text(text: &str, cores: usize) -> Self {
         let mut settings = Self::for_cores(cores);
         for (key, value) in text

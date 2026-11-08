@@ -1,18 +1,17 @@
 use std::future::Future;
 
 use gpui_kit::{
+    assets::IconName,
     component::{
-        ActiveTheme as _, Sizable as _,
+        ActiveTheme as _, Icon, Sizable as _,
         button::{Button, ButtonVariants},
-        h_flex,
-        input::{Input, InputState},
-        v_flex,
+        h_flex, v_flex,
     },
     prelude::FluentBuilder as _,
     *,
 };
 
-use super::chat_view::ChatView;
+use super::{chat_view::ChatView, new_group_form::NewGroupForm};
 use crate::{
     clients::server::ServerClient,
     components::social::PersonRow,
@@ -30,8 +29,7 @@ use crate::{
     },
 };
 
-/// The player's conversations, a new group, and the one open: one to one with a friend or in a
-/// group. The list follows the live connection: new messages, groups and members.
+/// The player's conversations, a new group, and the one open, with a friend or in a group.
 pub struct ChatsView {
     client: ServerClient,
     session: SessionSource,
@@ -41,10 +39,8 @@ pub struct ChatsView {
     /// The player's friends, to message, put in groups and add to them.
     friends: Vec<Friend>,
     open: Option<(Conversation, Entity<ChatView>)>,
-    /// The new-group form: open or not, its name, and the friends ticked.
-    making_group: bool,
-    group_name: Entity<InputState>,
-    group_members: Vec<String>,
+    /// The Messages page is on screen, so the open chat is being read.
+    shown: bool,
     problem: Option<String>,
 }
 
@@ -52,13 +48,11 @@ impl ChatsView {
     pub fn new(
         client: ServerClient,
         (session, connection): (SessionSource, Entity<LiveConnection>),
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let _live = cx.subscribe(&connection, |view, _, event: &LiveEvent, cx| {
             view.on_event(event, cx);
         });
-        let group_name = cx.new(|cx| InputState::new(window, cx).placeholder("Group name"));
         Self {
             client,
             session,
@@ -67,24 +61,58 @@ impl ChatsView {
             conversations: Vec::new(),
             friends: Vec::new(),
             open: None,
-            making_group: false,
-            group_name,
-            group_members: Vec::new(),
+            shown: false,
             problem: None,
         }
     }
 
-    /// Messages the player has not read, in the conversations not open.
-    pub fn unread(&self) -> usize {
-        let open = self
-            .open
+    /// The chat being read: open, on the Messages page while it is on screen.
+    fn reading_chat(&self) -> Option<&str> {
+        self.open
             .as_ref()
-            .map(|(conversation, _)| conversation.id.as_str());
+            .filter(|_| self.shown)
+            .map(|(conversation, _)| conversation.id.as_str())
+    }
+
+    /// Messages the player has not read: in every chat but the one on screen.
+    pub fn unread(&self) -> usize {
+        let open = self.reading_chat();
         self.conversations
             .iter()
             .filter(|conversation| Some(conversation.id.as_str()) != open)
             .map(|conversation| usize::try_from(conversation.unread).unwrap_or(usize::MAX))
             .sum()
+    }
+
+    /// The Messages page came on or off screen: the open chat reads new messages, or stops.
+    pub fn set_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        self.shown = shown;
+        if let Some((conversation, chat)) = self.open.as_ref() {
+            chat.update(cx, |chat, cx| chat.set_reading(shown, cx));
+            if shown {
+                let id = conversation.id.clone();
+                self.clear_unread(&id);
+            }
+        }
+        cx.notify();
+    }
+
+    /// The open chat, while on screen, is read: a stale list does not bring back its count.
+    fn clear_read_chat(&mut self) {
+        if let Some(id) = self.reading_chat().map(str::to_owned) {
+            self.clear_unread(&id);
+        }
+    }
+
+    /// The chat's messages count as read here at once, before the server's list says so.
+    fn clear_unread(&mut self, conversation_id: &str) {
+        if let Some(listed) = self
+            .conversations
+            .iter_mut()
+            .find(|listed| listed.id == conversation_id)
+        {
+            listed.unread = 0;
+        }
     }
 
     pub fn set_friends(&mut self, friends: Vec<Friend>, cx: &mut Context<Self>) {
@@ -107,7 +135,10 @@ impl ChatsView {
             // The view outlives the request unless the window is closing.
             let _ = view.update(cx, |view, cx| {
                 match result {
-                    Ok(conversations) => view.conversations = conversations,
+                    Ok(conversations) => {
+                        view.conversations = conversations;
+                        view.clear_read_chat();
+                    }
                     Err(error) => view.problem = Some(error_message(&error)),
                 }
                 cx.notify();
@@ -147,7 +178,7 @@ impl ChatsView {
         .detach();
     }
 
-    /// Shows the conversation; its messages count as read from now.
+    /// Shows the conversation; its messages count as read while the Messages page is on screen.
     fn open(&mut self, conversation: Conversation, window: &mut Window, cx: &mut Context<Self>) {
         let chat = cx.new(|cx| {
             ChatView::new(
@@ -157,15 +188,10 @@ impl ChatsView {
                 cx,
             )
         });
-        if let Some(listed) = self
-            .conversations
-            .iter_mut()
-            .find(|listed| listed.id == conversation.id)
-        {
-            listed.unread = 0;
-        }
+        chat.update(cx, |chat, cx| chat.set_reading(self.shown, cx));
         self.problem = None;
         self.open = Some((conversation, chat));
+        self.clear_read_chat();
         cx.notify();
     }
 
@@ -177,9 +203,9 @@ impl ChatsView {
                 ServerMessage::ConversationsChanged => self.refresh(cx),
                 ServerMessage::ChatMessage { message } => {
                     let me = (self.session)(cx).map(|session| session.user.id);
-                    let open = self.open.as_ref().map(|(open, _)| open.id.clone());
                     let from_another = me.as_deref() != Some(message.sender.id.as_str());
-                    if from_another && open.as_deref() != Some(message.conversation_id.as_str()) {
+                    if from_another && self.reading_chat() != Some(message.conversation_id.as_str())
+                    {
                         play_sound(Sound::Notify, cx);
                     }
                     self.refresh(cx);
@@ -198,17 +224,33 @@ impl ChatsView {
         }
     }
 
-    fn create_group(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Makes the group the New group modal asked for, and opens it once made.
+    fn create_group(
+        &mut self,
+        (name, members): (String, Vec<String>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(token) = self.token(cx) else {
             return;
         };
-        let name = self.group_name.read(cx).value().trim().to_owned();
-        let request = self.client.create_group(&token, &name, &self.group_members);
-        self.making_group = false;
-        self.group_members.clear();
-        self.group_name
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        let request = self.client.create_group(&token, &name, &members);
         self.open_when_ready(request, window, cx);
+    }
+
+    /// Opens the New group modal with the player's friends to pick from.
+    fn open_new_group(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let chats = cx.entity().downgrade();
+        NewGroupForm::open(
+            self.friends.clone(),
+            move |name, members, window, cx| {
+                let _ = chats.update(cx, |chats, cx| {
+                    chats.create_group((name, members), window, cx)
+                });
+            },
+            window,
+            cx,
+        );
     }
 
     /// Adds a friend to the open group, or leaves it.
@@ -268,64 +310,6 @@ impl ChatsView {
             .child(row)
     }
 
-    fn group_form(&self, cx: &mut Context<Self>) -> Div {
-        let toggles: Vec<Button> = self
-            .friends
-            .iter()
-            .map(|friend| {
-                let id = friend.id.clone();
-                let ticked = self.group_members.contains(&id);
-                let button = Button::new(SharedString::from(format!("group-pick-{id}")))
-                    .small()
-                    .label(friend.username.clone())
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        if view.group_members.contains(&id) {
-                            view.group_members.retain(|member| *member != id);
-                        } else {
-                            view.group_members.push(id.clone());
-                        }
-                        cx.notify();
-                    }));
-                if ticked {
-                    button.primary()
-                } else {
-                    button.outline()
-                }
-            })
-            .collect();
-        v_flex()
-            .gap_2()
-            .p_3()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().muted)
-            .child(Input::new(&self.group_name))
-            .child(div().text_xs().child("Friends in the group"))
-            .child(h_flex().flex_wrap().gap_2().children(toggles))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Button::new("create-group")
-                            .primary()
-                            .small()
-                            .label("Create group")
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.create_group(window, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("cancel-group")
-                            .ghost()
-                            .small()
-                            .label("Cancel")
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.making_group = false;
-                                cx.notify();
-                            })),
-                    ),
-            )
-    }
-
     /// For an open group: a button for each friend not in it yet, and Leave.
     fn group_actions(&self, conversation: &Conversation, cx: &mut Context<Self>) -> Div {
         let missing: Vec<Button> = self
@@ -375,71 +359,100 @@ impl ChatsView {
 
 impl Render for ChatsView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .size_full()
+            .items_start()
+            .gap_5()
+            .child(self.chat_list(cx))
+            .child(self.open_chat(cx))
+    }
+}
+
+impl ChatsView {
+    /// The left column: the chats, newest first, with New group over them.
+    fn chat_list(&self, cx: &mut Context<Self>) -> Div {
         let rows: Vec<Stateful<Div>> = self
             .conversations
             .iter()
             .map(|conversation| self.conversation_row(conversation, cx))
             .collect();
-        let open = self.open.clone();
+        let theme = cx.theme();
+        let (muted, danger) = (theme.muted_foreground, theme.danger);
         v_flex()
-            .w(px(420.))
+            .w(px(360.))
             .h_full()
+            .flex_shrink_0()
             .gap_3()
+            .p_3()
+            .rounded(px(8.))
+            .bg(theme.muted)
             .child(
                 h_flex()
                     .justify_between()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Chats"),
-                    )
+                    .child(div().font_weight(FontWeight::BOLD).child("Chats"))
                     .child(
                         Button::new("new-group")
                             .outline()
                             .small()
+                            .icon(IconName::Plus)
                             .label("New group")
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.making_group = !view.making_group;
-                                cx.notify();
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.open_new_group(window, cx);
                             })),
                     ),
             )
             .when_some(self.problem.clone(), |this, problem| {
-                this.child(div().text_xs().text_color(cx.theme().danger).child(problem))
+                this.child(div().text_xs().text_color(danger).child(problem))
             })
-            .when(self.making_group, |this| this.child(self.group_form(cx)))
             .when(rows.is_empty(), |this| {
                 this.child(
                     div()
                         .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("No chats yet: message a friend to start one."),
+                        .text_color(muted)
+                        .child("No chats yet: message a friend from Social to start one."),
                 )
             })
             .child(
                 div()
                     .id("conversation-list")
-                    .max_h(px(220.))
+                    .flex_1()
+                    .min_h_0()
                     .overflow_y_scroll()
                     .child(v_flex().gap_1().children(rows)),
             )
-            .when_some(open, |this, (conversation, chat)| {
-                this.child(
-                    v_flex()
-                        .flex_1()
-                        .min_h(px(280.))
-                        .gap_2()
-                        .p_3()
-                        .rounded(cx.theme().radius)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .when(conversation.kind == ConversationKind::Group, |this| {
-                            this.child(self.group_actions(&conversation, cx))
-                        })
-                        .child(div().flex_1().min_h_0().child(chat)),
-                )
-            })
+    }
+
+    /// The right of the page: the chat open, or a word to pick one.
+    fn open_chat(&self, cx: &mut Context<Self>) -> Div {
+        let theme = cx.theme();
+        let card = v_flex()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .gap_2()
+            .p_4()
+            .rounded(px(8.))
+            .bg(theme.muted);
+        let Some((conversation, chat)) = self.open.clone() else {
+            return card.items_center().justify_center().child(
+                v_flex()
+                    .items_center()
+                    .gap_2()
+                    .text_color(theme.muted_foreground)
+                    .child(Icon::from(IconName::Mail).size_10())
+                    .child("Pick a chat to read it"),
+            );
+        };
+        card.child(
+            div()
+                .text_lg()
+                .font_weight(FontWeight::BOLD)
+                .child(conversation.title.clone()),
+        )
+        .when(conversation.kind == ConversationKind::Group, |this| {
+            this.child(self.group_actions(&conversation, cx))
+        })
+        .child(div().flex_1().min_h_0().child(chat))
     }
 }
 
@@ -512,8 +525,7 @@ mod tests {
         })
     }
 
-    /// Ann chats with Bob and is in a group with two unread messages; once she connects, Bob
-    /// writes to her and the group gets a message too.
+    /// Ann chats with Bob and is in a group with two unread; once she connects, both get a message.
     fn server(asked: Asked) -> ServerClient {
         let (sent, read) = (Arc::clone(&asked), Arc::clone(&asked));
         ServerClient::serving(
@@ -600,9 +612,8 @@ mod tests {
         let live =
             cx.update(|cx| cx.new(|_| LiveConnection::new(client.clone(), Rc::clone(&session))));
         let connection = live.clone();
-        let (view, cx) = cx.add_window_view(|window, cx| {
-            ChatsView::new(client, (session, connection), window, cx)
-        });
+        let (view, cx) =
+            cx.add_window_view(|_, cx| ChatsView::new(client, (session, connection), cx));
         (view, live, asked, cx)
     }
 
@@ -625,7 +636,10 @@ mod tests {
     #[gpui_kit::test]
     fn a_friend_is_messaged_and_their_answer_arrives_live(cx: &mut TestAppContext) {
         let (view, live, asked, cx) = chats(cx);
-        view.update(cx, |view, cx| view.refresh(cx));
+        view.update(cx, |view, cx| {
+            view.set_shown(true, cx);
+            view.refresh(cx);
+        });
         wait_until(cx, |cx| {
             view.read_with(cx, |view, _| view.conversations.len() == 2)
         });
@@ -663,6 +677,33 @@ mod tests {
         assert_eq!(
             notified, 1,
             "only the group's message rings: the open chat is read"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn an_open_chat_counts_as_unread_while_messages_is_off_screen(cx: &mut TestAppContext) {
+        let (view, _, _, cx) = chats(cx);
+        view.update(cx, |view, cx| view.refresh(cx));
+        wait_until(cx, |cx| {
+            view.read_with(cx, |view, _| view.conversations.len() == 2)
+        });
+        view.update_in(cx, |view, window, cx| {
+            let group = view
+                .conversations
+                .iter()
+                .find(|conversation| conversation.id == "g1")
+                .cloned()
+                .expect("the group");
+            view.open(group, window, cx);
+        });
+        // The server still counts the group's two: the player went to another page.
+        view.update(cx, |view, cx| view.refresh(cx));
+        wait_until(cx, |cx| view.read_with(cx, |view, _| view.unread() == 2));
+        view.update(cx, |view, cx| view.set_shown(true, cx));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.unread()),
+            0,
+            "back on Messages, the open chat is read"
         );
     }
 }

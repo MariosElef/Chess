@@ -72,3 +72,11 @@ pub async fn get(
     .fetch_optional(db)
     .await
 }
+
+/// The player has the app open, or just closed it: their friends see them as online then.
+pub async fn mark_online(db: impl PgExecutor<'_>, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query_file!("src/repositories/sql/account/user/mark_online.sql", user_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}

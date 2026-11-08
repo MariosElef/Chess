@@ -13,7 +13,7 @@ pub(crate) use movement::{DIAGONAL, STRAIGHT};
 
 use crate::{Board, Move, Piece, PieceKind, Position, Side, Square};
 
-/// Every move the side to move's pieces can make, before checking whether it leaves their king in check.
+/// Every move of the side to move, before checking whether it leaves their king in check.
 pub(crate) fn pseudo_legal_moves(position: &Position) -> Vec<Move> {
     let mut moves = Vec::new();
     for from in Square::all() {

@@ -5,8 +5,7 @@ use gpui_kit::*;
 /// How often a running game clock is redrawn and checked, on Play and online.
 pub const CLOCK_TICK: Duration = Duration::from_millis(100);
 
-/// Wakes the page every `every` for as long as `tick` says to go on, or until the page is gone:
-/// a running clock's redraws, a review's replay.
+/// Wakes the page every `every` for as long as `tick` says to go on, or until the page is gone.
 pub fn start_ticker<T: 'static>(
     every: Duration,
     cx: &mut Context<T>,

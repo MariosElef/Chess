@@ -11,8 +11,7 @@ use crate::{components::panel::SidePanel, enums::play::PlayMode};
 
 type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
 
-/// The panel beside the board before a game, as chess.com has it: a tab for each way to play
-/// across its top, and that way's choices under them.
+/// The panel beside the board before a game: a tab for each way to play, and its choices under.
 #[derive(IntoElement)]
 pub struct PlayPanel {
     mode: PlayMode,

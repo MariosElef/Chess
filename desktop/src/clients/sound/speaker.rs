@@ -5,8 +5,7 @@ use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
 use super::sound_files::sound_bytes;
 use crate::enums::sound::Sound;
 
-/// The computer's audio output. Separate sounds overlap rather than wait for each other;
-/// `play_in_turn` plays a few one after another.
+/// The computer's audio output; separate sounds overlap rather than wait for each other.
 pub struct Speaker {
     output: MixerDeviceSink,
 }
@@ -26,8 +25,7 @@ impl Speaker {
         }
     }
 
-    /// Starts `sounds` one after another and returns at once, as a mate's check and then the
-    /// game's end.
+    /// Starts `sounds` one after another and returns at once, as a mate's check then the end.
     pub fn play_in_turn(&self, sounds: &[Sound]) {
         let player = Player::connect_new(self.output.mixer());
         for decoded in sounds.iter().filter_map(|&sound| decode(sound)) {

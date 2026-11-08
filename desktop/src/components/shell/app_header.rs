@@ -4,9 +4,7 @@ use gpui_kit::{
     *,
 };
 
-/// The bar across the top: the app's mark on the left, its actions on the right. It shares the
-/// rail's colour, the two making one L around the page. It is the window's title bar too: the
-/// Mac's buttons sit at its left, and dragging it moves the window.
+/// The bar across the top: the app's mark on the left, its actions on the right.
 #[derive(IntoElement)]
 pub struct AppHeader {
     actions: Vec<AnyElement>,

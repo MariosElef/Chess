@@ -1,5 +1,4 @@
-/// What an account form shows after the server refused it: a sentence under each field at
-/// fault, and one for the form as a whole.
+/// What an account form shows after a refusal: a sentence per field at fault, and one overall.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FormProblems {
     pub login: Option<String>,

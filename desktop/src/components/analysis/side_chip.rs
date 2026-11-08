@@ -7,8 +7,7 @@ const LIGHT_INK: u32 = 0x0030_2e2c;
 /// The light chip's edge, so it keeps its shape on a light panel.
 const LIGHT_EDGE: u32 = 0x00c8_c8c8;
 
-/// A number on a chip in a side's colours: white with dark ink, or dark with white ink, as
-/// chess.com shows evaluations, accuracy and ratings.
+/// A number on a chip in a side's colours, as chess.com shows evaluations, accuracy and ratings.
 pub fn side_chip(text: String, side: Side) -> Div {
     let chip = div()
         .rounded(px(4.))

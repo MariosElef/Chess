@@ -75,8 +75,7 @@ impl Eval {
         }
     }
 
-    /// The share of the points `side` can expect from here, from 0 (lost) through 0.5 (even) to
-    /// 1 (won): Lichess's winning-chances curve, with a forced mate as a sure result.
+    /// The share of the points `side` can expect from here, from 0 (lost) to 1 (won).
     pub fn expected_points(self, side: Side) -> f64 {
         let for_white = match self {
             Self::Centipawns(centipawns) => (1.0 + win_chances(centipawns)) / 2.0,

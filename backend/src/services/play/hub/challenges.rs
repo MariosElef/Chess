@@ -35,8 +35,7 @@ impl PendingChallenge {
 }
 
 impl PlayHub {
-    /// Invites a friend who is online and free to a game; the player's earlier challenge, if
-    /// any, is withdrawn. It waits a minute for an answer.
+    /// Invites an online, free friend to a game for a minute, withdrawing any earlier challenge.
     pub(super) async fn challenge(
         &self,
         player: &Player,
@@ -125,8 +124,7 @@ impl PlayHub {
         Ok(opponent)
     }
 
-    /// Starts the game a challenge sent to the player asks for; starting it calls off every
-    /// other challenge either of the two has waiting.
+    /// Starts the challenged game, calling off every other challenge either player has waiting.
     pub(super) async fn accept_challenge(&self, player: &Player, challenge_id: Uuid) {
         let found = lock(&self.inner.challenges)
             .iter()

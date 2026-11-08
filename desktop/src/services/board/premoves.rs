@@ -2,9 +2,7 @@ use chess_domain::{Board, Move, Position, Side, Square};
 
 use crate::enums::board::ClickMode;
 
-/// A click continues whatever is selected; otherwise a piece of the side waiting to move
-/// starts a premove, and anything else is a move. `preview` is the board as the queued
-/// premoves leave it.
+/// A click continues the selection; else the side waiting starts a premove, or it is a move.
 pub fn click_mode(
     preview: &Board,
     waiting: Side,
@@ -39,8 +37,7 @@ impl PremoveQueue {
         (!moves.is_empty()).then(|| moves.remove(0))
     }
 
-    /// The side to move's next premove, taken off the queue if it is legal in `position`;
-    /// if it is not, that side's whole queue is dropped, as chess.com does.
+    /// The side to move's next premove if legal in `position`; if not, its whole queue is dropped.
     pub fn next_playable(&mut self, position: &Position) -> Option<Move> {
         let side = position.side_to_move();
         let mv = self.first(side)?;
@@ -75,8 +72,7 @@ impl PremoveQueue {
             .collect()
     }
 
-    /// `live` with every queued move already made, so the next premove starts from where the
-    /// earlier ones leave the pieces. The side waiting to move goes first.
+    /// `live` with every queued move already made, so the next premove starts from there.
     pub fn preview(&self, live: &Board, side_to_move: Side) -> Board {
         let waiting = side_to_move.opponent();
         self.side(waiting)

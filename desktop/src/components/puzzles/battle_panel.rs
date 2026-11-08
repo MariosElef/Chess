@@ -23,8 +23,7 @@ use crate::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// Beside the board during a battle: the time left and the score, then how it ended with
-/// Play again and the way back.
+/// Beside the board during a battle: the time left and the score, then how it ended.
 #[derive(IntoElement)]
 pub struct BattlePanel {
     left: Duration,

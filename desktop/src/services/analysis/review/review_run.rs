@@ -20,10 +20,7 @@ const BOOK_PLIES: usize = 20;
 /// A sacrifice is only looked for in moves this close to best: no other can be Brilliant.
 const NEARLY_BEST: f64 = 0.02;
 
-/// A review under way: the game's positions, the engine's word on each so far, and those being
-/// searched, several at once by several engines. A finished position needs no search, its result
-/// being its value. The opening table's moves are Book whatever the engine says, but their
-/// positions are searched too: the review's graph shows the game from its first move.
+/// A review under way: the game's positions, the engine's word on each, and those searching.
 #[derive(Debug, Clone)]
 pub struct ReviewRun {
     game: Game,
@@ -43,8 +40,7 @@ impl ReviewRun {
         }
     }
 
-    /// The next position to search: its index in the game, 0 being the start, and its FEN;
-    /// `None` once every position has its value or is being searched.
+    /// The next position to search, by index and FEN; `None` once all are valued or searching.
     pub fn next_position(&mut self) -> Option<(usize, String)> {
         let index = (0..self.evals.len())
             .find(|index| self.evals[*index].is_none() && !self.searching.contains(index))?;

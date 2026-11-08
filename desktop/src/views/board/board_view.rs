@@ -17,9 +17,7 @@ use crate::{
 /// Reads what the board shows from the page that owns it; `None` once that page is gone.
 type ShownSource = Rc<dyn Fn(&App) -> Option<ShownPosition>>;
 
-/// The board every page shares: picking up and dropping pieces, premoves, the promotion
-/// picker, marks and arrows, and which way up it is. The page says what to show and plays
-/// the moves made on it, each its own way.
+/// The board every page shares: moving pieces, premoves, the promotion picker, marks and arrows.
 pub struct BoardView {
     interaction: BoardInteraction,
     /// Moves each side has queued for when its turn comes.
@@ -41,8 +39,7 @@ pub struct BoardView {
     bounds: BoardBounds,
     /// The held piece, following the cursor: only it redraws as the mouse moves.
     drag_layer: Entity<DragLayer>,
-    /// A piece dragged away and back to its own square: the click that the press and release
-    /// make there is not one.
+    /// A piece dragged away and back to its own square: its press and release are not a click.
     skip_click: Option<Square>,
     /// How many times the board was drawn, for tests that it is not redrawn needlessly.
     #[cfg(test)]
@@ -103,8 +100,7 @@ impl BoardView {
         cx.notify();
     }
 
-    /// The side to move's next premove, if it is legal in `position`; an illegal one drops
-    /// that side's whole queue, as chess.com does.
+    /// The side to move's next premove if legal in `position`; an illegal one drops its queue.
     pub fn next_premove(&mut self, position: &Position) -> Option<Move> {
         self.premoves.next_playable(position)
     }
@@ -117,8 +113,7 @@ impl BoardView {
         self.premoves.clear_all();
     }
 
-    /// Puts down a picked-up piece, closes the promotion picker and wipes the drawings,
-    /// keeping the premoves.
+    /// Puts down a held piece, closes the promotion picker and wipes drawings, keeping premoves.
     pub fn put_down(&mut self, cx: &mut Context<Self>) {
         self.interaction.clear();
         self.let_go(cx);
@@ -198,8 +193,7 @@ impl BoardView {
         cx.notify();
     }
 
-    /// A piece dropped on another square that took no move and opened no promotion picker
-    /// went somewhere it cannot go.
+    /// A drop that took no move and opened no promotion picker went somewhere the piece cannot go.
     fn sound_if_refused(
         &self,
         shown: &ShownPosition,
@@ -231,8 +225,7 @@ impl BoardView {
         cx.notify();
     }
 
-    /// A piece that can be moved is pressed: it is held, gliding to the cursor and then
-    /// following it, until the button comes up.
+    /// A movable piece is pressed: it is held, gliding to the cursor and following it till release.
     fn grab(&mut self, square: Square, cursor: Point<Pixels>, cx: &mut Context<Self>) {
         let Some(shown) = (self.shown)(cx) else {
             return;
@@ -249,8 +242,7 @@ impl BoardView {
         cx.notify();
     }
 
-    /// The held piece is let go: dragged onto a square, it is a drop there, as a move or a
-    /// premove; otherwise it goes back, and a press without a drag counts as a click.
+    /// The held piece is let go: dropped on a square it moves or premoves; otherwise it goes back.
     pub(super) fn land(
         &mut self,
         from: Square,
@@ -277,8 +269,7 @@ impl BoardView {
         }
     }
 
-    /// A right-click puts back a held piece; with premoves queued it cancels them all, as on
-    /// chess.com; either way it draws nothing.
+    /// A right-click puts back a held piece and cancels all premoves; it draws nothing.
     fn right_down(&mut self, square: Square, cx: &mut Context<Self>) {
         if self.held.is_some() {
             self.let_go(cx);
@@ -316,8 +307,7 @@ impl BoardView {
         }
     }
 
-    /// A click on the side to move's piece is a move, on the waiting side's a premove; on a
-    /// board that takes no moves or no premoves, nothing is premoved.
+    /// A click on the side to move's piece is a move, on the waiting side's a premove.
     fn click_mode(&self, shown: &ShownPosition, square: Square) -> ClickMode {
         if !premoves_allowed(shown) {
             return ClickMode::Move;
@@ -350,8 +340,7 @@ impl BoardView {
         }
     }
 
-    /// The side to move's pieces can be dragged to move, and with premoves the other side's
-    /// to premove; none on a board that takes no moves.
+    /// The side to move's pieces drag to move, the other side's to premove; none on a still board.
     fn draggable(&self, shown: &ShownPosition) -> Vec<Side> {
         if !self.interaction.accepts_moves(shown.can_move) {
             return Vec::new();
@@ -391,8 +380,7 @@ impl BoardView {
 }
 
 impl BoardView {
-    /// A step of one move forward or back slides the pieces that moved; a jump, a new position,
-    /// or a move the player made here does not.
+    /// A one-move step slides the moved pieces; a jump or the player's own move does not.
     fn follow_shown(&mut self, shown: &ShownPosition, cx: &mut Context<Self>) {
         let now = (shown.position, shown.last_move);
         let Some(before) = self.seen.replace(now) else {

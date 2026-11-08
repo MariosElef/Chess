@@ -18,9 +18,7 @@ use crate::components::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// What to do once a game is over, as chess.com offers it: Game Review, large and green, and
-/// smaller ways on under it, such as Analyze, New game and Rematch. The card over the board
-/// and the panel beside it both show it.
+/// What to do once a game is over: Game Review, large and green, then Analyze, New game, Rematch.
 #[derive(IntoElement, Clone)]
 pub struct GameOverActions {
     /// Ids are prefixed, so the card's and the panel's buttons are told apart.
@@ -38,8 +36,7 @@ impl GameOverActions {
         }
     }
 
-    /// A smaller button under Game Review, its label fixed or made at the time, such as the time
-    /// control "3 | 2".
+    /// A smaller button under Game Review, its label fixed or made at the time, such as "3 | 2".
     pub fn choice(
         mut self,
         label: impl Into<SharedString>,
@@ -91,8 +88,7 @@ impl RenderOnce for GameOverActions {
     }
 }
 
-/// The card over the board when a game ends, as chess.com's: who won and how, then the same
-/// actions as the panel. The cross puts it away to look at the board.
+/// The card over the board when a game ends: who won and how, then the panel's actions.
 #[derive(IntoElement)]
 pub struct GameOverCard {
     title: String,

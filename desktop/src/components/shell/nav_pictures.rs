@@ -4,11 +4,15 @@ use crate::enums::shell::Page;
 pub const PLAY_PICTURE: &str = "nav/play.png";
 /// The Puzzles page's picture: on the rail, its menus and the account's puzzle rating.
 pub const PUZZLES_PICTURE: &str = "nav/puzzles.png";
+/// The Social page's picture: on the rail and over the Friends page.
+pub const SOCIAL_PICTURE: &str = "nav/social.png";
+/// The Messages page's picture: in Social's menu on the rail and over the page.
+pub const MESSAGES_PICTURE: &str = "nav/messages.png";
 /// The Analysis page's picture: on the rail and on its panel's title strip.
 pub const ANALYSIS_PICTURE: &str = "nav/analyse.png";
 
-/// The rail's pictures: each page's asset path and its bytes.
-const PICTURES: [(Page, &str, &[u8]); 4] = [
+/// The pages' pictures, on the rail and in its menus: each page's asset path and its bytes.
+const PICTURES: [(Page, &str, &[u8]); 5] = [
     (
         Page::Play,
         PLAY_PICTURE,
@@ -26,8 +30,13 @@ const PICTURES: [(Page, &str, &[u8]); 4] = [
     ),
     (
         Page::Social,
-        "nav/social.png",
+        SOCIAL_PICTURE,
         include_bytes!("../../../assets/nav/social.png"),
+    ),
+    (
+        Page::Messages,
+        MESSAGES_PICTURE,
+        include_bytes!("../../../assets/nav/messages.png"),
     ),
 ];
 

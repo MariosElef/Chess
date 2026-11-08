@@ -4,8 +4,7 @@ use gpui_kit::{
     *,
 };
 
-/// The panel beside the board on every page: an optional strip across its top, such as tabs,
-/// and its content under it.
+/// The panel beside the board on every page: an optional strip across its top, then its content.
 #[derive(IntoElement, Default)]
 pub struct SidePanel {
     header: Option<AnyElement>,

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE account.users\nSET last_online_at = now()\nWHERE users.id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b4bfb2c76df728b7b7a6061ff6abff3faae27fb52bf1943ebec245db5b1350a"
+}

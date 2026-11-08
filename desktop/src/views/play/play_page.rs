@@ -52,8 +52,7 @@ use crate::{
     },
 };
 
-/// What a premove costs on the clock: a second, as the clock shows it (5:02 becomes 5:01). A
-/// side with less than this cannot play one.
+/// What a premove costs on the clock: one second, as the clock shows it.
 const PREMOVE_COST: Duration = Duration::from_secs(1);
 
 /// The page shows the new-game menu until a game starts.
@@ -200,15 +199,13 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// An online game takes the page; otherwise the online lobby, while that is the mode and
-    /// no local game is going on.
+    /// An online game takes the page; otherwise the online lobby when no local game is on.
     pub fn shows_online(&self, cx: &App) -> bool {
         self.online.read(cx).in_game()
             || (self.mode == PlayMode::Online && self.stage == Stage::Setup)
     }
 
-    /// What the board shows: the position being looked at, taking moves only on the live
-    /// position of a game still going.
+    /// What the board shows: the position looked at, taking moves only on a live game.
     fn shown_position(&self) -> ShownPosition {
         if self.stage == Stage::Setup {
             return ShownPosition::waiting();
@@ -234,8 +231,7 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// Leaves the menu with a fresh game and, for a timed game, a ticking clock; against a bot,
-    /// once its engine has started.
+    /// Leaves the menu with a fresh game and, for a timed game, a ticking clock.
     fn start_game(&mut self, cx: &mut Context<Self>) {
         if self.mode == PlayMode::Bots {
             // A bot that will not start sends the player back to the bot menu, with why.
@@ -271,8 +267,7 @@ impl PlayPage {
             .unwrap_or_else(|| custom_bot(self.custom_rating))
     }
 
-    /// Starts the picked bot on its own Stockfish, the board turned to the player's side;
-    /// whether it started.
+    /// Starts the picked bot on its own Stockfish, the board turned to the player; whether it did.
     fn start_bot(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(path) = locate_stockfish() else {
             self.bot_problem =
@@ -337,8 +332,7 @@ impl PlayPage {
         }
     }
 
-    /// Plays a move picked from the legal ones; the mover's clock is charged, and the
-    /// opponent's starts unless the move ended the game. Then any premoves that are due play.
+    /// Plays a legal move, charges the mover's clock and starts the opponent's, then due premoves.
     fn play(&mut self, mv: Move, cx: &mut Context<Self>) {
         let mover = self.side_to_move();
         self.charge_clock(mover, Clock::finish_turn);
@@ -364,9 +358,7 @@ impl PlayPage {
         self.turn_started = (!is_over).then(Instant::now);
     }
 
-    /// Plays the side to move's queued premoves while each is legal, then the other side's,
-    /// and so on; the first one that is not drops the rest of that side's queue, and a game
-    /// that ends drops them all.
+    /// Plays each side's queued premoves while legal; one that is not drops that side's queue.
     fn run_premoves(&mut self, cx: &mut Context<Self>) {
         loop {
             let side = self.side_to_move();
@@ -413,8 +405,7 @@ impl PlayPage {
         self.turn_started = None;
     }
 
-    /// Redraws the clocks and ends the game when the side to move's time runs out.
-    /// Returns whether the ticker should keep going.
+    /// Redraws the clocks and ends the game when time runs out; whether to keep ticking.
     fn tick(&mut self, cx: &mut Context<Self>) -> bool {
         if self.history.game().is_over() {
             return false;
@@ -517,8 +508,7 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// Hands the game to the shell, which opens it on the analysis board; with `review`, it is
-    /// reviewed there at once.
+    /// Hands the game to the shell for the analysis board; with `review`, reviewed at once.
     fn analyze(&mut self, review: bool, cx: &mut Context<Self>) {
         cx.emit(AnalyzeGame {
             game: self.history.game().clone(),
@@ -589,8 +579,7 @@ impl PlayPage {
             .update(cx, |board, cx| board.face(Side::White, cx));
     }
 
-    /// Puts down a picked-up piece, closes the promotion picker, wipes the drawings and drops
-    /// the premoves.
+    /// Puts down a held piece, closes the promotion picker, wipes drawings and drops premoves.
     fn end_interaction(&mut self, cx: &mut Context<Self>) {
         self.board.update(cx, |board, cx| board.reset(cx));
         cx.notify();
@@ -611,8 +600,7 @@ impl PlayPage {
             })
     }
 
-    /// While the game is on: Accept/Decline for an offer, or Draw/Resign. Once it is over, the
-    /// panel offers Game Review instead. Flip is beside the board.
+    /// While on: Accept/Decline for an offer, or Draw/Resign; once over, Game Review.
     fn actions(&self, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let game = self.history.game();
         let mut buttons = Vec::new();
@@ -730,8 +718,7 @@ impl PlayPage {
         board_page(self.waiting_column(), panel)
     }
 
-    /// Before the game: the opponent above the board, the player below, each with the clock
-    /// they will start on.
+    /// Before the game: the opponent above the board, the player below, each with their clock.
     fn waiting_column(&self) -> BoardColumn {
         let clock = self.setup_choice.map(|control| control.initial);
         let (top, bottom) = if self.mode == PlayMode::Bots {

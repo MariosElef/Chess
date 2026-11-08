@@ -17,8 +17,7 @@ impl RushService {
         Self { db }
     }
 
-    /// Stores the rush and says whether it beat the player's best of its kind. A guest's is
-    /// not kept: its score is only its own best.
+    /// Stores the rush and says whether it beat the player's best of its kind; not for a guest.
     pub async fn record(
         &self,
         user_id: Uuid,

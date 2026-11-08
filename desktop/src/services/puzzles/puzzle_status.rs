@@ -4,8 +4,7 @@ use crate::{
     services::board::side_name,
 };
 
-/// What the panel says about the puzzle, given the player's last move: whose move it is, how
-/// the last one went, or that it is solved. Good news comes back `true`.
+/// What the panel says about the puzzle after the player's move; good news comes back `true`.
 pub fn status_line(run: &PuzzleRun, last: Option<PuzzleVerdict>) -> (String, bool) {
     let solver = side_name(run.solver());
     match (run.state(), last) {

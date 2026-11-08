@@ -8,8 +8,7 @@ use crate::{
     services::rating::{from_row, to_row, whole},
 };
 
-/// Moves both players' ratings in the game's category after a rated game, each against the
-/// other's rating from before it, and records the game in their rating history.
+/// Moves both players' ratings after a rated game and records it in their rating history.
 pub async fn rate_game(
     db: &Db,
     game_id: Uuid,
@@ -20,9 +19,7 @@ pub async fn rate_game(
     rate_pair(db, RatingSource::Game(game_id), players, category, winner).await
 }
 
-/// Moves two players' ratings in `category` after a contest between them, each against the
-/// other's rating from before it; `winner` names a side, white being the first player. Each
-/// player comes with their rating when the contest began.
+/// Moves two players' ratings in `category` after a contest, each against the other's from before.
 pub async fn rate_pair(
     db: &Db,
     source: RatingSource,

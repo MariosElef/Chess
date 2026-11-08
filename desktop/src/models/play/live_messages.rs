@@ -124,8 +124,7 @@ pub enum ServerMessage {
     },
 }
 
-/// What happens on the live socket, for the page: the connection coming and going, and the
-/// server's messages.
+/// What happens on the live socket: the connection coming and going, and server messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LiveEvent {
     Connected,

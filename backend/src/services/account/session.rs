@@ -31,8 +31,7 @@ impl SessionService {
         Self { db, play }
     }
 
-    /// A new session for the account whose email or username and password match. Which of
-    /// the two was wrong is never said.
+    /// A new session for the matching email or username and password; never says which was wrong.
     pub async fn sign_in(
         &self,
         body: CreateSessionModel,
@@ -62,11 +61,7 @@ impl SessionService {
         Ok(response)
     }
 
-    /// A session for the lowest guest nobody is using, Guest before Guest2 and so on; with all
-    /// ten in use, the player is asked to sign up. A guest left signed in on a closed app is
-    /// free again, and its old sessions end, so that app signs in afresh next time. Choosing
-    /// the guest and starting its session is one transaction, so two sign-ins at once never
-    /// share a guest.
+    /// A session for the lowest free guest; with all ten in use, the player is asked to sign up.
     pub async fn sign_in_as_guest(
         &self,
         user_agent: Option<String>,

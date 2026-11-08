@@ -22,8 +22,7 @@ pub const RUSH_PICTURE: &str = BULLET_PICTURE;
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 type OnPick = Rc<dyn Fn(RushKind, &mut Window, &mut App)>;
 
-/// Puzzle Rush's panel, as chess.com's: the best today and the top score of the kind picked,
-/// a tile for each kind, and Play.
+/// Puzzle Rush's panel: today's best and the top score of the kind picked, its tiles, and Play.
 #[derive(IntoElement)]
 pub struct RushMenu {
     picked: RushKind,

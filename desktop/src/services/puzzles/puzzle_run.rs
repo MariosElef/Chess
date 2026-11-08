@@ -5,8 +5,7 @@ use crate::{
     models::puzzles::Puzzle,
 };
 
-/// One attempt at a puzzle: where the board is, how far into the solution the player got, and
-/// whether a wrong move was tried on the way.
+/// One attempt at a puzzle: the board, progress through the solution, and any wrong move tried.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PuzzleRun {
     puzzle: Puzzle,
@@ -56,8 +55,7 @@ impl PuzzleRun {
         self.mistakes
     }
 
-    /// The player's move: the solution's move, or any checkmate, is played; anything else
-    /// leaves the board as it was.
+    /// The player's move: the solution's move, or any checkmate, is played; else nothing changes.
     pub fn play(&mut self, mv: Move) -> PuzzleVerdict {
         let expected = self.puzzle.solution.get(self.next).copied();
         let after = self

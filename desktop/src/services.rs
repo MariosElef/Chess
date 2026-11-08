@@ -7,4 +7,5 @@ pub mod history;
 pub mod play;
 pub mod puzzles;
 pub mod server;
+pub mod social;
 pub mod sound;

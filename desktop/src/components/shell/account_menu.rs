@@ -12,7 +12,11 @@ use gpui_kit::{
     *,
 };
 
-use crate::enums::{account::AccountForm, shell::Page};
+use super::page_icons::page_icon;
+use crate::{
+    components::social::avatar,
+    enums::{account::AccountForm, shell::Page},
+};
 
 type OnPage = Rc<dyn Fn(Page, &mut Window, &mut App)>;
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -26,8 +30,7 @@ pub struct MenuPerson {
     pub guest: bool,
 }
 
-/// The avatar at the right of the header and the panel it opens: who is signed in, Account and
-/// Settings, and Sign out; a guest gets Create account and Sign in instead.
+/// The header avatar and its menu: who is signed in, Account, Settings and Sign out.
 #[derive(IntoElement)]
 pub struct AccountMenu {
     person: MenuPerson,
@@ -54,12 +57,11 @@ impl AccountMenu {
 
 impl RenderOnce for AccountMenu {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let initial = initial_of(&self.person.name);
         let trigger = Button::new("account-menu")
             .ghost()
             .rounded(ButtonRounded::Size(px(16.)))
             .p_0()
-            .child(avatar(&initial, px(32.), cx));
+            .child(avatar(&self.person.name, px(32.), cx));
         let Self {
             person,
             on_page,
@@ -126,7 +128,7 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
     h_flex()
         .gap_3()
         .p_3()
-        .child(avatar(&initial_of(&person.name), px(48.), cx))
+        .child(avatar(&person.name, px(48.), cx))
         .child(
             v_flex()
                 .min_w_0()
@@ -144,23 +146,6 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
                         .child(detail),
                 ),
         )
-}
-
-/// A circle with the person's initial, tinted with the theme's primary colour.
-fn avatar(initial: &str, size: Pixels, cx: &App) -> Div {
-    let primary = cx.theme().primary;
-    div()
-        .size(size)
-        .flex_shrink_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_full()
-        .bg(primary.opacity(0.15))
-        .text_color(primary)
-        .text_size(size * 0.45)
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(initial.to_owned())
 }
 
 fn item(label: &'static str, icon: IconName) -> Button {
@@ -183,24 +168,4 @@ fn closer(cx: &mut Context<PopoverState>) -> OnClick {
         // Gone already only if the window is closing.
         let _ = panel.update(cx, |panel, cx| panel.dismiss(window, cx));
     })
-}
-
-/// The first letter of the name, capital.
-fn initial_of(name: &str) -> String {
-    name.trim()
-        .chars()
-        .next()
-        .map(|first| first.to_uppercase().collect())
-        .unwrap_or_default()
-}
-
-fn page_icon(page: Page) -> IconName {
-    match page {
-        Page::Play => IconName::ChessKnight,
-        Page::Puzzles => IconName::Puzzle,
-        Page::Analyze => IconName::Microscope,
-        Page::Social => IconName::Users,
-        Page::Settings => IconName::Settings,
-        Page::Account => IconName::CircleUser,
-    }
 }

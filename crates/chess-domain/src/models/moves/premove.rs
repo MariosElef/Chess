@@ -10,8 +10,7 @@ use crate::{
 const CASTLE_FILES: [u8; 2] = [2, 6];
 
 impl Board {
-    /// Every square the piece on `from` could reach by its own way of moving, ignoring every
-    /// other piece: a slider's full rays, a pawn's pushes and both captures, the king's castles.
+    /// Every square the piece on `from` could reach by its own moves, ignoring other pieces.
     pub fn premove_targets(&self, from: Square) -> Vec<Square> {
         let Some(piece) = self.piece_at(from) else {
             return Vec::new();
@@ -28,9 +27,7 @@ impl Board {
         targets
     }
 
-    /// The pieces as they will stand if `mv` happens, with no check that it may: the piece
-    /// moves (or promotes), whatever stood on the target is gone, and a king going two files
-    /// takes its rook along.
+    /// The pieces as they will stand if `mv` happens, with no check that it may.
     pub fn after_premove(&self, mv: Move) -> Self {
         let mut after = *self;
         let Some(piece) = self.piece_at(mv.from) else {

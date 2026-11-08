@@ -17,8 +17,7 @@ use crate::components::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// Practice's panel beside the board, as chess.com's: whose move and how it is going on a
-/// card, the player's rating, the difficulty, the puzzle's rating and time, and Next.
+/// Practice's panel: a status card, the player's rating, the difficulty, the puzzle, and Next.
 #[derive(IntoElement)]
 pub struct PuzzlePanel {
     status: String,

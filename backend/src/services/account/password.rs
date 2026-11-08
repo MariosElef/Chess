@@ -13,8 +13,7 @@ pub async fn hash(password: String) -> anyhow::Result<String> {
     task::spawn_blocking(move || hash_now(&password)).await?
 }
 
-/// Whether `password` matches `hash`. With no account to check, a stand-in hash is checked so
-/// an unknown name takes as long as a wrong password and the two cannot be told apart.
+/// Whether `password` matches `hash`, taking as long for an unknown name as a wrong password.
 pub async fn verify(password: String, hash: Option<String>) -> anyhow::Result<bool> {
     task::spawn_blocking(move || {
         let matches = verify_now(&password, hash.as_deref().unwrap_or(stand_in_hash()?))?;

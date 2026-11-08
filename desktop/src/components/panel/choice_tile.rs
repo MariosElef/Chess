@@ -11,9 +11,7 @@ use super::start_button::START_GREEN;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// One of several choices, as chess.com draws them: a solid tile with an icon and a label,
-/// ringed in the start button's green once picked. It is as wide as its place and never taller
-/// than its height; a row of them gives each an equal share.
+/// One of several choices: a tile with an icon and a label, ringed in green once picked.
 #[derive(IntoElement)]
 pub struct ChoiceTile {
     id: SharedString,

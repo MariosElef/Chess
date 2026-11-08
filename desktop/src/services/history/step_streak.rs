@@ -2,14 +2,12 @@ use std::time::{Duration, Instant};
 
 use crate::enums::history::StepPace;
 
-/// Steps further apart than this are separate presses; closer, a key or button being held. A
-/// held key repeats every tenth of a second or so, quicker than anyone taps.
+/// Steps further apart than this are separate presses; closer, a key or button being held.
 const HELD_GAP: Duration = Duration::from_millis(150);
 /// Held this long, the walk goes fast.
 const FAST_AFTER: Duration = Duration::from_secs(2);
 
-/// Steps that keep coming close together, as from a held key or button: when the run began
-/// and when it last stepped.
+/// Steps that keep coming close together, as from a held key: when the run began and last stepped.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StepStreak {
     began: Option<Instant>,

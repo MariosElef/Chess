@@ -4,8 +4,7 @@ use gpui_kit::{
     *,
 };
 
-/// Turns the page's board round: the small icon beside the board's top-right corner, on Play,
-/// online games and Analysis.
+/// Turns the page's board round: the small icon beside the board's top-right corner.
 pub fn flip_button<T: 'static>(
     id: &'static str,
     cx: &mut Context<T>,

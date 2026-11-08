@@ -30,8 +30,7 @@ const LADDER_STEP: i32 = 40;
 /// Puzzle ids are Lichess's: five letters and digits.
 const ID_ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-/// Puzzles to solve: from the imported Lichess database, or straight from Lichess before the
-/// database has been imported.
+/// Puzzles to solve, from the imported Lichess database or straight from Lichess before that.
 #[derive(Clone)]
 pub struct PuzzleService {
     db: Db,
@@ -63,8 +62,7 @@ impl PuzzleService {
         Ok(response)
     }
 
-    /// The first puzzle after a random point in the range; past the range's last puzzle, the
-    /// range's first.
+    /// The first puzzle after a random point in the range, wrapping round to the range's first.
     async fn random_in_range(
         &self,
         min: i32,
@@ -79,8 +77,7 @@ impl PuzzleService {
         Ok(puzzle::first_from(&self.db, range, (min, ""), user_id).await?)
     }
 
-    /// The puzzle rating and best rushes, ever and today, for the Puzzles menu; a guest keeps
-    /// none of them.
+    /// The puzzle rating and best rushes, ever and today, for the Puzzles menu; none for a guest.
     pub async fn summary(
         &self,
         user_id: Uuid,
@@ -197,8 +194,7 @@ fn opened(row: PuzzleRow) -> Result<GetPuzzleModel, AppError> {
     Ok(response)
 }
 
-/// A battle's puzzles, the same for both players: from easy, a little harder each one, so no
-/// one ever runs out in three minutes. Needs the imported database.
+/// A battle's puzzles, the same for both players, each a little harder than the last.
 pub async fn battle_ladder(db: &Db) -> Result<Vec<GetPuzzleModel>, AppError> {
     let mut ladder = Vec::with_capacity(LADDER_LENGTH);
     for step in 0..LADDER_LENGTH {

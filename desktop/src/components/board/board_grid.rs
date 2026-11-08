@@ -126,8 +126,7 @@ impl BoardGrid {
         self
     }
 
-    /// Slides pieces from their old squares to the ones they stand on now; `run` tells one
-    /// slide from the next.
+    /// Slides pieces from their old squares to their new ones; `run` tells one slide from the next.
     pub fn slides(mut self, slides: Vec<(Square, Square)>, run: usize) -> Self {
         self.slides = slides;
         self.slide_run = run;
@@ -229,9 +228,7 @@ impl BoardGrid {
 }
 
 impl BoardGrid {
-    /// A board drawing `board` (the position's pieces, or the pieces as queued premoves leave
-    /// them) with everything `interaction` shows; the check square comes from `position`.
-    /// The page adds its promotion prompt and callbacks.
+    /// A board drawing `board` with everything `interaction` shows.
     pub fn for_interaction(
         interaction: &BoardInteraction,
         position: &Position,
@@ -296,8 +293,7 @@ impl BoardGrid {
         }
     }
 
-    /// The arrows, painted over the squares without catching any clicks; laying it out also
-    /// notes where the board is, for the held piece.
+    /// The arrows over the squares, catching no clicks; its layout notes where the board is.
     fn arrow_layer(&self, colors: BoardColors) -> Canvas<()> {
         let measured = self.bounds.clone();
         let engine: Vec<(Cell, Cell)> = self.cells(self.engine_arrow.iter());

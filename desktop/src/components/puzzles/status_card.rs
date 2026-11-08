@@ -7,8 +7,7 @@ use gpui_kit::{
 
 use crate::services::board::side_name;
 
-/// How it is going, on a white card as chess.com's: a square of the colour to move, then the
-/// status.
+/// How it is going, on a white card: a square of the colour to move, then the status.
 pub fn status_card(status: &str, good: bool, side: Option<Side>, cx: &App) -> Div {
     let theme = cx.theme();
     let text = if good {

@@ -47,8 +47,7 @@ pub(super) struct BattleEntry {
 }
 
 impl PlayHub {
-    /// Pairs the player with the next one wanting the same kind of battle, or queues them. A
-    /// guest's battle is never rated.
+    /// Pairs the player with the next one wanting the same battle, or queues them.
     pub(super) async fn seek_battle(&self, player: &Player, rated: bool) {
         let rated = rated && !player.guest;
         if self.is_battling(player.id) {
@@ -131,8 +130,7 @@ impl PlayHub {
         }
     }
 
-    /// Invites a friend who is online to a battle; the player's earlier invitation, if any, is
-    /// withdrawn. It waits a minute for an answer.
+    /// Invites an online friend to a battle for a minute, withdrawing any earlier invitation.
     pub(super) async fn challenge_battle(&self, player: &Player, to: Uuid, rated: bool) {
         if self.is_battling(player.id) {
             return self.refuse(player.id, "Finish your battle first");
@@ -220,9 +218,7 @@ impl PlayHub {
         self.drop_invitations_of(player);
     }
 
-    /// Picks the puzzles, stores the battle and starts its task; both players hear it began.
-    /// Both are held as starting meanwhile, so no other battle can take them, and their other
-    /// seeks and invitations go.
+    /// Picks the puzzles, stores the battle and starts it; both players hear it began.
     async fn start_battle(&self, players: [Player; 2], rated: bool) {
         let ids = [players[0].id, players[1].id];
         // Checked and reserved in one step: two requests at once cannot both take a player.

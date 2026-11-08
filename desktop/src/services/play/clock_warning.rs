@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use chess_domain::Side;
 
-/// The warning sounds once a clock is down to this share of its starting time: one part in
-/// twenty, the last 5%.
+/// The warning sounds once a clock is down to this share of its starting time: the last 5%.
 const LOW_TIME_PARTS: u32 = 20;
 
 /// Which players have already been warned that their clock is low; each hears it once a game.
@@ -14,8 +13,7 @@ pub struct ClockWarning {
 }
 
 impl ClockWarning {
-    /// Whether `side`, with `left` on a clock that started at `initial`, should hear the
-    /// warning now: the first time its time is down to the last 5%.
+    /// Whether `side` should hear the warning now: the first time its time is down to the last 5%.
     pub fn is_due(&mut self, side: Side, left: Duration, initial: Duration) -> bool {
         let warned = self.warned_mut(side);
         if *warned || left > low_time(initial) {

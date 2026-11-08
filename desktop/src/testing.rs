@@ -49,8 +49,7 @@ pub fn drag(cx: &mut VisualTestContext, from: &'static str, to: &'static str) {
 /// The opponent's scripted answer comes within this.
 pub const ANSWER_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// A server for the puzzle pages: always Lichess's 5laTS, a mate in three for White; a rated
-/// attempt brings the rating to 1512 (+12); a rush is always a new best.
+/// A server for the puzzle pages: always Lichess's 5laTS, a mate in three for White.
 pub fn puzzle_server() -> crate::clients::server::ServerClient {
     use axum::{
         Json, Router,

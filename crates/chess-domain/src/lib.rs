@@ -23,8 +23,7 @@ pub use models::{
     time::{Clock, TimeControl},
 };
 
-/// Talking to a UCI chess engine such as Stockfish: the commands sent, the lines read back, and
-/// what an evaluation means. Pure text and numbers; whoever runs the engine process uses these.
+/// Talking to a UCI engine such as Stockfish: commands sent, lines read back, what scores mean.
 pub mod engine {
     pub use crate::{
         enums::engine::{Command, Eval, UciMessage, UciScore},

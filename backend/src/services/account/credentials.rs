@@ -49,8 +49,7 @@ pub fn checked_password(password: &str) -> Result<String, FieldError> {
     Ok(password.to_owned())
 }
 
-/// One `@` with something before it and a dotted domain after it, and no spaces: enough to
-/// catch typos without refusing real addresses.
+/// One `@` with a name before it and a dotted domain after it, and no spaces: catches typos.
 fn looks_like_email(email: &str) -> bool {
     let Some((local, domain)) = email.split_once('@') else {
         return false;

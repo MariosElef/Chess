@@ -16,8 +16,7 @@ impl Position {
         ))
     }
 
-    /// A line of moves in notation, as an engine's suggestion is shown; it stops at the first
-    /// move that is not legal where it would be played.
+    /// A line of moves in notation, stopping at the first move that is not legal where played.
     pub fn san_line(&self, moves: &[Move]) -> Vec<String> {
         let mut position = *self;
         let mut sans = Vec::new();

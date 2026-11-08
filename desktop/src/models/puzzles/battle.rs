@@ -6,8 +6,7 @@ use crate::{
     models::social::UserRef,
 };
 
-/// A Puzzle Battle as the server sends it to the player: both sides, the shared puzzles, the
-/// time left, and once over, how it ended for them.
+/// A Puzzle Battle as the server sends it: both sides, the puzzles, time left, and the end.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct BattleSnapshot {
     pub id: String,

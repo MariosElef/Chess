@@ -4,8 +4,7 @@ use uuid::Uuid;
 use super::player::PlayerModel;
 use crate::enums::play::{Color, GameResult, GameStatus};
 
-/// A live game as both players see it, sent whole after every change: the moves from the
-/// start, both clocks at the moment it was sent, and how it stands.
+/// A live game as both players see it, sent whole after every change: moves, clocks and state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GameSnapshot {
     pub id: Uuid,

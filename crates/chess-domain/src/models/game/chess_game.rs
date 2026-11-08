@@ -50,8 +50,7 @@ impl Game {
         &self.sans
     }
 
-    /// The game cut after its first `plies` moves: a fresh line from an earlier point, so a
-    /// resignation, agreed draw or open offer does not carry over.
+    /// The game cut after its first `plies` moves, with no resignation, draw or offer carried over.
     pub fn truncated(&self, plies: usize) -> Self {
         let plies = plies.min(self.moves.len());
         Self {
@@ -128,7 +127,7 @@ impl Game {
         Ok(())
     }
 
-    /// Endings the rules decide on their own, checkmate first so a mate on the last allowed move counts.
+    /// Endings the rules decide on their own, checkmate first, so a mate on the last move counts.
     fn automatic_outcome(&self) -> Option<Outcome> {
         let live = self.live();
         match live.status() {

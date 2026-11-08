@@ -16,8 +16,7 @@ pub enum AppError {
         detail: Option<String>,
         fields: Vec<FieldError>,
     },
-    /// A service this server depends on failed: answered with the code's title, the cause
-    /// only logged.
+    /// A service this server depends on failed: answered with the code's title, the cause logged.
     Unavailable {
         code: ChessCode,
         cause: anyhow::Error,

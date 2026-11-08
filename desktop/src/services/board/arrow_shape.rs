@@ -19,7 +19,7 @@ pub struct ArrowShape {
     pub head: [(f32, f32); 3],
 }
 
-/// An arrow that is neither straight nor diagonal bends: along its longer leg first, then to the target.
+/// An arrow that is neither straight nor diagonal bends: along its longer leg, then to the target.
 pub fn bend_corner(
     (from_column, from_row): Cell,
     (to_column, to_row): Cell,

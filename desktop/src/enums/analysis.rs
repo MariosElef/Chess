@@ -17,8 +17,7 @@ pub enum EngineStatus {
     Stopped,
 }
 
-/// What a game review calls a move, after chess.com's Game Review; see
-/// `services::analysis::review` for the rules.
+/// What a game review calls a move, after chess.com's Game Review.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MoveClass {
     Brilliant,

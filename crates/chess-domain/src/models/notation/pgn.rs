@@ -4,7 +4,6 @@ use crate::{Game, Move, PgnError, Position};
 
 impl Game {
     /// The game a PGN records, from its `[FEN "…"]` header if it has one, else the start.
-    /// Comments, variations, move numbers, `$` codes, `!?` marks and the result are skipped.
     pub fn from_pgn(pgn: &str) -> Result<Self, PgnError> {
         let start = match header(pgn, "FEN") {
             Some(fen) => fen.parse().map_err(PgnError::StartingPosition)?,
@@ -27,8 +26,7 @@ impl Game {
     }
 }
 
-/// The value of a `[Name "value"]` header, wherever it is: a pasted PGN may have lost its
-/// line breaks.
+/// The value of a `[Name "value"]` header, wherever it is: a pasted PGN may lose line breaks.
 fn header<'a>(pgn: &'a str, name: &str) -> Option<&'a str> {
     let opening = format!("[{name} \"");
     let start = pgn.find(&opening)? + opening.len();
@@ -72,8 +70,7 @@ fn move_words(movetext: &str) -> Vec<String> {
         .collect()
 }
 
-/// `12.e4` as `e4`, and `12.` or `12...` as nothing; a word without a dot, such as `0-0` or
-/// `1-0`, stays as it is.
+/// `12.e4` as `e4`, and `12.` or `12...` as nothing; a word without a dot stays as it is.
 fn without_move_number(word: &str) -> &str {
     match word.rfind('.') {
         Some(dot) if word[..dot].chars().all(|c| c.is_ascii_digit() || c == '.') => {

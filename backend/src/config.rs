@@ -7,8 +7,7 @@ const DEFAULT_BIND_ADDR: &str = "127.0.0.1:8080";
 /// Where puzzles come from when `LICHESS_URL` is not set.
 const DEFAULT_LICHESS_URL: &str = "https://lichess.org";
 
-/// The server's settings, read from the environment once at startup; a missing one stops it
-/// there. No `Debug`: the database URL carries a password.
+/// The server's settings, read from the environment once at startup; no `Debug`, for the password.
 pub struct AppConfig {
     pub database_url: String,
     pub bind_addr: String,

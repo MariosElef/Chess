@@ -3,8 +3,7 @@ use gpui_kit::{
     *,
 };
 
-/// The strip across the top of a page's panel, in a game or on Analysis: its picture and name,
-/// on a band a shade darker than the panel.
+/// The strip across the top of a panel: its picture and name, on a band a shade darker.
 #[derive(IntoElement)]
 pub struct PanelHeader {
     picture: &'static str,

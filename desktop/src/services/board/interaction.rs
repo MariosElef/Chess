@@ -7,9 +7,7 @@ use super::{
 };
 use crate::enums::board::ClickOutcome;
 
-/// What the player is doing on a board, for any page that shows one: the picked-up piece, the
-/// pawn waiting for its promotion choice, the drawings, and which way up the board is.
-/// Methods return the move to play, if any; the page decides what playing it means.
+/// What the player is doing on a board: the held piece, promotion choice, drawings and flip.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BoardInteraction {
     selected: Option<Square>,
@@ -86,8 +84,7 @@ impl BoardInteraction {
         }
     }
 
-    /// A left-click by the side waiting to move: selects one of its pieces on `board` (the
-    /// position as the queued premoves leave it) or returns the premove to queue.
+    /// A left-click by the side waiting to move: selects one of its pieces or returns a premove.
     pub fn premove_click(&mut self, board: &Board, side: Side, square: Square) -> Option<Move> {
         self.annotations.clear();
         if self.is_promoting() {
@@ -143,8 +140,7 @@ impl BoardInteraction {
         self.right_press = Some(square);
     }
 
-    /// Releasing where it was pressed marks the square; elsewhere, it draws an arrow.
-    /// Returns whether the drawings changed.
+    /// Marks the square if released where pressed, else draws an arrow; returns if they changed.
     pub fn right_up(&mut self, square: Square) -> bool {
         let Some(start) = self.right_press.take() else {
             return false;

@@ -2,8 +2,7 @@ use chess_domain::{Game, Position};
 
 use crate::models::analysis::Pasted;
 
-/// A FEN or a PGN, whichever the text is; else why it is neither, said for the one it looks
-/// like: move numbers or `[` headers make it a PGN.
+/// A FEN or a PGN, whichever the text is; else why it is neither.
 pub fn read_pasted(text: &str) -> Result<Pasted, String> {
     let text = text.trim();
     if let Ok(position) = text.parse::<Position>() {

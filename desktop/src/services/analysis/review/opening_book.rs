@@ -16,8 +16,7 @@ static BOOK: LazyLock<HashSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Builds the opening table now, which takes a moment: for a review being set up off the UI
-/// thread, so the first `is_book` later costs nothing.
+/// Builds the opening table now, off the UI thread, so the first `is_book` later costs nothing.
 pub fn warm_up() {
     LazyLock::force(&BOOK);
 }
@@ -27,8 +26,7 @@ pub fn is_book(position: &Position) -> bool {
     BOOK.contains(&position_key(position))
 }
 
-/// The positions after each move of a line; `None` for a note, a blank line, or a move that is
-/// not legal where it stands.
+/// The positions after each move of a line; `None` for a note, a blank line or an illegal move.
 fn line_positions(line: &str) -> Option<Vec<Position>> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {

@@ -15,5 +15,7 @@ pub use clock_face::{ClockFace, format_clock};
 pub use game_over_card::{GameOverActions, GameOverCard, with_card};
 pub use game_setup::{BotOptions, GameSetup, OnlineOptions};
 pub use play_panel::PlayPanel;
-pub use speed_label::{BULLET_PICTURE, speed_label, speed_picture_bytes, speed_picture_paths};
+pub use speed_label::{
+    BULLET_PICTURE, speed_label, speed_picture, speed_picture_bytes, speed_picture_paths,
+};
 pub use waiting_bar::WaitingBar;

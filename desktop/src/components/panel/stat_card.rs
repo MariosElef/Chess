@@ -4,8 +4,7 @@ use gpui_kit::{
     *,
 };
 
-/// A number worth showing off, as chess.com puts it at the top of a panel: an icon and the
-/// value large, its name small and in capitals under them.
+/// A number worth showing off: an icon and the value large, its name small and in capitals under.
 #[derive(IntoElement)]
 pub struct StatCard {
     icon: IconName,

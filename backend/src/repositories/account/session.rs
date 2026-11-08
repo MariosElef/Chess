@@ -22,8 +22,7 @@ pub async fn insert(
     .await
 }
 
-/// The live session with this token hash, marked as just seen; `None` when it is unknown,
-/// revoked, expired, or its account is closed.
+/// The live session with this token hash, marked as just seen; `None` if unknown or ended.
 pub async fn authenticate(
     db: impl PgExecutor<'_>,
     token_hash: &[u8],
@@ -37,8 +36,7 @@ pub async fn authenticate(
     .await
 }
 
-/// Ends every session of the user: a guest handed to someone new is no longer the last
-/// holder's.
+/// Ends every session of the user, so a guest handed to someone new is no longer the last holder's.
 pub async fn revoke_all_of_user(db: impl PgExecutor<'_>, user_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query_file!(
         "src/repositories/sql/account/session/revoke_all_of_user.sql",

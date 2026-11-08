@@ -3,13 +3,10 @@ use chess_domain::{Move, PieceKind, Position, Side, Square, piece_value};
 
 /// A piece worth less than this is not sacrificed: a pawn is not, a knight is.
 const LEAST_PIECE: i32 = 3;
-/// The material the opponent must be able to win, net, for it to be a sacrifice: a bishop for
-/// a pawn is, a bishop for a knight is not.
+/// The material the opponent must win, net, for a sacrifice: a bishop for a pawn, not a knight.
 const LEAST_GIVEN: i32 = 2;
 
-/// The move leaves a piece of the mover's that the opponent can take and come out at least two
-/// pawns up on, counting what the move itself captured. A piece that could already be won
-/// before the move does not count: the move did not give it up.
+/// The move leaves a piece the opponent can take and come out at least two pawns up on.
 pub fn is_sacrifice(before: &Position, mv: Move) -> bool {
     let Ok(after) = before.play(mv) else {
         return false;
@@ -47,8 +44,7 @@ fn pieces_of(position: &Position, side: Side) -> impl Iterator<Item = Square> + 
     })
 }
 
-/// What the side to move wins by taking on `square` with its cheapest piece: the piece there,
-/// less the taker if it can be taken back. `None` when it cannot be taken.
+/// What the side to move wins by taking on `square` with its cheapest piece; `None` if it can't.
 fn winnable(position: &Position, square: Square) -> Option<i32> {
     let victim = piece_value(position.board().piece_at(square)?.kind);
     let capture = position
@@ -69,8 +65,7 @@ fn taker_value(position: &Position, capture: Move) -> i32 {
         .map_or(0, |piece| piece_value(piece.kind))
 }
 
-/// The same position with the other side to move, as if the mover passed; `None` when that is
-/// not a legal position (the mover is in check).
+/// The same position with the other side to move; `None` when the mover is in check.
 fn with_turn_passed(position: &Position) -> Option<Position> {
     if position.is_check() {
         return None;

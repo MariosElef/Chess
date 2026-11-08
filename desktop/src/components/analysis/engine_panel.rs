@@ -85,8 +85,7 @@ impl EnginePanel {
     }
 }
 
-/// The evaluation on a chip, white when White is better and dark when Black is, then the
-/// moves on one line.
+/// The evaluation on a chip in the better side's colour, then the moves on one line.
 fn line_row(line: &LineView) -> Div {
     let side = if favours_black(line.eval) {
         Side::Black

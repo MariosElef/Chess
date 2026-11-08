@@ -19,7 +19,7 @@ use crate::{
     components::{
         board::BoardStyle,
         settings::{SettingsChoices, SettingsPage},
-        shell::{AccountMenu, AppHeader, MenuPerson, NavRail},
+        shell::{AccountMenu, AppHeader, MESSAGES_PICTURE, MenuPerson, NavRail},
     },
     enums::{play::LiveStatus, puzzles::BattleStatus, settings::Appearance, shell::Page},
     models::{
@@ -30,16 +30,16 @@ use crate::{
     views::{
         account::AccountView,
         analysis::AnalysisPage,
+        chat::ChatsView,
         live::{LiveConnection, SessionSource},
         play::{OnlineView, PlayPage},
         puzzles::PuzzlesView,
         settings::apply_appearance,
-        social::SocialView,
+        social::{OpenMessages, SocialView},
     },
 };
 
-/// What the shell talks to: the chess server, and the file that keeps the session between
-/// launches. The app uses the real ones; a test hands in its own.
+/// What the shell talks to: the chess server and the saved session; a test hands in its own.
 pub struct ShellSetup {
     pub client: ServerClient,
     pub tokens: SessionTokenFile,
@@ -69,10 +69,13 @@ pub struct AppShell {
     /// The live connection Play's online games, Puzzle Battle and Social share.
     live: Entity<LiveConnection>,
     social: Entity<SocialView>,
-    /// A game starting from a challenge opens Play, a battle Puzzles; Social's waiting count
-    /// redraws the rail.
+    /// The player's chats: the Messages page.
+    messages: Entity<ChatsView>,
+    /// A challenge's game opens Play, a battle Puzzles; Social's waiting count redraws the rail.
     _live_events: Subscription,
     _social_changes: Subscription,
+    _message_changes: Subscription,
+    _message_asks: Subscription,
     /// Battle invitations redraw the rail's count on Puzzles.
     _puzzle_changes: Subscription,
     /// The last battle that opened Puzzles: each one opens it once, when it begins.
@@ -118,6 +121,9 @@ impl AppShell {
             puzzles: pages.puzzles,
             live: pages.live,
             social: pages.social,
+            messages: pages.messages,
+            _message_changes: pages.message_changes,
+            _message_asks: pages.message_asks,
             _live_events: pages.live_events,
             _social_changes: pages.social_changes,
             _puzzle_changes: pages.puzzle_changes,
@@ -139,6 +145,12 @@ impl AppShell {
         if page == Page::Social {
             self.social.update(cx, |social, cx| social.opened(cx));
         }
+        self.messages.update(cx, |messages, cx| {
+            messages.set_shown(page == Page::Messages, cx);
+            if page == Page::Messages {
+                messages.refresh(cx);
+            }
+        });
         if page == Page::Account {
             self.account.update(cx, |account, cx| account.opened(cx));
         }
@@ -156,7 +168,7 @@ impl AppShell {
         match page {
             Page::Play => Some(self.play.read(cx).focus_handle()),
             Page::Analyze => Some(self.analyze.read(cx).focus_handle()),
-            Page::Puzzles | Page::Social | Page::Settings | Page::Account => None,
+            Page::Puzzles | Page::Social | Page::Messages | Page::Settings | Page::Account => None,
         }
     }
 
@@ -195,6 +207,9 @@ impl AppShell {
         self.puzzles = pages.puzzles;
         self.live = pages.live;
         self.social = pages.social;
+        self.messages = pages.messages;
+        self._message_changes = pages.message_changes;
+        self._message_asks = pages.message_asks;
         self._live_events = pages.live_events;
         self._social_changes = pages.social_changes;
         self._puzzle_changes = pages.puzzle_changes;
@@ -233,7 +248,8 @@ impl Render for AppShell {
             email: (!user.guest).then(|| user.email.clone()),
             guest: user.guest,
         });
-        let waiting = self.social.read(cx).waiting_for_me(cx);
+        let waiting = self.social.read(cx).waiting_for_me();
+        let unread = self.messages.read(cx).unread();
         let invitations = self.puzzles.read(cx).invitations(cx);
         let shell = cx.entity().downgrade();
         let header = person.into_iter().fold(AppHeader::new(), |header, person| {
@@ -257,6 +273,7 @@ impl Render for AppShell {
                             .child(
                                 NavRail::new(self.page, open_page(shell.clone()))
                                     .count(Page::Social, waiting)
+                                    .count(Page::Messages, unread)
                                     .count(Page::Puzzles, invitations),
                             ),
                     )
@@ -297,6 +314,7 @@ impl AppShell {
             Page::Puzzles => self.puzzles.clone().into_any_element(),
             Page::Analyze => self.analyze.clone().into_any_element(),
             Page::Social => self.social.clone().into_any_element(),
+            Page::Messages => messages_page(self.messages.clone()).into_any_element(),
             Page::Account => self.account.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
                 SettingsChoices {
@@ -363,8 +381,7 @@ fn analyze_game(
     shell.open(Page::Analyze, window, cx);
 }
 
-/// Coming in, the app opens on Play; going out, the account screen takes over and the pages
-/// start afresh for whoever comes next.
+/// Signing in opens Play; signing out shows the account screen and resets the pages.
 fn account_changed(
     shell: &mut AppShell,
     account: &Entity<AccountView>,
@@ -388,7 +405,12 @@ struct Pages {
     puzzles: Entity<PuzzlesView>,
     live: Entity<LiveConnection>,
     social: Entity<SocialView>,
+    messages: Entity<ChatsView>,
     live_events: Subscription,
+    /// Unread messages change the rail's count.
+    message_changes: Subscription,
+    /// A friend's Message button opens the Messages page.
+    message_asks: Subscription,
     social_changes: Subscription,
     puzzle_changes: Subscription,
     /// Play's Game Review and Analyze hand their game over to the shell.
@@ -414,8 +436,19 @@ impl Pages {
             (live.clone(), Rc::clone(&session)),
             cx,
         );
-        let social =
-            cx.new(|cx| SocialView::new(client.clone(), session, live.clone(), window, cx));
+        let messages =
+            cx.new(|cx| ChatsView::new(client.clone(), (Rc::clone(&session), live.clone()), cx));
+        let message_changes = cx.observe(&messages, |_, _, cx| cx.notify());
+        let social = cx.new(|cx| {
+            SocialView::new(
+                client.clone(),
+                (session, live.clone()),
+                messages.clone(),
+                window,
+                cx,
+            )
+        });
+        let message_asks = cx.subscribe_in(&social, window, open_messages);
         let social_changes = cx.observe(&social, |_, _, cx| cx.notify());
         let puzzle_changes = cx.observe(&puzzles, |_, _, cx| cx.notify());
         Self {
@@ -424,7 +457,10 @@ impl Pages {
             puzzles,
             live,
             social,
+            messages,
             live_events,
+            message_changes,
+            message_asks,
             social_changes,
             puzzle_changes,
             play_events,
@@ -446,6 +482,37 @@ fn new_play_page(
     play
 }
 
+/// The Messages page: its title, then the chats.
+fn messages_page(chats: Entity<ChatsView>) -> Div {
+    v_flex()
+        .size_full()
+        .p_6()
+        .gap_5()
+        .child(
+            h_flex()
+                .gap_3()
+                .child(img(MESSAGES_PICTURE).size_10())
+                .child(
+                    div()
+                        .text_2xl()
+                        .font_weight(FontWeight::BOLD)
+                        .child("Messages"),
+                ),
+        )
+        .child(div().flex_1().min_h_0().child(chats))
+}
+
+/// A friend's Message button: the Messages page opens, with their chat.
+fn open_messages(
+    shell: &mut AppShell,
+    _: &Entity<SocialView>,
+    _: &OpenMessages,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    shell.open(Page::Messages, window, cx);
+}
+
 /// Reads the signed-in session from the account, for the pages that need who is playing.
 fn session_of(account: &Entity<AccountView>) -> SessionSource {
     let account = account.downgrade();
@@ -456,8 +523,7 @@ fn session_of(account: &Entity<AccountView>) -> SessionSource {
     })
 }
 
-/// A game just starting, as a challenge accepted on the Social page starts one, opens Play; a
-/// Puzzle Battle just starting opens Puzzles.
+/// A game just starting, as from a challenge, opens Play; a Puzzle Battle opens Puzzles.
 fn open_page_for_new_game(
     shell: &mut AppShell,
     _: &Entity<LiveConnection>,
@@ -518,7 +584,7 @@ fn new_puzzles_view(
 
 #[cfg(test)]
 mod tests {
-    use std::{env, process};
+    use std::{env, process, time::Duration};
 
     use axum::{
         Json, Router,
@@ -526,7 +592,7 @@ mod tests {
         http::StatusCode,
         routing::{delete, get, post},
     };
-    use gpui_kit::{Bounds, Entity, Pixels, TestAppContext, VisualTestContext};
+    use gpui_kit::{Bounds, Entity, Modifiers, Pixels, TestAppContext, VisualTestContext};
     use serde_json::json;
 
     use super::{AppShell, ShellSetup};
@@ -534,7 +600,7 @@ mod tests {
         clients::{server::ServerClient, settings::SessionTokenFile},
         enums::shell::Page,
         models::play::ClientMessage,
-        testing::wait_until,
+        testing::{centre_of, click, wait_until},
     };
 
     /// A server that hands out Guest3 and takes sign-outs.
@@ -570,8 +636,7 @@ mod tests {
         )
     }
 
-    /// Answers the app's first message with a new game, as a friend accepting a challenge
-    /// starts one.
+    /// Answers the app's first message with a new game, as an accepted challenge starts one.
     async fn start_a_game(mut socket: WebSocket) {
         if !matches!(socket.recv().await, Some(Ok(Message::Text(_)))) {
             return;
@@ -626,8 +691,7 @@ mod tests {
         );
     }
 
-    /// Where one square is drawn on `page`, and how big: the same on every page means the
-    /// same board in the same place.
+    /// Where one square is drawn on `page`, and how big, to check every page's board matches.
     fn square_on(
         shell: &Entity<AppShell>,
         page: Page,
@@ -658,6 +722,33 @@ mod tests {
         let play = square_on(&shell, Page::Play, cx);
         assert_eq!(square_on(&shell, Page::Puzzles, cx), play, "Puzzles");
         assert_eq!(square_on(&shell, Page::Analyze, cx), play, "Analysis");
+    }
+
+    #[gpui_kit::test]
+    fn hovering_social_offers_friends_and_messages(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let path = env::temp_dir().join(format!("chess-shell-menu-test-{}", process::id()));
+        let setup = ShellSetup {
+            client: guest_server(),
+            tokens: SessionTokenFile::at(path),
+        };
+        let (shell, cx) = cx.add_window_view(|window, cx| AppShell::with(setup, window, cx));
+        let account = shell.update(cx, |shell, _| shell.account.clone());
+        account.update_in(cx, |account, window, cx| {
+            account.continue_as_guest(window, cx)
+        });
+        wait_until(cx, |cx| {
+            account.update(cx, |account, _| account.is_admitted())
+        });
+        let social = centre_of(cx, "rail-Social");
+        cx.simulate_mouse_move(social, None, Modifiers::none());
+        wait_until(cx, |cx| {
+            cx.executor().advance_clock(Duration::from_millis(200));
+            cx.debug_bounds("rail-menu-Messages").is_some()
+        });
+        click(cx, "rail-menu-Messages");
+        assert_eq!(shell.read_with(cx, |shell, _| shell.page), Page::Messages);
     }
 
     #[gpui_kit::test]

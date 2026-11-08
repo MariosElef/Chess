@@ -53,8 +53,7 @@ pub struct BattleMenuActions {
     pub on_rated: OnRated,
 }
 
-/// Puzzle Battle's panel, as chess.com's: this month's wins and the battle rating, a random
-/// opponent or a friend online, invitations, and Play.
+/// Puzzle Battle's panel: this month's wins, the battle rating, an opponent, invitations, and Play.
 #[derive(IntoElement)]
 pub struct BattleMenu {
     state: BattleMenuState,

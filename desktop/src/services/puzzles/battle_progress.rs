@@ -7,8 +7,7 @@ use crate::{
     models::puzzles::BattleSnapshot,
 };
 
-/// The puzzle the player is on after `answered` answers and `mistakes` of them wrong; `None`
-/// once they are out of mistakes or of puzzles.
+/// The puzzle the player is on after `answered` answers and `mistakes`; `None` once out.
 pub fn current_puzzle(answered: u32, mistakes: u32, total: usize) -> Option<usize> {
     let index = usize::try_from(answered).unwrap_or(usize::MAX);
     (mistakes < STRIKES && index < total).then_some(index)

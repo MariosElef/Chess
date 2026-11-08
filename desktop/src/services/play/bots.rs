@@ -44,15 +44,13 @@ pub const BOTS: [Bot; 5] = [
 /// The custom bot's strength: from, to, in steps of, and where it starts.
 pub const CUSTOM_STRENGTH: (u32, u32, u32, u32) = (400, 2800, 100, 1500);
 
-/// From this rating up, Stockfish's own strength limit plays the bot; below, it cannot go
-/// that weak, so the bot looks only a little ahead and sometimes picks a worse move.
+/// From this rating up, Stockfish's own strength limit plays the bot; below, a weaker search does.
 const OWN_LIMIT_FROM: u32 = 1400;
 /// The lowest and highest ratings Stockfish's limit takes.
 const LIMIT_RANGE: (u32, u32) = (1320, 3190);
 /// How long a bot on Stockfish's limit searches each move.
 const LIMITED_SEARCH_MS: u64 = 500;
-/// Weak bots by the rating each starts at: how deep they look, how many of the best moves they
-/// choose among, and how often they play any legal move instead.
+/// Weak bots by starting rating: how deep they look, how many best moves, and how often random.
 const WEAK: [(u32, u32, usize, f64); 4] = [
     (400, 1, 4, 0.25),
     (800, 2, 3, 0.12),
@@ -120,8 +118,7 @@ pub fn bot_options(style: &BotStyle) -> Vec<(&'static str, String)> {
     options
 }
 
-/// The bot's move: now and then any legal move, otherwise one of the engine's best few. `best`
-/// is the engine's lines' first moves, best first; `rolls` are two numbers from 0 to 1.
+/// The bot's move: now and then any legal move, otherwise one of the engine's best few.
 pub fn pick_bot_move(
     style: &BotStyle,
     (best, legal): (&[Move], &[Move]),

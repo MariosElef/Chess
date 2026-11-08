@@ -27,7 +27,7 @@ impl Board {
         self.material(Side::White) - self.material(Side::Black)
     }
 
-    /// Neither side can ever mate: only kings, a single knight or bishop, or bishops all on one colour.
+    /// Neither side can ever mate: only kings, one knight or bishop, or bishops on one colour.
     pub fn has_insufficient_material(&self) -> bool {
         let pieces = self.non_king_pieces();
         if pieces

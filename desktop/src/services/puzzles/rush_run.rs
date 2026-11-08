@@ -9,12 +9,10 @@ const FIRST_RATING: i32 = 600;
 const RATING_STEP: i32 = 40;
 /// How wide a band each puzzle is picked from.
 const BAND_WIDTH: i32 = 100;
-/// The band asked for instead when its narrow one has no puzzle left that the player has not
-/// seen: near the top of the ratings, puzzles are few.
+/// The band asked for instead when its narrow one has no unseen puzzle left.
 const WIDE_BAND_WIDTH: i32 = 600;
 
-/// One Puzzle Rush: how many puzzles were served, solved and missed. Each puzzle comes from a
-/// higher band than the last, so the rush starts easy and climbs.
+/// One Puzzle Rush: how many puzzles were served, solved and missed, climbing band by band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RushRun {
     kind: RushKind,

@@ -152,8 +152,7 @@ impl Render for DragLayer {
     }
 }
 
-/// While a piece is held, every move and release on the window reaches the layer, wherever
-/// the cursor is.
+/// While a piece is held, every move and release on the window reaches the layer.
 fn follow_the_mouse(layer: WeakEntity<DragLayer>, board: WeakEntity<BoardView>) -> Canvas<()> {
     canvas(
         |_, _, _| {},

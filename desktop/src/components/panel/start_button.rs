@@ -9,14 +9,14 @@ const START_GREEN_EDGE: u32 = 0x0045_7536;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The big green button that starts a game or a puzzle: solid, bold white text, a darker edge
-/// along the bottom; dimmed, and deaf to clicks, while it waits.
+/// The big green button that starts a game or a puzzle; dimmed and deaf to clicks while it waits.
 #[derive(IntoElement)]
 pub struct StartButton {
     id: SharedString,
     label: SharedString,
     picture: Option<&'static str>,
     busy: bool,
+    disabled: bool,
     on_click: OnClick,
 }
 
@@ -31,6 +31,7 @@ impl StartButton {
             label: label.into(),
             picture: None,
             busy: false,
+            disabled: false,
             on_click: Rc::new(on_click),
         }
     }
@@ -41,8 +42,15 @@ impl StartButton {
         self
     }
 
+    /// Dimmed and taking no clicks, while what it started is on its way.
     pub fn busy(mut self, busy: bool) -> Self {
         self.busy = busy;
+        self
+    }
+
+    /// Dimmed and taking no clicks, until what it needs is filled in.
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 }
@@ -50,6 +58,7 @@ impl StartButton {
 impl RenderOnce for StartButton {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let on_click = self.on_click;
+        let inert = self.busy || self.disabled;
         let selector = self.id.to_string();
         div()
             .id(self.id)
@@ -68,14 +77,14 @@ impl RenderOnce for StartButton {
             .text_color(white())
             .text_lg()
             .font_weight(FontWeight::EXTRA_BOLD)
-            .when(self.busy, |this| this.opacity(0.7))
-            .when(!self.busy, |this| {
+            .when(inert, |this| this.opacity(0.7))
+            .when(!inert, |this| {
                 this.cursor_pointer()
                     .hover(|this| this.bg(rgb(START_GREEN_HOVER)))
             })
             .when_some(self.picture, |this, path| this.child(img(path).size_6()))
             .child(self.label)
-            .when(!self.busy, |this| {
+            .when(!inert, |this| {
                 this.on_click(move |_, window, cx| on_click(window, cx))
             })
     }

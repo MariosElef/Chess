@@ -28,8 +28,7 @@ pub const STRIKES: u32 = 3;
 /// Answers queued for a battle before the sender waits.
 const COMMANDS_AHEAD: usize = 32;
 
-/// A player in a battle: who, their battle rating before it if it is rated, and their full
-/// rating to rate it with.
+/// A player in a battle: who, their battle rating before it if rated, and their full rating.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BattlePlayer {
     pub id: Uuid,
@@ -81,8 +80,7 @@ async fn run(mut live: LiveBattle, mut commands: mpsc::Receiver<BattleCommand>) 
     live.finish().await;
 }
 
-/// One player's run: puzzles solved, mistakes made, and when they last scored, which breaks
-/// a tie.
+/// One player's run: puzzles solved, mistakes made, and when they last scored, to break a tie.
 #[derive(Debug, Clone, Copy, Default)]
 struct Progress {
     score: u32,

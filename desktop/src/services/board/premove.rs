@@ -4,8 +4,7 @@ use chess_domain::{Board, Move, PieceKind, Side, Square};
 
 use crate::enums::board::ClickOutcome;
 
-/// Clicking a premove target queues the move (or asks for a promotion); any other click
-/// changes the selection to a piece of `side`, or lets go.
+/// Clicking a premove target queues the move; any other click reselects a piece of `side`.
 pub fn premove_outcome(
     board: &Board,
     side: Side,

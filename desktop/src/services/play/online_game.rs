@@ -9,8 +9,7 @@ use crate::{
     services::board::side_name,
 };
 
-/// The game the snapshot's moves make, played from the start; `None` if a move does not parse
-/// or is not legal, which the server never sends.
+/// The game the snapshot's moves make from the start; `None` if a move is unreadable or illegal.
 pub fn replay(snapshot: &GameSnapshot) -> Option<Game> {
     let mut game = Game::new();
     for uci in &snapshot.moves {
@@ -45,8 +44,7 @@ pub fn clock_left(snapshot: &GameSnapshot, side: Side, since: Duration) -> Durat
     }
 }
 
-/// How the game ended, said to `me`: "You won by checkmate", "Draw by agreement", "Game
-/// aborted"; `None` while it is going on.
+/// How the game ended, said to `me`: "You won by checkmate"; `None` while it is going on.
 pub fn result_line(snapshot: &GameSnapshot, me: Option<Side>) -> Option<String> {
     match snapshot.status {
         LiveStatus::Ongoing => return None,

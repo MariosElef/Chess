@@ -38,8 +38,7 @@ pub struct AccountView {
     restoring: bool,
     /// Enter in any field submits the form.
     _enter_presses: Vec<Subscription>,
-    /// Deleting the account: its password field, why the last try failed, and a request on
-    /// its way; `None` until Delete account is pressed.
+    /// Deleting the account: password, last error, pending request; `None` until Delete is pressed.
     closing: Option<Closing>,
     /// The signed-in player's ratings and results, once fetched.
     stats: Option<Stats>,
@@ -102,8 +101,7 @@ impl AccountView {
         self.session.as_ref().map(|session| &session.user)
     }
 
-    /// Asks the server who the saved token belongs to. A token it refuses is forgotten; an
-    /// unreachable server keeps it for next time.
+    /// Asks the server whose the saved token is; a refused one is forgotten, an unreachable kept.
     fn restore(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(token) = self.tokens.load() else {
             return;
@@ -238,8 +236,7 @@ impl AccountView {
         .detach();
     }
 
-    /// Signs out here at once; the server is told too, and if it cannot be reached the token
-    /// simply expires there.
+    /// Signs out here at once and tells the server; if unreachable, the token simply expires there.
     pub fn sign_out(&mut self, cx: &mut Context<Self>) {
         let Some(session) = self.session.take() else {
             return;
@@ -253,8 +250,7 @@ impl AccountView {
         self.forget_session(cx);
     }
 
-    /// No one signed in any more: what was theirs goes, the saved token too, and the sign-in
-    /// form comes back.
+    /// No one signed in any more: their data and saved token go, and the sign-in form comes back.
     fn forget_session(&mut self, cx: &mut Context<Self>) {
         self.session = None;
         self.stats = None;
@@ -421,8 +417,7 @@ impl AccountView {
         cx.notify();
     }
 
-    /// The server's answer for the account signed in as `token`; if someone else has signed in
-    /// since, it is not theirs to act on.
+    /// The server's answer for `token`'s account, ignored if someone else signed in since.
     fn closed(&mut self, token: &str, result: Result<(), ServerError>, cx: &mut Context<Self>) {
         if self.token().as_deref() != Some(token) {
             return;
@@ -473,8 +468,7 @@ impl Render for AccountView {
     }
 }
 
-/// The account being deleted: the password typed again, why the last try failed, and whether a
-/// request is on its way.
+/// The account being deleted: the password typed again, the last error and any request on its way.
 struct Closing {
     password: Entity<InputState>,
     /// The session being closed: an answer for any other is ignored.

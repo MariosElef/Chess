@@ -22,8 +22,7 @@ pub async fn connect(url: &str) -> anyhow::Result<Db> {
     Ok(db)
 }
 
-/// Applies the migrations in `backend/migrations` that have not run yet; this repository owns
-/// its schema.
+/// Applies the migrations in `backend/migrations` that have not run yet.
 pub async fn migrate(db: &Db) -> anyhow::Result<()> {
     sqlx::migrate!().run(db).await?;
     Ok(())

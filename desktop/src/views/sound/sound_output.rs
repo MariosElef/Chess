@@ -42,8 +42,7 @@ fn play_in_turn(sounds: &[Sound], cx: &App) {
     }
 }
 
-/// The sound `mv` makes from `before` to `after`, with `plain` for a quiet move; a move that
-/// `ends_game` is followed by the game's end, so a mate is heard as check, then the end.
+/// The sound `mv` makes from `before` to `after`, `plain` if quiet, then the end if it `ends_game`.
 pub fn play_move_sound(
     before: &Position,
     after: &Position,

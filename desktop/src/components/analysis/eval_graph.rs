@@ -10,9 +10,7 @@ use crate::{
 
 type OnSelect = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
-/// The game's evaluation over every move, as chess.com draws it: White's share in white over a
-/// dark ground, a line through the middle, and the move on the board marked. A click goes to
-/// the move under it.
+/// The game's evaluation over every move, White's share in white; a click goes to that move.
 #[derive(IntoElement)]
 pub struct EvalGraph {
     shares: Vec<f64>,
@@ -21,8 +19,7 @@ pub struct EvalGraph {
     on_select: OnSelect,
 }
 
-/// The graph's height, and its colours: chess.com's dark ground, and the marker in a mistake's
-/// orange.
+/// The graph's height and colours: chess.com's dark ground, and the marker in a mistake's orange.
 const HEIGHT: Pixels = px(80.);
 const GROUND: u32 = DARK_SIDE;
 const MIDDLE: u32 = 0x0080_8080;

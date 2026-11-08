@@ -4,8 +4,7 @@ use std::{fs, io, path::PathBuf};
 const SESSION_FILE: &str = "session";
 const APP_FOLDER: &str = "Chess";
 
-/// Where the session token is kept, so the app stays signed in after a restart. Only this
-/// user can read the file: the token signs its holder in.
+/// Where the session token is kept, readable only by this user, so the app stays signed in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionTokenFile {
     path: Option<PathBuf>,

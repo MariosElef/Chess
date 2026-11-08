@@ -1,5 +1,13 @@
 use uuid::Uuid;
 
+/// One player's rating in one category, for showing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserRatingRow {
+    pub user_id: Uuid,
+    pub category_id: String,
+    pub rating: f64,
+}
+
 /// A stored Glicko-2 rating.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RatingRow {
