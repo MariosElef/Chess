@@ -1,0 +1,53 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// A sign-up. No `Debug`: it carries the password.
+#[derive(Deserialize)]
+pub struct CreateUserModel {
+    pub email: String,
+    pub username: String,
+    pub password: String,
+}
+
+/// An account as its owner sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GetUserModel {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub created_at: DateTime<Utc>,
+    /// One of the ten shared guest accounts, Guest to Guest10.
+    pub guest: bool,
+}
+
+/// A checked sign-up with its password hashed, ready to store. No `Debug`: the hash.
+pub struct NewUser {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub password_hash: String,
+}
+
+/// The account a sign-in names, with the hash its password is checked against. No `Debug`.
+pub struct UserCredentials {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub created_at: DateTime<Utc>,
+    pub guest: bool,
+    pub password_hash: String,
+}
+
+impl UserCredentials {
+    /// The account without its hash, for the answer.
+    pub fn into_user(self) -> GetUserModel {
+        GetUserModel {
+            id: self.id,
+            email: self.email,
+            username: self.username,
+            created_at: self.created_at,
+            guest: self.guest,
+        }
+    }
+}

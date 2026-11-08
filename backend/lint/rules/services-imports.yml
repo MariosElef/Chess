@@ -1,0 +1,12 @@
+id: services-imports
+language: Rust
+severity: error
+message: "A service never reaches back up to a route or an extractor."
+note: Imports point downward only — routes → services → repositories and clients → models.
+files: ['**/src/services/**', '**/src/services.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(routes|extract)\b'
+    - matches: outer-path
+      regex: '^crate::(routes|extract)\b'

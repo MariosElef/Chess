@@ -3,9 +3,11 @@ use gpui_kit::{component::h_flex, *};
 use crate::{
     clients::{
         engine::device_cores,
+        server::{ServerClient, server_url},
         settings::{
-            load_appearance, load_board_theme, load_engine_settings, load_piece_set,
-            save_appearance, save_board_theme, save_engine_settings, save_piece_set,
+            SessionTokenFile, load_appearance, load_board_theme, load_engine_settings,
+            load_piece_set, save_appearance, save_board_theme, save_engine_settings,
+            save_piece_set,
         },
     },
     components::{
@@ -15,14 +17,20 @@ use crate::{
         shell::NavSidebar,
     },
     enums::{settings::Appearance, shell::Page},
+    models::account::AccountChanged,
     models::{engine::EngineSettings, play::AnalyzeGame},
-    views::{analysis::AnalysisPage, play::PlayPage, settings::apply_appearance},
+    views::{
+        account::AccountView, analysis::AnalysisPage, play::PlayPage, settings::apply_appearance,
+    },
 };
 
 pub struct AppShell {
     page: Page,
     play: Entity<PlayPage>,
     analyze: Entity<AnalysisPage>,
+    /// Signing in and out; it keeps the session the other pages will use.
+    account: Entity<AccountView>,
+    _account_changes: Subscription,
     appearance: Appearance,
     /// The board theme and pieces every board draws with; also kept as a global for them.
     board_style: BoardStyle,
@@ -48,10 +56,18 @@ impl AppShell {
         let engine_settings = load_engine_settings();
         let play = new_play_page(window, cx);
         let _play_events = cx.subscribe_in(&play, window, analyze_game);
+        let client = ServerClient::new(&server_url()).expect("the network runtime starts");
+        let account = cx
+            .new(|cx| AccountView::new(client, SessionTokenFile::in_settings_folder(), window, cx));
+        let _account_changes = cx.subscribe(&account, |shell, account, _: &AccountChanged, cx| {
+            shell.account_changed(&account, cx);
+        });
         Self {
             page: Page::Play,
             play,
             analyze: cx.new(|cx| AnalysisPage::new(engine_settings, window, cx)),
+            account,
+            _account_changes,
             appearance,
             board_style,
             engine_settings,
@@ -77,7 +93,7 @@ impl AppShell {
         match page {
             Page::Play => Some(self.play.read(cx).focus_handle()),
             Page::Analyze => Some(self.analyze.read(cx).focus_handle()),
-            Page::Puzzles | Page::Settings => None,
+            Page::Puzzles | Page::Settings | Page::Account => None,
         }
     }
 
@@ -102,6 +118,14 @@ impl AppShell {
         cx.refresh_windows();
     }
 
+    /// Coming in, the app opens on Play; going out, the account screen takes over.
+    fn account_changed(&mut self, account: &Entity<AccountView>, cx: &mut Context<Self>) {
+        if account.read(cx).is_admitted() {
+            self.page = Page::Play;
+        }
+        cx.notify();
+    }
+
     fn set_appearance(
         &mut self,
         appearance: Appearance,
@@ -117,13 +141,23 @@ impl AppShell {
 }
 
 impl Render for AppShell {
+    /// Nothing but the account screen until the player signs in or chooses to play as a guest.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let account = self.account.read(cx);
+        if !account.is_admitted() {
+            return div()
+                .size_full()
+                .child(self.account.clone())
+                .into_any_element();
+        }
+        let player = account.player_name();
         let shell = cx.entity().downgrade();
         h_flex()
             .size_full()
             .items_stretch()
-            .child(NavSidebar::new(self.page, open_page(shell.clone())))
+            .child(NavSidebar::new(self.page, player, open_page(shell.clone())))
             .child(div().flex_1().min_w_0().child(self.content(shell)))
+            .into_any_element()
     }
 }
 
@@ -133,6 +167,7 @@ impl AppShell {
             Page::Play => self.play.clone().into_any_element(),
             Page::Puzzles => PuzzlesPage.into_any_element(),
             Page::Analyze => self.analyze.clone().into_any_element(),
+            Page::Account => self.account.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
                 SettingsChoices {
                     appearance: self.appearance,

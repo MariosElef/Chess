@@ -1,0 +1,36 @@
+id: routes-imports
+valid:
+  - "use crate::services::account::UserService;"
+  - "// crate::repositories::account in a comment"
+  - 'const NAME: &str = "crate::repositories::x";'
+invalid:
+  - "use crate::repositories::account::user;"
+  - |
+    use crate::{
+        services::account::UserService,
+        repositories::database::Db,
+    };
+  - "fn f() { crate::repositories::database::ping(); }"
+---
+id: services-imports
+valid:
+  - "use crate::repositories::account::user;"
+invalid:
+  - "use crate::routes::build_router;"
+  - "use crate::{models::account::NewUser, extract::SignedIn};"
+---
+id: repositories-imports
+valid:
+  - "use crate::models::account::NewUser;"
+  - "use crate::errors::AppError;"
+invalid:
+  - "use crate::services::account::UserService;"
+  - "fn f() { crate::routes::build_router(); }"
+---
+id: models-imports
+valid:
+  - "use super::user::GetUserModel;"
+invalid:
+  - "use crate::config::AppConfig;"
+  - "use crate::repositories::database::Db;"
+  - "fn f() -> crate::services::account::UserService { todo!() }"

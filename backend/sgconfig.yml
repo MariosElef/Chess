@@ -1,0 +1,6 @@
+# The backend's layering, mc2's: routes → services → repositories → models, sqlx only in
+# repositories. `ast-grep scan` checks the code; `ast-grep test` proves each rule.
+ruleDirs: [lint/rules]
+utilDirs: [lint/utils]
+testConfigs:
+  - testDir: lint/rule-tests

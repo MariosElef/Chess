@@ -1,0 +1,19 @@
+id: sqlx-only-in-repositories
+language: Rust
+severity: error
+message: "Only repositories touch sqlx: a query, a pool type or a transaction lives there."
+files:
+  - '**/src/routes/**'
+  - '**/src/routes.rs'
+  - '**/src/services/**'
+  - '**/src/services.rs'
+  - '**/src/clients/**'
+  - '**/src/clients.rs'
+  - '**/src/models/**'
+  - '**/src/models.rs'
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\buse\s+(::)?sqlx\b'
+    - matches: outer-path
+      regex: '^sqlx::'

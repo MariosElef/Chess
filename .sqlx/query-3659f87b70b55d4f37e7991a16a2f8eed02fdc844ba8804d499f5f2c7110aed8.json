@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Losing a race for the email or username inserts nothing; the service says which was taken.\nINSERT INTO account.users (id, email, username, password_hash)\nVALUES ($1, $2, $3, $4)\nON CONFLICT DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3659f87b70b55d4f37e7991a16a2f8eed02fdc844ba8804d499f5f2c7110aed8"
+}

@@ -1,0 +1,17 @@
+id: no-http-below-routes
+language: Rust
+severity: error
+message: "HTTP stays in routes and clients: services, repositories and models know no axum or http."
+files:
+  - '**/src/services/**'
+  - '**/src/services.rs'
+  - '**/src/repositories/**'
+  - '**/src/repositories.rs'
+  - '**/src/models/**'
+  - '**/src/models.rs'
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\buse\s+(::)?(axum|http)\b'
+    - matches: outer-path
+      regex: '^(axum|http)::'

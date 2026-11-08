@@ -1,0 +1,12 @@
+# A whole path as written in code (`crate::clients::x`, `axum::Json`), once, not each of its prefixes.
+id: outer-path
+language: Rust
+rule:
+  any:
+    - kind: scoped_identifier
+    - kind: scoped_type_identifier
+  not:
+    any:
+      - inside: {kind: scoped_identifier}
+      - inside: {kind: scoped_type_identifier}
+      - inside: {kind: use_declaration, stopBy: end}

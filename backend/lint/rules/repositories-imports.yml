@@ -1,0 +1,12 @@
+id: repositories-imports
+language: Rust
+severity: error
+message: "A repository only talks to the database: it reaches no service, route or client."
+note: Imports point downward only — routes → services → repositories and clients → models.
+files: ['**/src/repositories/**', '**/src/repositories.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(services|routes|clients)\b'
+    - matches: outer-path
+      regex: '^crate::(services|routes|clients)\b'

@@ -9,10 +9,16 @@ publish.workspace = true
 chess-domain = { version = "0.1.0", path = "../crates/chess-domain" }
 dirs = "7.0.0"
 gpui-kit = { version = "0.9.0", features = ["gpui-fast"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
 rodio = { version = "0.23.0", default-features = false, features = ["playback", "mp3"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time"] }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+axum = "0.8.9"
 gpui-kit = { version = "0.9.0", features = ["gpui-fast", "test-support"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "macros"] }

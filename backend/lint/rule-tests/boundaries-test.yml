@@ -1,0 +1,22 @@
+id: sqlx-only-in-repositories
+valid:
+  - "use crate::repositories::database::Db;"
+  - "// sqlx::query in a comment"
+invalid:
+  - "use sqlx::PgPool;"
+  - "fn f() { sqlx::query(\"x\"); }"
+  - "fn f() -> sqlx::Error { todo!() }"
+---
+id: no-http-below-routes
+valid:
+  - "use crate::errors::AppError;"
+invalid:
+  - "use axum::Json;"
+  - "fn f(status: http::StatusCode) {}"
+  - "fn f() -> axum::response::Response { todo!() }"
+---
+id: no-reaching-up
+valid:
+  - "use super::password;"
+invalid:
+  - "use super::super::models::account::NewUser;"

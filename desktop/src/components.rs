@@ -1,4 +1,5 @@
 //! Stateless pieces of UI: data in, callbacks out, nothing remembered.
+pub mod account;
 pub mod analysis;
 pub mod board;
 pub mod history;

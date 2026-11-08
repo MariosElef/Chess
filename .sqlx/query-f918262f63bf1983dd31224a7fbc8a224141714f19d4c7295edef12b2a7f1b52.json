@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The first guest with no live session, locked until the transaction ends so a sign-in running\n-- at the same moment skips it and takes the next one.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\"\nFROM account.users\nWHERE\n    users.guest_number IS NOT NULL\n    AND NOT EXISTS (\n        SELECT 1\n        FROM account.sessions\n        WHERE\n            sessions.user_id = users.id\n            AND sessions.revoked_at IS NULL\n            AND sessions.expires_at > now()\n    )\nORDER BY users.guest_number\nLIMIT 1\nFOR UPDATE SKIP LOCKED\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "guest!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "f918262f63bf1983dd31224a7fbc8a224141714f19d4c7295edef12b2a7f1b52"
+}

@@ -8,6 +8,7 @@ use gpui_kit::{
         h_flex,
         popover::{Popover, PopoverState},
         sidebar::{Sidebar, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuItem},
+        v_flex,
     },
     *,
 };
@@ -19,13 +20,20 @@ type OnSelect = Rc<dyn Fn(Page, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub struct NavSidebar {
     active: Page,
+    /// The signed-in username or "Guest", shown on the profile row; `None` shows "Player".
+    player: Option<String>,
     on_select: OnSelect,
 }
 
 impl NavSidebar {
-    pub fn new(active: Page, on_select: impl Fn(Page, &mut Window, &mut App) + 'static) -> Self {
+    pub fn new(
+        active: Page,
+        player: Option<String>,
+        on_select: impl Fn(Page, &mut Window, &mut App) + 'static,
+    ) -> Self {
         Self {
             active,
+            player,
             on_select: Rc::new(on_select),
         }
     }
@@ -52,15 +60,20 @@ impl NavSidebar {
         })
     }
 
-    /// The profile row at the bottom; it opens a small menu upward with Settings.
+    /// The profile row at the bottom; it opens a small menu upward with Account and Settings.
     fn profile_menu(self) -> Popover {
         let on_select = self.on_select;
+        let selected = matches!(self.active, Page::Settings | Page::Account);
         Popover::new("profile-menu")
             .anchor(Anchor::BottomLeft)
-            .trigger(profile_row(self.active == Page::Settings))
+            .trigger(profile_row(self.player, selected))
             .trigger_style(StyleRefinement::default().w_full())
             .w_48()
-            .content(move |_, _, cx| settings_button(Rc::clone(&on_select), cx))
+            .content(move |_, _, cx| {
+                v_flex()
+                    .child(menu_button(Page::Account, Rc::clone(&on_select), cx))
+                    .child(menu_button(Page::Settings, Rc::clone(&on_select), cx))
+            })
     }
 }
 
@@ -74,26 +87,26 @@ fn app_header() -> SidebarHeader {
 }
 
 /// Matches SidebarMenuItem's h_7 with p_2: the footer adds the p_2 around this row.
-fn profile_row(selected: bool) -> SidebarFooter {
+fn profile_row(player: Option<String>, selected: bool) -> SidebarFooter {
     SidebarFooter::new()
         .h_3()
         .text_sm()
         .selected(selected)
         .child(Icon::from(IconName::CircleUser))
-        .child("Player")
+        .child(player.unwrap_or_else(|| "Player".to_owned()))
 }
 
-/// Opens Settings and closes the profile menu it sits in.
-fn settings_button(on_select: OnSelect, cx: &mut Context<PopoverState>) -> Button {
+/// Opens `page` and closes the profile menu it sits in.
+fn menu_button(page: Page, on_select: OnSelect, cx: &mut Context<PopoverState>) -> Button {
     let popover = cx.entity().downgrade();
-    Button::new("open-settings")
+    Button::new(page.label())
         .ghost()
         .w_full()
         .justify_start()
-        .icon(page_icon(Page::Settings))
-        .label(Page::Settings.label())
+        .icon(page_icon(page))
+        .label(page.label())
         .on_click(move |_, window, cx| {
-            on_select(Page::Settings, window, cx);
+            on_select(page, window, cx);
             let _ = popover.update(cx, |popover, cx| popover.dismiss(window, cx));
         })
 }
@@ -104,5 +117,6 @@ fn page_icon(page: Page) -> IconName {
         Page::Puzzles => IconName::Puzzle,
         Page::Analyze => IconName::Microscope,
         Page::Settings => IconName::Settings,
+        Page::Account => IconName::CircleUser,
     }
 }

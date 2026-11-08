@@ -1,0 +1,12 @@
+id: routes-imports
+language: Rust
+severity: error
+message: "A route takes a service off AppState; it never reaches a repository or a client."
+note: Imports point downward only — routes → services → repositories and clients → models.
+files: ['**/src/routes/**', '**/src/routes.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(repositories|clients)\b'
+    - matches: outer-path
+      regex: '^crate::(repositories|clients)\b'

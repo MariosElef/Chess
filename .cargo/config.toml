@@ -1,0 +1,4 @@
+# Queries are checked against the committed `.sqlx/` cache, never a live database. After a
+# query or a migration changes: `DATABASE_URL=… cargo sqlx prepare --workspace -- --all-targets`.
+[env]
+SQLX_OFFLINE = "true"

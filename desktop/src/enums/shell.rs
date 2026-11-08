@@ -6,10 +6,11 @@ pub enum Page {
     Puzzles,
     Analyze,
     Settings,
+    Account,
 }
 
 impl Page {
-    /// The pages listed in the sidebar; Settings opens from the profile menu instead.
+    /// The pages listed in the sidebar; Settings and Account open from the profile menu instead.
     pub const NAV: [Self; 3] = [Self::Play, Self::Puzzles, Self::Analyze];
 
     pub fn label(self) -> &'static str {
@@ -18,6 +19,7 @@ impl Page {
             Self::Puzzles => "Puzzles",
             Self::Analyze => "Analyze",
             Self::Settings => "Settings",
+            Self::Account => "Account",
         }
     }
 }

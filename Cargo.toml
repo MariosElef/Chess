@@ -22,11 +22,4 @@ overflow-checks = true
 
 # GPUI renders slowly unoptimized; these crates are optimized even in debug builds.
 [profile.dev.package]
-gpui-fast = { opt-level = 3 }
-gpui-fast-platform = { opt-level = 3 }
-gpui-component = { opt-level = 3 }
 gpui-kit = { opt-level = 3 }
-gpui-kit-assets = { opt-level = 3 }
-rustybuzz = { opt-level = 3 }
-taffy = { opt-level = 3 }
-ttf-parser = { opt-level = 3 }
