@@ -7,7 +7,10 @@ use gpui_kit::{
 
 use crate::board::PIECE_IMAGES;
 
-icon_assets!(ChessIcons, [ChessKnight, Puzzle]);
+icon_assets!(
+    ChessIcons,
+    [ChessKnight, Puzzle, ChevronsLeft, ChevronsRight]
+);
 
 /// The kit's default icons, the Lucide icons only this app uses, and the piece images.
 pub struct AppAssets;

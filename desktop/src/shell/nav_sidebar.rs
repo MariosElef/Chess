@@ -6,7 +6,7 @@ use gpui_kit::{
         Icon, Selectable,
         button::{Button, ButtonVariants},
         h_flex,
-        popover::Popover,
+        popover::{Popover, PopoverState},
         sidebar::{Sidebar, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuItem},
     },
     *,
@@ -33,54 +33,67 @@ impl NavSidebar {
 
 impl RenderOnce for NavSidebar {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let items = Page::NAV.map(|page| {
+        Sidebar::new("nav-sidebar")
+            .collapsible(false)
+            .header(app_header())
+            .child(SidebarMenu::new().children(self.nav_items()))
+            .footer(self.profile_menu())
+    }
+}
+
+impl NavSidebar {
+    fn nav_items(&self) -> [SidebarMenuItem; 2] {
+        Page::NAV.map(|page| {
             let on_select = Rc::clone(&self.on_select);
             SidebarMenuItem::new(page.label())
                 .icon(page.icon())
                 .active(page == self.active)
                 .on_click(move |_, window, cx| on_select(page, window, cx))
-        });
+        })
+    }
 
+    /// The profile row at the bottom; it opens a small menu upward with Settings.
+    fn profile_menu(self) -> Popover {
         let on_select = self.on_select;
-        let profile = Popover::new("profile-menu")
+        Popover::new("profile-menu")
             .anchor(Anchor::BottomLeft)
-            .trigger(
-                // Matches SidebarMenuItem's h_7 with p_2: the footer adds the p_2 around this row.
-                SidebarFooter::new()
-                    .h_3()
-                    .text_sm()
-                    .selected(self.active == Page::Settings)
-                    .child(Icon::from(IconName::CircleUser))
-                    .child("Player"),
-            )
+            .trigger(profile_row(self.active == Page::Settings))
             .trigger_style(StyleRefinement::default().w_full())
             .w_48()
-            .content(move |_, _, cx| {
-                let on_select = Rc::clone(&on_select);
-                let popover = cx.entity().downgrade();
-                Button::new("open-settings")
-                    .ghost()
-                    .w_full()
-                    .justify_start()
-                    .icon(Page::Settings.icon())
-                    .label(Page::Settings.label())
-                    .on_click(move |_, window, cx| {
-                        on_select(Page::Settings, window, cx);
-                        let _ = popover.update(cx, |popover, cx| popover.dismiss(window, cx));
-                    })
-            });
-
-        Sidebar::new("nav-sidebar")
-            .collapsible(false)
-            .header(
-                SidebarHeader::new().child(
-                    h_flex()
-                        .gap_2()
-                        .child(Icon::from(IconName::ChessKnight))
-                        .child("Chess"),
-                ),
-            )
-            .child(SidebarMenu::new().children(items))
-            .footer(profile)
+            .content(move |_, _, cx| settings_button(Rc::clone(&on_select), cx))
     }
+}
+
+fn app_header() -> SidebarHeader {
+    SidebarHeader::new().child(
+        h_flex()
+            .gap_2()
+            .child(Icon::from(IconName::ChessKnight))
+            .child("Chess"),
+    )
+}
+
+/// Matches SidebarMenuItem's h_7 with p_2: the footer adds the p_2 around this row.
+fn profile_row(selected: bool) -> SidebarFooter {
+    SidebarFooter::new()
+        .h_3()
+        .text_sm()
+        .selected(selected)
+        .child(Icon::from(IconName::CircleUser))
+        .child("Player")
+}
+
+/// Opens Settings and closes the profile menu it sits in.
+fn settings_button(on_select: OnSelect, cx: &mut Context<PopoverState>) -> Button {
+    let popover = cx.entity().downgrade();
+    Button::new("open-settings")
+        .ghost()
+        .w_full()
+        .justify_start()
+        .icon(Page::Settings.icon())
+        .label(Page::Settings.label())
+        .on_click(move |_, window, cx| {
+            on_select(Page::Settings, window, cx);
+            let _ = popover.update(cx, |popover, cx| popover.dismiss(window, cx));
+        })
 }

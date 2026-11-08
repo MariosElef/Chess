@@ -9,6 +9,7 @@ use crate::{
 
 pub struct AppShell {
     page: Page,
+    play: Entity<PlayPage>,
     appearance: Appearance,
     _appearance_changes: Subscription,
 }
@@ -25,6 +26,7 @@ impl AppShell {
 
         Self {
             page: Page::Play,
+            play: new_play_page(window, cx),
             appearance,
             _appearance_changes,
         }
@@ -49,28 +51,47 @@ impl AppShell {
 
 impl Render for AppShell {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // The shell outlives the elements it renders; a failed update means the window is closing.
         let shell = cx.entity().downgrade();
-        let open = {
-            let shell = shell.clone();
-            move |page, _: &mut Window, cx: &mut App| {
-                let _ = shell.update(cx, |shell, cx| shell.open(page, cx));
-            }
-        };
-
-        let content = match self.page {
-            Page::Play => PlayPage.into_any_element(),
-            Page::Puzzles => PuzzlesPage.into_any_element(),
-            Page::Settings => SettingsPage::new(self.appearance, move |appearance, window, cx| {
-                let _ = shell.update(cx, |shell, cx| shell.set_appearance(appearance, window, cx));
-            })
-            .into_any_element(),
-        };
-
         h_flex()
             .size_full()
             .items_stretch()
-            .child(NavSidebar::new(self.page, open))
-            .child(div().flex_1().min_w_0().child(content))
+            .child(NavSidebar::new(self.page, open_page(shell.clone())))
+            .child(div().flex_1().min_w_0().child(self.content(shell)))
     }
+}
+
+impl AppShell {
+    fn content(&self, shell: WeakEntity<Self>) -> AnyElement {
+        match self.page {
+            Page::Play => self.play.clone().into_any_element(),
+            Page::Puzzles => PuzzlesPage.into_any_element(),
+            Page::Settings => {
+                SettingsPage::new(self.appearance, change_appearance(shell)).into_any_element()
+            }
+        }
+    }
+}
+
+// The shell outlives the elements it renders; a failed update means the window is closing.
+
+fn open_page(shell: WeakEntity<AppShell>) -> impl Fn(Page, &mut Window, &mut App) + 'static {
+    move |page, _, cx| {
+        let _ = shell.update(cx, |shell, cx| shell.open(page, cx));
+    }
+}
+
+fn change_appearance(
+    shell: WeakEntity<AppShell>,
+) -> impl Fn(Appearance, &mut Window, &mut App) + 'static {
+    move |appearance, window, cx| {
+        let _ = shell.update(cx, |shell, cx| shell.set_appearance(appearance, window, cx));
+    }
+}
+
+/// Starts with keyboard focus, so the arrow keys work before anything is clicked.
+fn new_play_page(window: &mut Window, cx: &mut Context<AppShell>) -> Entity<PlayPage> {
+    let play = cx.new(PlayPage::new);
+    let focus = play.read(cx).focus_handle();
+    focus.focus(window, cx);
+    play
 }

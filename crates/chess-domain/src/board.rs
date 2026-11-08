@@ -39,6 +39,15 @@ impl Board {
         self.squares[square.index()]
     }
 
+    pub fn king_of(&self, side: Side) -> Option<Square> {
+        Square::all()
+            .find(|&square| self.piece_at(square) == Some(Piece::new(side, PieceKind::King)))
+    }
+
+    pub(crate) fn set(&mut self, square: Square, piece: Option<Piece>) {
+        self.squares[square.index()] = piece;
+    }
+
     fn place(&mut self, file: u8, rank: u8, piece: Piece) {
         let square = Square::new(file, rank).expect("the starting layout stays on the board");
         self.squares[square.index()] = Some(piece);

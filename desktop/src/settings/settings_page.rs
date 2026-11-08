@@ -27,7 +27,7 @@ impl SettingsPage {
 
 impl RenderOnce for SettingsPage {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let selected = Appearance::ALL.iter().position(|a| *a == self.appearance);
+        let selected = Some(self.appearance.index());
         let on_appearance = self.on_appearance;
 
         v_flex()

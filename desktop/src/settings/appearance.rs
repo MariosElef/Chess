@@ -14,6 +14,15 @@ pub enum Appearance {
 impl Appearance {
     pub const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
 
+    /// Its place in `ALL`, which is the order the settings page lists the choices.
+    pub fn index(self) -> usize {
+        match self {
+            Self::System => 0,
+            Self::Light => 1,
+            Self::Dark => 2,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::System => "System",

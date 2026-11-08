@@ -12,6 +12,7 @@ use crate::{assets::AppAssets, shell::AppShell};
 fn main() {
     application().with_assets(AppAssets).run(|cx| {
         init(cx);
+        play::bind_keys(cx);
 
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
