@@ -23,9 +23,12 @@ pub struct ModeStats {
     pub wins: u32,
     pub losses: u32,
     pub draws: u32,
+    /// The latest ratings, oldest first, for its graph.
+    #[serde(default)]
+    pub history: Vec<i32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct PuzzleStats {
     pub rating: Option<i32>,
     pub provisional: bool,
@@ -35,4 +38,7 @@ pub struct PuzzleStats {
     pub best_rush: BestRush,
     pub battle_rating: Option<i32>,
     pub battle_provisional: bool,
+    /// The latest puzzle ratings, oldest first, for its graph.
+    #[serde(default)]
+    pub history: Vec<i32>,
 }

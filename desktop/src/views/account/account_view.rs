@@ -1,8 +1,8 @@
 use gpui_kit::{
+    assets::IconName,
     component::{
-        ActiveTheme as _,
+        ActiveTheme as _, Icon, h_flex,
         input::{InputEvent, InputState},
-        label::Label,
         v_flex,
     },
     *,
@@ -10,8 +10,12 @@ use gpui_kit::{
 
 use crate::{
     clients::{server::ServerClient, settings::SessionTokenFile},
-    components::account::{
-        AccountCard, CloseAccountCard, FormField, GuestCard, SignedInCard, StatsPanel, WaitingCard,
+    components::{
+        account::{
+            AccountCard, CloseAccountCard, FormField, GuestCard, SignedInCard, StatsPanel,
+            WaitingCard,
+        },
+        shell::PLAY_PICTURE,
     },
     enums::account::AccountForm,
     models::{
@@ -437,34 +441,61 @@ impl AccountView {
     /// The Account page inside the app; before it opens, a welcome above the forms.
     fn heading(&self, cx: &App) -> Div {
         if self.is_admitted() {
-            return v_flex().child(Label::new("Account").text_2xl());
+            return h_flex()
+                .gap_3()
+                .child(Icon::from(IconName::CircleUser).size_7())
+                .child(
+                    div()
+                        .text_3xl()
+                        .font_weight(FontWeight::BOLD)
+                        .child("Account"),
+                );
         }
         v_flex()
             .items_center()
-            .gap_1()
-            .pt_12()
-            .child(Label::new("Chess").text_3xl())
+            .gap_2()
+            .pt_16()
+            .pb_2()
+            .child(img(PLAY_PICTURE).size_16())
             .child(
-                Label::new("Sign in, create an account, or play as a guest")
-                    .text_color(cx.theme().muted_foreground),
+                div()
+                    .text_3xl()
+                    .font_weight(FontWeight::EXTRA_BOLD)
+                    .child("Chess"),
+            )
+            .child(
+                div()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Sign in, create an account, or play as a guest"),
             )
     }
 }
 
 impl Render for AccountView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .size_full()
-            .p_6()
-            .gap_4()
+        if !self.is_admitted() {
+            return v_flex()
+                .size_full()
+                .p_6()
+                .gap_4()
+                .child(self.heading(cx))
+                .child(div().flex().justify_center().child(self.card(cx)))
+                .into_any_element();
+        }
+        // Signed in: one centred column, as Settings, from the heading to the stats.
+        let column = v_flex()
+            .w_full()
+            .max_w(px(1072.))
+            .gap_5()
             .child(self.heading(cx))
             .child(div().flex().justify_center().child(self.card(cx)))
-            .children(
-                self.stats
-                    .clone()
-                    .filter(|_| self.is_admitted())
-                    .map(|stats| div().flex().justify_center().child(StatsPanel::new(stats))),
-            )
+            .children(self.stats.clone().map(StatsPanel::new));
+        div()
+            .id("account-page")
+            .size_full()
+            .overflow_y_scroll()
+            .child(h_flex().w_full().justify_center().p_6().child(column))
+            .into_any_element()
     }
 }
 

@@ -1,10 +1,11 @@
 use std::time::{Duration, Instant};
 
-use chess_domain::Move;
+use chess_domain::{Move, Position};
 use gpui_kit::*;
 
 use crate::{
     enums::{
+        analysis::MoveClass,
         puzzles::{PuzzleState, PuzzleVerdict},
         sound::Sound,
     },
@@ -21,6 +22,8 @@ use crate::{
 
 /// How long the opponent seems to think before its scripted answer, so the move is seen.
 pub const ANSWER_DELAY: Duration = Duration::from_millis(400);
+/// How long a wrong move stays on the board with its miss, as chess.com shows it, before it goes.
+pub const MISS_PAUSE: Duration = Duration::from_millis(1000);
 
 /// One puzzle on the shared board for Practice and Rush: moves are judged and the opponent answers.
 pub struct PuzzleSolver {
@@ -35,6 +38,12 @@ pub struct PuzzleSolver {
     _board_moves: Subscription,
     /// The opponent's answer on its way; dropped with the puzzle.
     _answer: Option<Task<()>>,
+    /// A wrong move on the board, with the position it made, until it is taken back.
+    missed: Option<(Position, Move)>,
+    /// Whether a wrong move is taken back to try again, as in Practice; Rush and Battle move on.
+    retries: bool,
+    /// The wrong move's taking back, after its pause.
+    _take_back: Option<Task<()>>,
 }
 
 impl EventEmitter<PuzzleVerdict> for PuzzleSolver {}
@@ -63,6 +72,9 @@ impl PuzzleSolver {
             board,
             _board_moves,
             _answer: None,
+            missed: None,
+            retries: false,
+            _take_back: None,
         }
     }
 
@@ -74,6 +86,8 @@ impl PuzzleSolver {
         self.last_verdict = None;
         self.loaded_at = Some(Instant::now());
         self.solved_at = None;
+        self.missed = None;
+        self._take_back = None;
         self._answer = None;
         self.board.update(cx, |board, cx| {
             board.reset(cx);
@@ -88,6 +102,8 @@ impl PuzzleSolver {
         self.last_verdict = None;
         self.loaded_at = None;
         self.solved_at = None;
+        self.missed = None;
+        self._take_back = None;
         self._answer = None;
         self.board.update(cx, |board, cx| board.reset(cx));
         cx.notify();
@@ -117,7 +133,18 @@ impl PuzzleSolver {
         &self.board
     }
 
-    /// The player's move: a wrong one is refused with a sound; a right one is played and answered.
+    /// The wrong move on the board with its miss, before it is taken back.
+    #[cfg(test)]
+    pub fn shows_miss(&self) -> bool {
+        self.missed.is_some()
+    }
+
+    /// Whether a wrong move is taken back after its pause, so the puzzle can be tried again.
+    pub fn set_retries(&mut self, retries: bool) {
+        self.retries = retries;
+    }
+
+    /// The player's move: a wrong one stays a moment with its miss; a right one is answered.
     fn play(&mut self, mv: Move, cx: &mut Context<Self>) {
         let Some(run) = self.run.as_mut() else {
             return;
@@ -128,10 +155,14 @@ impl PuzzleSolver {
         match verdict {
             PuzzleVerdict::Wrong => {
                 play_sound(Sound::Illegal, cx);
+                self.missed = before.play(mv).ok().map(|after| (after, mv));
                 self.board.update(cx, |board, cx| {
                     board.drop_all_premoves();
                     board.put_down(cx);
                 });
+                if self.retries {
+                    self.take_back_soon(cx);
+                }
             }
             PuzzleVerdict::Correct => {
                 play_move_sound(&before, run.position(), mv, Sound::MoveSelf, false, cx);
@@ -145,6 +176,17 @@ impl PuzzleSolver {
         }
         cx.emit(verdict);
         cx.notify();
+    }
+
+    fn take_back_soon(&mut self, cx: &mut Context<Self>) {
+        self._take_back = Some(cx.spawn(async move |solver, cx| {
+            cx.background_executor().timer(MISS_PAUSE).await;
+            // The solver outlives its pause unless the window is closing.
+            let _ = solver.update(cx, |solver, cx| {
+                solver.missed = None;
+                cx.notify();
+            });
+        }));
     }
 
     fn answer_soon(&mut self, cx: &mut Context<Self>) {
@@ -183,6 +225,19 @@ impl PuzzleSolver {
 
     /// The puzzle's position, taking only the player's pieces: moved on their turn or premoved.
     fn shown_position(&self) -> ShownPosition {
+        if let Some((position, mv)) = self.missed {
+            return ShownPosition {
+                position,
+                last_move: Some(mv),
+                can_move: false,
+                premoves: false,
+                player: self.run.as_ref().map(PuzzleRun::solver),
+                engine_arrow: None,
+                badge: Some((mv.to, MoveClass::Miss)),
+                best_arrow: None,
+                outcome: None,
+            };
+        }
         match &self.run {
             Some(run) => ShownPosition {
                 position: *run.position(),

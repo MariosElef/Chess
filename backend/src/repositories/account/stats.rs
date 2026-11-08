@@ -1,7 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::models::account::{CategoryRatingRow, GameResultsRow, PuzzleCountsRow};
+use crate::models::account::{CategoryRatingRow, GameResultsRow, HistoryRow, PuzzleCountsRow};
 
 /// Every rating category, in order, with the player's rating in it and their best, if any.
 pub async fn ratings(
@@ -12,6 +12,23 @@ pub async fn ratings(
         CategoryRatingRow,
         "src/repositories/sql/account/stats/ratings.sql",
         user_id
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// The player's latest `count` ratings in each category but `skipped`, oldest first.
+pub async fn history(
+    db: impl PgExecutor<'_>,
+    user_id: Uuid,
+    (count, skipped): (i64, &str),
+) -> Result<Vec<HistoryRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        HistoryRow,
+        "src/repositories/sql/account/stats/history.sql",
+        user_id,
+        count,
+        skipped
     )
     .fetch_all(db)
     .await

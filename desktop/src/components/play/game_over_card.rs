@@ -25,6 +25,8 @@ pub struct GameOverActions {
     prefix: &'static str,
     on_review: OnClick,
     choices: Vec<(SharedString, IconName, OnClick)>,
+    /// The smaller buttons' icons over their labels, as on the narrow card.
+    stacked: bool,
 }
 
 impl GameOverActions {
@@ -33,6 +35,7 @@ impl GameOverActions {
             prefix: "",
             on_review: Rc::new(on_review),
             choices: Vec::new(),
+            stacked: false,
         }
     }
 
@@ -51,11 +54,17 @@ impl GameOverActions {
         self.prefix = prefix;
         self
     }
+
+    /// The smaller buttons with their icons over their labels, to fit the narrow card.
+    fn stacked(mut self) -> Self {
+        self.stacked = true;
+        self
+    }
 }
 
 impl RenderOnce for GameOverActions {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let (prefix, on_review) = (self.prefix, self.on_review);
+        let (prefix, on_review, stacked) = (self.prefix, self.on_review, self.stacked);
         let choices = self
             .choices
             .into_iter()
@@ -69,6 +78,7 @@ impl RenderOnce for GameOverActions {
                     },
                 )
                 .icon(icon)
+                .map(|tile| if stacked { tile.stacked() } else { tile })
             })
             .collect();
         v_flex()
@@ -109,7 +119,7 @@ impl GameOverCard {
             title,
             reason,
             detail: None,
-            actions: actions.prefixed("card-"),
+            actions: actions.prefixed("card-").stacked(),
             on_close: Rc::new(on_close),
         }
     }

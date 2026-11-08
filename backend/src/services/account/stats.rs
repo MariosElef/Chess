@@ -4,7 +4,8 @@ use crate::{
     errors::AppError,
     models::{
         account::{
-            CategoryRatingRow, GameResultsRow, GetStatsModel, ModeStatsModel, PuzzleStatsModel,
+            CategoryRatingRow, GameResultsRow, GetStatsModel, HistoryRow, ModeStatsModel,
+            PuzzleStatsModel,
         },
         rating::RatingRow,
     },
@@ -34,6 +35,7 @@ impl StatsService {
         let results = stats::game_results(&self.db, user_id).await?;
         let counts = stats::puzzle_counts(&self.db, user_id).await?;
         let bests = rush_run::bests(&self.db, user_id).await?;
+        let history = stats::history(&self.db, user_id, (GRAPHED, BATTLE_CATEGORY)).await?;
         let mut puzzles = PuzzleStatsModel {
             rating: None,
             provisional: false,
@@ -43,6 +45,7 @@ impl StatsService {
             best_rush: best_rush(bests),
             battle_rating: None,
             battle_provisional: false,
+            history: recent(&history, PUZZLE_CATEGORY),
         };
         let mut modes = Vec::new();
         for row in ratings {
@@ -56,7 +59,12 @@ impl StatsService {
                 puzzles.battle_rating = rating;
                 puzzles.battle_provisional = provisional;
             } else {
-                modes.push(mode(row.category, (rating, provisional, best), &results));
+                let graph = recent(&history, &row.category);
+                modes.push(mode(
+                    row.category,
+                    (rating, provisional, best),
+                    (&results, graph),
+                ));
             }
         }
         Ok(GetStatsModel { modes, puzzles })
@@ -78,10 +86,22 @@ fn shown(row: &CategoryRatingRow) -> (Option<i32>, bool) {
     (Some(whole(rating.rating)), rating.is_provisional())
 }
 
+/// How many of a category's latest ratings its graph shows.
+const GRAPHED: i64 = 30;
+
+/// The category's ratings from the history, rounded and oldest first.
+fn recent(history: &[HistoryRow], category: &str) -> Vec<i32> {
+    history
+        .iter()
+        .filter(|row| row.category == category)
+        .map(|row| whole(row.rating))
+        .collect()
+}
+
 fn mode(
     category: String,
     (rating, provisional, best): (Option<i32>, bool, Option<i32>),
-    results: &[GameResultsRow],
+    (results, history): (&[GameResultsRow], Vec<i32>),
 ) -> ModeStatsModel {
     let played = results.iter().find(|result| result.category == category);
     let (games, wins, draws) = played.map_or((0, 0, 0), |r| (r.games, r.wins, r.draws));
@@ -94,5 +114,6 @@ fn mode(
         wins,
         losses: games - wins - draws,
         draws,
+        history,
     }
 }

@@ -22,9 +22,11 @@ pub struct ModeStatsModel {
     pub wins: i64,
     pub losses: i64,
     pub draws: i64,
+    /// The latest ratings, rounded and oldest first, for its graph.
+    pub history: Vec<i32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PuzzleStatsModel {
     pub rating: Option<i32>,
     pub provisional: bool,
@@ -35,6 +37,8 @@ pub struct PuzzleStatsModel {
     /// The Puzzle Battle rating, before the first rated battle `None`.
     pub battle_rating: Option<i32>,
     pub battle_provisional: bool,
+    /// The latest puzzle ratings, rounded and oldest first, for its graph.
+    pub history: Vec<i32>,
 }
 
 /// A rating category with the player's rating in it, if they have one.
@@ -45,6 +49,13 @@ pub struct CategoryRatingRow {
     pub deviation: Option<f64>,
     pub volatility: Option<f64>,
     pub best: Option<f64>,
+}
+
+/// One rating the player had in a category.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistoryRow {
+    pub category: String,
+    pub rating: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

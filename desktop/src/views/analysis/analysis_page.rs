@@ -710,7 +710,9 @@ impl AnalysisPage {
     fn on_review_event(&mut self, worker: usize, event: EngineEvent, cx: &mut Context<Self>) {
         match event {
             EngineEvent::Message(message) => self.on_review_message(worker, message, cx),
-            EngineEvent::Stopped => self.review_failed(cx),
+            // With no review running, finished or never begun, an engine stopping is no failure.
+            EngineEvent::Stopped if self.reviewer.is_some() => self.review_failed(cx),
+            EngineEvent::Stopped => {}
         }
         cx.notify();
     }
@@ -774,6 +776,7 @@ impl AnalysisPage {
     /// The review is ready: the engines go, live analysis comes back, and the board starts over.
     fn complete_review(&mut self, review: GameReview, cx: &mut Context<Self>) {
         self.review = Some(review);
+        self.review_problem = false;
         self.reviewer = None;
         play_sound(Sound::Notify, cx);
         self.show_position(0, cx);
@@ -1056,7 +1059,7 @@ mod tests {
     use super::AnalysisPage;
     use crate::{
         clients::engine::locate_stockfish,
-        enums::{analysis::MoveClass, history::NavStep, sound::Sound},
+        enums::{analysis::MoveClass, engine::EngineEvent, history::NavStep, sound::Sound},
         models::engine::EngineSettings,
         testing::{centre_of, click, drag},
         views::sound::{played_sounds, record_sounds},
@@ -1368,5 +1371,17 @@ mod tests {
             page.reset_board(cx);
         });
         assert!(!page.read_with(cx, |page, _| page.review_problem));
+    }
+
+    #[gpui_kit::test]
+    fn an_engine_stopping_with_no_review_running_is_no_failure(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        page.update(cx, |page, cx| {
+            page.on_review_event(0, EngineEvent::Stopped, cx);
+        });
+        assert!(
+            !page.read_with(cx, |page, _| page.review_problem),
+            "no review was running, so nothing stopped it"
+        );
     }
 }

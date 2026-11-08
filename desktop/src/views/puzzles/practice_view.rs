@@ -56,6 +56,8 @@ impl PracticeView {
         cx: &mut Context<Self>,
     ) -> Self {
         let solver = cx.new(PuzzleSolver::new);
+        // A wrong move is taken back after its miss, to try the puzzle again.
+        solver.update(cx, |solver, _| solver.set_retries(true));
         let _verdicts = cx.subscribe(&solver, |view, _, verdict: &PuzzleVerdict, cx| {
             view.judged(*verdict, cx);
         });
@@ -255,6 +257,7 @@ mod tests {
     };
 
     use super::PracticeView;
+    use crate::views::puzzles::puzzle_solver::MISS_PAUSE;
     use crate::{
         enums::puzzles::PuzzleState,
         models::puzzles::RatingRange,
@@ -311,6 +314,16 @@ mod tests {
         });
         assert_eq!(status.as_deref(), Some("Not the move. Try again."));
         assert_eq!(state(&view, cx), Some(PuzzleState::Solving));
+        let shows_miss = |cx: &mut VisualTestContext| {
+            view.update(cx, |view, cx| view.solver().read(cx).shows_miss())
+        };
+        assert!(
+            shows_miss(cx),
+            "the wrong move stays a moment with its miss"
+        );
+        cx.executor().advance_clock(MISS_PAUSE);
+        cx.run_until_parked();
+        assert!(!shows_miss(cx), "then it is taken back to try again");
     }
 
     #[gpui_kit::test]

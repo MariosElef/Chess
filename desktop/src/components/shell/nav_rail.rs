@@ -151,7 +151,6 @@ impl NavRail {
             .w(RAIL_WIDTH)
             .items_center()
             .gap(LABEL_GAP)
-            .cursor_pointer()
             .text_color(theme.sidebar_foreground)
             .child(tile)
             .child(
@@ -160,7 +159,11 @@ impl NavRail {
                     .line_height(LABEL_HEIGHT)
                     .child(page.label()),
             )
-            .on_click(move |_, window, cx| on_select(page, window, cx))
+            // An item with a menu opens nothing itself: its pages are picked from the menu.
+            .when(page.menu().is_empty(), |this| {
+                this.cursor_pointer()
+                    .on_click(move |_, window, cx| on_select(page, window, cx))
+            })
     }
 }
 

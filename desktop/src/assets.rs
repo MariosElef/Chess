@@ -38,7 +38,9 @@ icon_assets!(
         UserMinus,
         UserCheck,
         UserX,
-        Mail
+        Mail,
+        Monitor,
+        Volume2
     ]
 );
 
@@ -95,7 +97,7 @@ mod tests {
     use crate::{components::board::PIECE_IMAGES, enums::analysis::MoveClass};
 
     #[test]
-    fn every_piece_picture_of_both_sets_is_served() {
+    fn every_piece_picture_of_every_set_is_served() {
         for image in PIECE_IMAGES {
             let served = AppAssets.load(image.path).expect("loading never fails");
             assert_eq!(served.as_deref(), Some(image.bytes), "{}", image.path);

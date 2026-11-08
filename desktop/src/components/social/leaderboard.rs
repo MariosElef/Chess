@@ -4,7 +4,7 @@ use gpui_kit::{
     *,
 };
 
-use super::avatar::pawn_avatar;
+use super::avatar::square_avatar;
 use crate::{
     components::{play::speed_picture, shell::PUZZLES_PICTURE},
     enums::social::LeaderBoard,
@@ -94,7 +94,7 @@ fn place_row(row: LeaderRow, cx: &App) -> Div {
                 .text_color(muted)
                 .child(format!("#{}", row.place)),
         )
-        .child(pawn_avatar(px(24.)))
+        .child(square_avatar(&row.name, px(24.), cx))
         .child(div().flex_1().min_w_0().child(row.name))
         .child(
             div()

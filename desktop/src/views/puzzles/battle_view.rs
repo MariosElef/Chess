@@ -5,7 +5,7 @@ use std::{
 
 use gpui_kit::*;
 
-use super::puzzle_solver::PuzzleSolver;
+use super::puzzle_solver::{MISS_PAUSE, PuzzleSolver};
 use crate::{
     clients::server::ServerClient,
     components::{
@@ -366,14 +366,12 @@ impl BattleView {
         self.connection
             .read(cx)
             .send(ClientMessage::BattleAnswer { battle_id, solved });
-        if solved {
-            self._next = Some(cx.spawn(async move |view, cx| {
-                cx.background_executor().timer(NEXT_DELAY).await;
-                let _ = view.update(cx, |view, cx| view.show_current(cx));
-            }));
-        } else {
-            self.show_current(cx);
-        }
+        // A solve moves on quickly; a wrong move shows with its miss for a moment first.
+        let pause = if solved { NEXT_DELAY } else { MISS_PAUSE };
+        self._next = Some(cx.spawn(async move |view, cx| {
+            cx.background_executor().timer(pause).await;
+            let _ = view.update(cx, |view, cx| view.show_current(cx));
+        }));
         cx.notify();
     }
 

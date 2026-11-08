@@ -6,9 +6,11 @@ use gpui_kit::{
     *,
 };
 
+use crate::components::panel::START_GREEN;
+
 pub type OnChoose = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// One choice shown as a picture with its name under it; the chosen one is outlined.
+/// One choice shown as a picture with its name under it; the chosen one is ringed in green.
 #[derive(IntoElement)]
 pub struct OptionTile {
     id: ElementId,
@@ -54,20 +56,27 @@ impl RenderOnce for OptionTile {
             .id(self.id)
             .debug_selector(move || selector.clone())
             .items_center()
-            .gap_1p5()
-            .p_2()
-            .rounded(theme.radius)
+            .gap_2()
+            .p_3()
+            .rounded(px(8.))
             .border_2()
             .border_color(if self.selected {
-                theme.ring
+                rgb(START_GREEN).into()
             } else {
                 theme.transparent
             })
+            .bg(theme.accent)
             .cursor_pointer()
-            .hover(|this| this.bg(theme.accent))
-            .when(self.selected, |this| this.bg(theme.accent))
+            .when(!self.selected, |this| {
+                this.hover(|this| this.bg(theme.input))
+            })
             .on_click(move |_, window, cx| on_choose(window, cx))
             .child(self.preview)
-            .child(div().text_sm().child(self.label))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(self.label),
+            )
     }
 }

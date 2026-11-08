@@ -85,10 +85,23 @@ impl RenderOnce for BoardColumn {
                         .left(relative(1.))
                         .ml_1()
                         .gap_1()
-                        .children(self.tools),
+                        .children(self.tools.into_iter().map(tool_slot)),
                 )
             })
     }
+}
+
+/// The size of a tool's place beside the board: every tool centred in one, so they line up.
+const TOOL_SLOT: Pixels = px(32.);
+
+/// A tool in its square, centred, whatever kind of button it is.
+fn tool_slot(tool: AnyElement) -> Div {
+    div()
+        .size(TOOL_SLOT)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(tool)
 }
 
 fn bar_slot(bar: Option<AnyElement>) -> Div {

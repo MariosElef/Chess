@@ -22,6 +22,8 @@ pub struct ChoiceTile {
     picked: bool,
     disabled: bool,
     height: Pixels,
+    /// The icon over the label, for a narrow tile, as the end-of-game card's.
+    stacked: bool,
     on_click: OnClick,
 }
 
@@ -40,6 +42,7 @@ impl ChoiceTile {
             picked,
             disabled: false,
             height: px(42.),
+            stacked: false,
             on_click: Rc::new(on_click),
         }
     }
@@ -57,6 +60,13 @@ impl ChoiceTile {
     /// Dimmed, and a click does nothing.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// The icon over the label, so a tile needs half the width.
+    pub fn stacked(mut self) -> Self {
+        self.stacked = true;
+        self.height = px(56.);
         self
     }
 
@@ -81,6 +91,7 @@ impl RenderOnce for ChoiceTile {
             .justify_center()
             .gap_2()
             .px_2()
+            .when(self.stacked, |this| this.flex_col().gap_1())
             .rounded(px(6.))
             .border_2()
             .bg(theme.accent)

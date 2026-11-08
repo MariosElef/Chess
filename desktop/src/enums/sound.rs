@@ -1,4 +1,4 @@
-//! The game's sounds, chess.com's set.
+//! The game's sounds, played from the set Settings picks: Standard or Lichess's Lisp.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Sound {

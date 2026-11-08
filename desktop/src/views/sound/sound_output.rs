@@ -4,7 +4,11 @@ use std::cell::RefCell;
 use chess_domain::{Move, Position};
 use gpui_kit::{App, Global};
 
-use crate::{clients::sound::Speaker, enums::sound::Sound, services::sound::move_sound};
+use crate::{
+    clients::sound::Speaker,
+    enums::{settings::SoundSet, sound::Sound},
+    services::sound::move_sound,
+};
 
 /// Where the pages' sounds go: the speaker, or in tests a list of what would have played.
 enum SoundOutput {
@@ -19,6 +23,16 @@ impl Global for SoundOutput {}
 pub fn install_speaker(cx: &mut App) {
     if let Some(speaker) = Speaker::open() {
         cx.set_global(SoundOutput::Speaker(speaker));
+    }
+}
+
+/// Plays the app's sounds from `set` from now on.
+pub fn use_sound_set(set: SoundSet, cx: &App) {
+    match cx.try_global::<SoundOutput>() {
+        Some(SoundOutput::Speaker(speaker)) => speaker.use_set(set),
+        #[cfg(test)]
+        Some(SoundOutput::Recorder(_)) => {}
+        None => {}
     }
 }
 

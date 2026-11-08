@@ -3,7 +3,7 @@ use std::{fs, io, path::PathBuf};
 
 use crate::{
     clients::engine::device_cores,
-    enums::settings::{Appearance, BoardTheme, PieceSet},
+    enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
     models::engine::EngineSettings,
 };
 
@@ -12,6 +12,7 @@ const APPEARANCE_FILE: &str = "appearance";
 const ENGINE_FILE: &str = "engine";
 const BOARD_THEME_FILE: &str = "board_theme";
 const PIECE_SET_FILE: &str = "pieces";
+const SOUND_SET_FILE: &str = "sounds";
 
 /// The saved choice, or `None` on a first launch or when the file is missing or unreadable.
 pub fn load_appearance() -> Option<Appearance> {
@@ -38,6 +39,15 @@ pub fn load_piece_set() -> Option<PieceSet> {
 
 pub fn save_piece_set(set: PieceSet) -> io::Result<()> {
     write_setting(PIECE_SET_FILE, set.key())
+}
+
+/// The saved sound set, or `None` on a first launch or when the file is missing or unreadable.
+pub fn load_sound_set() -> Option<SoundSet> {
+    SoundSet::from_key(read_setting(SOUND_SET_FILE)?.trim())
+}
+
+pub fn save_sound_set(set: SoundSet) -> io::Result<()> {
+    write_setting(SOUND_SET_FILE, set.key())
 }
 
 /// The saved engine settings, fitted to this device; its defaults on a first launch.

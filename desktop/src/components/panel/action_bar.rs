@@ -7,5 +7,10 @@ pub fn action_bar(tiles: Vec<ChoiceTile>) -> Div {
     h_flex()
         .w_full()
         .gap_2()
-        .children(tiles.into_iter().map(|tile| div().flex_1().child(tile)))
+        // Each may shrink below its label's width, so a narrow row never pushes a tile out.
+        .children(
+            tiles
+                .into_iter()
+                .map(|tile| div().flex_1().min_w_0().child(tile)),
+        )
 }

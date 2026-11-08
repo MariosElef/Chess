@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    component::{ActiveTheme as _, h_flex, label::Label, radio::RadioGroup, v_flex},
+    assets::IconName,
+    component::{ActiveTheme as _, Icon, h_flex, v_flex},
     *,
 };
 
@@ -10,24 +11,27 @@ use super::{
     option_tile::OptionTile,
 };
 use crate::{
-    components::board::BoardStyle,
-    enums::settings::{Appearance, BoardTheme, PieceSet},
+    components::{board::BoardStyle, panel::ChoiceTile},
+    enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
     models::engine::{DEPTH_CHOICES, EngineSettings, HASH_CHOICES, depth_label, thread_choices},
 };
 
 type OnAppearance = Rc<dyn Fn(Appearance, &mut Window, &mut App)>;
 type OnEngine = Rc<dyn Fn(EngineSettings, &mut Window, &mut App)>;
 type OnBoardStyle = Rc<dyn Fn(BoardStyle, &mut Window, &mut App)>;
+type OnSoundSet = Rc<dyn Fn(SoundSet, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct SettingsPage {
     appearance: Appearance,
     board_style: BoardStyle,
+    sound_set: SoundSet,
     engine: EngineSettings,
     /// This computer's cores, which decide the thread choices.
     cores: usize,
     on_appearance: OnAppearance,
     on_board_style: OnBoardStyle,
+    on_sound_set: OnSoundSet,
     on_engine: OnEngine,
 }
 
@@ -35,6 +39,7 @@ pub struct SettingsPage {
 pub struct SettingsChoices {
     pub appearance: Appearance,
     pub board_style: BoardStyle,
+    pub sound_set: SoundSet,
     pub engine: EngineSettings,
     pub cores: usize,
 }
@@ -44,15 +49,18 @@ impl SettingsPage {
         choices: SettingsChoices,
         on_appearance: impl Fn(Appearance, &mut Window, &mut App) + 'static,
         on_board_style: impl Fn(BoardStyle, &mut Window, &mut App) + 'static,
+        on_sound_set: impl Fn(SoundSet, &mut Window, &mut App) + 'static,
         on_engine: impl Fn(EngineSettings, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             appearance: choices.appearance,
             board_style: choices.board_style,
+            sound_set: choices.sound_set,
             engine: choices.engine,
             cores: choices.cores,
             on_appearance: Rc::new(on_appearance),
             on_board_style: Rc::new(on_board_style),
+            on_sound_set: Rc::new(on_sound_set),
             on_engine: Rc::new(on_engine),
         }
     }
@@ -60,44 +68,79 @@ impl SettingsPage {
 
 impl RenderOnce for SettingsPage {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        v_flex()
-            .size_full()
-            .p_6()
-            .gap_6()
-            .child(Label::new("Settings").text_2xl())
-            .child(self.appearance_section())
+        let column = v_flex()
+            .w_full()
+            .max_w(px(760.))
+            .gap_5()
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(Icon::from(IconName::Settings).size_7())
+                    .child(
+                        div()
+                            .text_3xl()
+                            .font_weight(FontWeight::BOLD)
+                            .child("Settings"),
+                    ),
+            )
+            .child(self.appearance_section(cx))
             .child(self.board_section(cx))
-            .child(self.engine_section(cx))
+            .child(self.sound_section(cx))
+            .child(self.engine_section(cx));
+        div()
+            .id("settings-page")
+            .size_full()
+            .overflow_y_scroll()
+            .child(h_flex().w_full().justify_center().p_6().child(column))
     }
 }
 
 impl SettingsPage {
-    fn appearance_section(&self) -> Div {
-        let on_appearance = Rc::clone(&self.on_appearance);
-        section("Appearance").child(
-            RadioGroup::horizontal("appearance")
-                .children(Appearance::ALL.map(Appearance::label))
-                .selected_index(Some(self.appearance.index()))
-                .on_click(move |index, window, cx| {
-                    on_appearance(Appearance::ALL[*index], window, cx);
-                }),
+    /// System, Light and Dark, as tiles with their icons.
+    fn appearance_section(&self, cx: &App) -> Div {
+        let tiles: Vec<Div> = Appearance::ALL
+            .into_iter()
+            .map(|appearance| {
+                let on_appearance = Rc::clone(&self.on_appearance);
+                let tile = ChoiceTile::new(
+                    format!("appearance-{}", appearance.index()),
+                    appearance.label(),
+                    appearance == self.appearance,
+                    move |window, cx| on_appearance(appearance, window, cx),
+                )
+                .icon(appearance_icon(appearance))
+                .height(px(48.));
+                // An equal share of the row each, not the whole row each.
+                div().flex_1().child(tile)
+            })
+            .collect();
+        card(
+            (IconName::Palette, "Appearance"),
+            "Follow the system, or keep the app light or dark.",
+            h_flex().gap_3().children(tiles),
+            cx,
         )
     }
 
     /// The squares' colours and the pieces for every board, each choice shown as it looks.
     fn board_section(&self, cx: &App) -> Div {
-        section("Board")
-            .child(Label::new("Theme").text_sm())
-            .child(self.theme_tiles(cx))
-            .child(Label::new("Pieces").text_sm())
-            .child(self.piece_set_tiles(cx))
+        card(
+            (IconName::ChessKnight, "Board"),
+            "Every board in the app, in play, puzzles and analysis.",
+            v_flex()
+                .gap_4()
+                .child(labelled("Theme", self.theme_tiles(cx), cx))
+                .child(labelled("Pieces", self.piece_set_tiles(cx), cx)),
+            cx,
+        )
     }
 
     fn theme_tiles(&self, cx: &App) -> Div {
         let style = self.board_style;
         h_flex()
             .flex_wrap()
-            .gap_2()
+            .justify_center()
+            .gap_3()
             .children(BoardTheme::ALL.map(|theme| {
                 let on_board_style = Rc::clone(&self.on_board_style);
                 OptionTile::new(
@@ -117,7 +160,8 @@ impl SettingsPage {
         let style = self.board_style;
         h_flex()
             .flex_wrap()
-            .gap_2()
+            .justify_center()
+            .gap_3()
             .children(PieceSet::ALL.map(|pieces| {
                 let on_board_style = Rc::clone(&self.on_board_style);
                 OptionTile::new(
@@ -133,93 +177,160 @@ impl SettingsPage {
             }))
     }
 
+    /// The app's sounds: the standard set or Lichess's lisp; picking one plays it.
+    fn sound_section(&self, cx: &App) -> Div {
+        let tiles: Vec<Div> = SoundSet::ALL
+            .into_iter()
+            .map(|set| {
+                let on_sound_set = Rc::clone(&self.on_sound_set);
+                div().flex_1().child(
+                    ChoiceTile::new(
+                        format!("sound-set-{}", set.index()),
+                        set.label(),
+                        set == self.sound_set,
+                        move |window, cx| on_sound_set(set, window, cx),
+                    )
+                    .icon(IconName::Volume2)
+                    .height(px(48.)),
+                )
+            })
+            .collect();
+        card(
+            (IconName::Volume2, "Sounds"),
+            "Every move, capture, check and clock warning. Pick one to hear it.",
+            h_flex().gap_3().children(tiles),
+            cx,
+        )
+    }
+
     /// Stockfish's threads, memory and depth; the thread choices come from this device's cores.
     fn engine_section(&self, cx: &App) -> Div {
-        section("Stockfish")
-            .child(hint(
-                "Fewer threads and a depth limit keep the computer quiet; more search deeper.",
-                cx,
-            ))
-            .child(Label::new("Threads").text_sm())
-            .child(self.threads_choice())
-            .child(Label::new("Memory (MB)").text_sm())
-            .child(self.hash_choice())
-            .child(Label::new("Search depth").text_sm())
-            .child(self.depth_choice())
+        let threads = thread_choices(self.cores);
+        let engine = self.engine;
+        card(
+            (IconName::Fish, "Stockfish"),
+            "Fewer threads and a depth limit keep the computer quiet; more search deeper.",
+            v_flex()
+                .gap_4()
+                .child(labelled(
+                    "Threads",
+                    self.engine_tiles(
+                        ("engine-threads", &threads, engine.threads),
+                        |threads| threads.to_string(),
+                        move |threads| EngineSettings { threads, ..engine },
+                    ),
+                    cx,
+                ))
+                .child(labelled(
+                    "Memory (MB)",
+                    self.engine_tiles(
+                        ("engine-hash", &HASH_CHOICES, engine.hash_mb),
+                        |hash_mb| hash_mb.to_string(),
+                        move |hash_mb| EngineSettings { hash_mb, ..engine },
+                    ),
+                    cx,
+                ))
+                .child(labelled(
+                    "Search depth",
+                    self.engine_tiles(
+                        ("engine-depth", &DEPTH_CHOICES, engine.depth),
+                        depth_label,
+                        move |depth| EngineSettings { depth, ..engine },
+                    ),
+                    cx,
+                )),
+            cx,
+        )
     }
 
-    fn threads_choice(&self) -> RadioGroup {
-        let choices = thread_choices(self.cores);
-        let selected = choices
+    /// A row of tiles, one per choice, named by `label`, the current one ringed.
+    fn engine_tiles<T: Copy + PartialEq + 'static>(
+        &self,
+        (group, choices, current): (&'static str, &[T], T),
+        label: impl Fn(T) -> String,
+        settings: impl Fn(T) -> EngineSettings + 'static,
+    ) -> Div {
+        let settings = Rc::new(settings);
+        let tiles: Vec<Div> = choices
             .iter()
-            .position(|&threads| threads == self.engine.threads);
-        let labels: Vec<String> = choices.iter().map(ToString::to_string).collect();
-        let (engine, on_engine) = (self.engine, Rc::clone(&self.on_engine));
-        RadioGroup::horizontal("engine-threads")
-            .children(labels)
-            .selected_index(selected)
-            .on_click(move |index, window, cx| {
-                on_engine(
-                    EngineSettings {
-                        threads: choices[*index],
-                        ..engine
-                    },
-                    window,
-                    cx,
-                );
+            .enumerate()
+            .map(|(index, &choice)| {
+                let (on_engine, settings) = (Rc::clone(&self.on_engine), Rc::clone(&settings));
+                div().flex_1().child(
+                    ChoiceTile::new(
+                        format!("{group}-{index}"),
+                        label(choice),
+                        choice == current,
+                        move |window, cx| on_engine(settings(choice), window, cx),
+                    )
+                    .height(px(36.)),
+                )
             })
-    }
-
-    fn hash_choice(&self) -> RadioGroup {
-        let selected = HASH_CHOICES
-            .iter()
-            .position(|&mb| mb == self.engine.hash_mb);
-        let (engine, on_engine) = (self.engine, Rc::clone(&self.on_engine));
-        RadioGroup::horizontal("engine-hash")
-            .children(HASH_CHOICES.map(|mb| mb.to_string()))
-            .selected_index(selected)
-            .on_click(move |index, window, cx| {
-                on_engine(
-                    EngineSettings {
-                        hash_mb: HASH_CHOICES[*index],
-                        ..engine
-                    },
-                    window,
-                    cx,
-                );
-            })
-    }
-
-    fn depth_choice(&self) -> RadioGroup {
-        let selected = DEPTH_CHOICES
-            .iter()
-            .position(|&depth| depth == self.engine.depth);
-        let (engine, on_engine) = (self.engine, Rc::clone(&self.on_engine));
-        RadioGroup::horizontal("engine-depth")
-            .children(DEPTH_CHOICES.map(depth_label))
-            .selected_index(selected)
-            .on_click(move |index, window, cx| {
-                on_engine(
-                    EngineSettings {
-                        depth: DEPTH_CHOICES[*index],
-                        ..engine
-                    },
-                    window,
-                    cx,
-                );
-            })
+            .collect();
+        h_flex().gap_2().children(tiles)
     }
 }
 
-fn section(title: &'static str) -> Div {
-    v_flex().gap_2().child(Label::new(title).text_lg())
+/// A settings card, as the app's panels: a band with its icon and title, a line about it, and
+/// its choices under them.
+fn card(
+    (icon, title): (IconName, &'static str),
+    about: &'static str,
+    body: impl IntoElement,
+    cx: &App,
+) -> Div {
+    let theme = cx.theme();
+    v_flex()
+        .w_full()
+        .rounded(px(8.))
+        .overflow_hidden()
+        .bg(theme.group_box)
+        .child(
+            h_flex()
+                .gap_2()
+                .px_5()
+                .py_3()
+                .bg(theme.muted)
+                .text_lg()
+                .font_weight(FontWeight::BOLD)
+                .child(Icon::from(icon).size_5())
+                .child(title),
+        )
+        .child(
+            v_flex()
+                .gap_4()
+                .px_5()
+                .py_4()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(about),
+                )
+                .child(body),
+        )
 }
 
-fn hint(text: &'static str, cx: &App) -> Div {
-    div()
-        .text_sm()
-        .text_color(cx.theme().muted_foreground)
-        .child(text)
+/// A small heading over a row of choices.
+fn labelled(label: &'static str, choices: impl IntoElement, cx: &App) -> Div {
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(cx.theme().muted_foreground)
+                .child(label),
+        )
+        .child(choices)
+}
+
+fn appearance_icon(appearance: Appearance) -> IconName {
+    match appearance {
+        Appearance::System => IconName::Monitor,
+        Appearance::Light => IconName::Sun,
+        Appearance::Dark => IconName::Moon,
+    }
 }
 
 #[cfg(test)]
@@ -231,7 +342,7 @@ mod tests {
     use super::{SettingsChoices, SettingsPage};
     use crate::{
         components::board::BoardStyle,
-        enums::settings::{Appearance, BoardTheme, PieceSet},
+        enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
         models::engine::EngineSettings,
         testing::click,
     };
@@ -239,21 +350,26 @@ mod tests {
     /// Draws the settings page and keeps the last board style it was asked for.
     struct Harness {
         style: Rc<Cell<BoardStyle>>,
+        appearance: Rc<Cell<Appearance>>,
+        engine: Rc<Cell<EngineSettings>>,
     }
 
     impl Render for Harness {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             let chosen = Rc::clone(&self.style);
+            let (appearance, engine) = (Rc::clone(&self.appearance), Rc::clone(&self.engine));
             SettingsPage::new(
                 SettingsChoices {
-                    appearance: Appearance::System,
+                    appearance: self.appearance.get(),
                     board_style: self.style.get(),
-                    engine: EngineSettings::for_cores(4),
+                    sound_set: SoundSet::Standard,
+                    engine: self.engine.get(),
                     cores: 4,
                 },
-                |_, _, _| {},
+                move |picked, _, _| appearance.set(picked),
                 move |style, _, _| chosen.set(style),
                 |_, _, _| {},
+                move |settings, _, _| engine.set(settings),
             )
         }
     }
@@ -265,6 +381,8 @@ mod tests {
         let harness_style = Rc::clone(&style);
         let (_, cx) = cx.add_window_view(|_, _| Harness {
             style: harness_style,
+            appearance: Rc::new(Cell::new(Appearance::System)),
+            engine: Rc::new(Cell::new(EngineSettings::for_cores(4))),
         });
         click(cx, "board-theme-3");
         assert_eq!(style.get().theme, BoardTheme::Green);
@@ -276,6 +394,29 @@ mod tests {
                 pieces: PieceSet::Modern,
             },
             "choosing pieces keeps the theme"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn appearance_and_stockfish_are_chosen_by_their_tiles(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let appearance = Rc::new(Cell::new(Appearance::System));
+        let engine = Rc::new(Cell::new(EngineSettings::for_cores(4)));
+        let (picked, settings) = (Rc::clone(&appearance), Rc::clone(&engine));
+        let (_, cx) = cx.add_window_view(|_, _| Harness {
+            style: Rc::new(Cell::new(BoardStyle::default())),
+            appearance: picked,
+            engine: settings,
+        });
+        click(cx, "appearance-2");
+        assert_eq!(appearance.get(), Appearance::Dark);
+        let before = engine.get();
+        click(cx, "engine-hash-2");
+        assert_eq!(engine.get().hash_mb, 256);
+        assert_eq!(
+            engine.get().threads,
+            before.threads,
+            "the other settings stay"
         );
     }
 }

@@ -1,17 +1,16 @@
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex, v_flex},
-    prelude::FluentBuilder as _,
     *,
 };
 
+use super::rating_card::RatingCard;
 use crate::{
-    components::play::speed_label,
-    components::shell::PUZZLES_PICTURE,
+    components::{play::speed_picture, shell::PUZZLES_PICTURE},
     models::account::{ModeStats, PuzzleStats, Stats},
     services::account::{category_of, rating_text, solved_share},
 };
 
-/// The player's ratings in every mode and in puzzles, each on a tile with its best and record.
+/// The player's ratings in every mode and in puzzles, each on a card with its graph.
 #[derive(IntoElement)]
 pub struct StatsPanel {
     stats: Stats,
@@ -25,45 +24,44 @@ impl StatsPanel {
 
 impl RenderOnce for StatsPanel {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let modes: Vec<Div> = self
-            .stats
-            .modes
-            .iter()
-            .map(|mode| mode_tile(mode, cx))
-            .collect();
+        let speeds: Vec<RatingCard> = self.stats.modes.into_iter().map(mode_card).collect();
         v_flex()
             .w_full()
-            .max_w(px(720.))
+            .max_w(px(1072.))
             .gap_3()
             .child(
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
+                    .text_lg()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(cx.theme().foreground)
                     .child("Stats"),
             )
-            .child(h_flex().flex_wrap().gap_3().children(modes))
-            .child(puzzle_tile(self.stats.puzzles, cx))
+            // One even row of the speeds, every card as tall as the tallest, then puzzles across.
+            .child(h_flex().items_stretch().gap_3().children(speeds))
+            .child(puzzle_card(self.stats.puzzles).wide())
     }
 }
 
-fn mode_tile(mode: &ModeStats, cx: &App) -> Div {
-    let name = category_of(&mode.category)
-        .map_or_else(|| div().text_sm().child(mode.category.clone()), speed_label);
+fn mode_card(mode: ModeStats) -> RatingCard {
+    let category = category_of(&mode.category);
+    let name = category.map_or_else(
+        || mode.category.clone(),
+        |category| category.name().to_owned(),
+    );
+    let picture = category.and_then(speed_picture);
     let record = format!(
         "{} games · {} won · {} lost · {} drawn",
         mode.games, mode.wins, mode.losses, mode.draws
     );
-    tile(cx)
-        .w(px(168.))
-        .child(name)
-        .child(big_number(rating_text(mode.rating, mode.provisional)))
-        .when_some(mode.best, |this, best| {
-            this.child(small_line(format!("Best {best}"), cx))
-        })
-        .child(small_line(record, cx))
+    let card = RatingCard::new(
+        (picture, name),
+        rating_text(mode.rating, mode.provisional),
+        mode.history,
+    );
+    best_line(card, mode.best).line(record)
 }
 
-fn puzzle_tile(puzzles: PuzzleStats, cx: &App) -> Div {
+fn puzzle_card(puzzles: PuzzleStats) -> RatingCard {
     let solved = solved_share(puzzles.solved, puzzles.attempted).map_or_else(
         || "No puzzles yet".to_owned(),
         |share| {
@@ -86,49 +84,24 @@ fn puzzle_tile(puzzles: PuzzleStats, cx: &App) -> Div {
         )
     })
     .join(" · ");
-    tile(cx)
-        .w_full()
-        .child(
-            h_flex()
-                .gap_1p5()
-                .text_sm()
-                .child(img(PUZZLES_PICTURE).size_4().flex_shrink_0())
-                .child("Puzzles"),
-        )
-        .child(big_number(rating_text(puzzles.rating, puzzles.provisional)))
-        .when_some(puzzles.best, |this, best| {
-            this.child(small_line(format!("Best {best}"), cx))
-        })
-        .child(small_line(solved, cx))
-        .child(small_line(format!("Puzzle Rush best: {best_rush}"), cx))
-        .child(small_line(
-            format!(
-                "Puzzle Battle rating: {}",
-                rating_text(puzzles.battle_rating, puzzles.battle_provisional)
-            ),
-            cx,
+    let card = RatingCard::new(
+        (Some(PUZZLES_PICTURE), "Puzzles"),
+        rating_text(puzzles.rating, puzzles.provisional),
+        puzzles.history,
+    );
+    best_line(card, puzzles.best)
+        .line(solved)
+        .line(format!("Rush: {best_rush}"))
+        .line(format!(
+            "Battle rating {}",
+            rating_text(puzzles.battle_rating, puzzles.battle_provisional)
         ))
 }
 
-fn tile(cx: &App) -> Div {
-    v_flex()
-        .gap_1()
-        .p_3()
-        .rounded(cx.theme().radius)
-        .border_1()
-        .border_color(cx.theme().border)
-}
-
-fn big_number(text: String) -> Div {
-    div()
-        .text_2xl()
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(text)
-}
-
-fn small_line(text: String, cx: &App) -> Div {
-    div()
-        .text_xs()
-        .text_color(cx.theme().muted_foreground)
-        .child(text)
+/// "Best 1630", once there is one.
+fn best_line(card: RatingCard, best: Option<i32>) -> RatingCard {
+    match best {
+        Some(best) => card.line(format!("Best {best}")),
+        None => card,
+    }
 }

@@ -17,31 +17,55 @@ pub struct PieceImage {
 }
 
 /// Every picture of every set, for the asset source to serve.
-pub const ALL: [PieceImage; 24] = [
+pub const ALL: [PieceImage; 48] = [
     king::CLASSIC_WHITE,
     king::CLASSIC_BLACK,
     king::MODERN_WHITE,
     king::MODERN_BLACK,
+    king::STAUNTY_WHITE,
+    king::STAUNTY_BLACK,
+    king::CALIFORNIA_WHITE,
+    king::CALIFORNIA_BLACK,
     queen::CLASSIC_WHITE,
     queen::CLASSIC_BLACK,
     queen::MODERN_WHITE,
     queen::MODERN_BLACK,
+    queen::STAUNTY_WHITE,
+    queen::STAUNTY_BLACK,
+    queen::CALIFORNIA_WHITE,
+    queen::CALIFORNIA_BLACK,
     rook::CLASSIC_WHITE,
     rook::CLASSIC_BLACK,
     rook::MODERN_WHITE,
     rook::MODERN_BLACK,
+    rook::STAUNTY_WHITE,
+    rook::STAUNTY_BLACK,
+    rook::CALIFORNIA_WHITE,
+    rook::CALIFORNIA_BLACK,
     bishop::CLASSIC_WHITE,
     bishop::CLASSIC_BLACK,
     bishop::MODERN_WHITE,
     bishop::MODERN_BLACK,
+    bishop::STAUNTY_WHITE,
+    bishop::STAUNTY_BLACK,
+    bishop::CALIFORNIA_WHITE,
+    bishop::CALIFORNIA_BLACK,
     knight::CLASSIC_WHITE,
     knight::CLASSIC_BLACK,
     knight::MODERN_WHITE,
     knight::MODERN_BLACK,
+    knight::STAUNTY_WHITE,
+    knight::STAUNTY_BLACK,
+    knight::CALIFORNIA_WHITE,
+    knight::CALIFORNIA_BLACK,
     pawn::CLASSIC_WHITE,
     pawn::CLASSIC_BLACK,
     pawn::MODERN_WHITE,
     pawn::MODERN_BLACK,
+    pawn::STAUNTY_WHITE,
+    pawn::STAUNTY_BLACK,
+    pawn::CALIFORNIA_WHITE,
+    pawn::CALIFORNIA_BLACK,
 ];
 
 pub fn piece_image(piece: Piece, set: PieceSet) -> PieceImage {
@@ -97,6 +121,14 @@ mod tests {
         assert_eq!(
             piece_image(knight, PieceSet::Modern).path,
             "pieces/modern/bN.png"
+        );
+        assert_eq!(
+            piece_image(knight, PieceSet::Staunty).path,
+            "pieces/staunty/bN.svg"
+        );
+        assert_eq!(
+            piece_image(knight, PieceSet::California).path,
+            "pieces/california/bN.svg"
         );
     }
 }

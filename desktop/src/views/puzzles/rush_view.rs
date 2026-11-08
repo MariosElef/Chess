@@ -7,7 +7,7 @@ use gpui_kit::*;
 
 use super::{
     puzzle_request::{TokenSource, report_attempt, request_puzzle},
-    puzzle_solver::PuzzleSolver,
+    puzzle_solver::{MISS_PAUSE, PuzzleSolver},
 };
 use crate::{
     clients::server::ServerClient,
@@ -37,6 +37,9 @@ const TICK: Duration = Duration::from_millis(200);
 const NO_NEW_PUZZLE: &str = "/problems/no-puzzle-in-range";
 /// A solved puzzle stays on the board this long before the next one, so its last move is seen.
 const NEXT_DELAY: Duration = Duration::from_millis(300);
+/// The count before a rush: from 3, a second a number.
+const COUNT_FROM: u8 = 3;
+const COUNT_STEP: Duration = Duration::from_secs(1);
 
 /// A rush's score reached the server: the Rush panel's bests are fetched again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +69,9 @@ pub struct RushView {
     record: Option<RushRecord>,
     _ticker: Option<Task<()>>,
     _next: Option<Task<()>>,
+    /// The count before a rush, as chess.com's: 3, 2, 1, then the first puzzle and the clock.
+    countdown: Option<u8>,
+    _countdown: Option<Task<()>>,
     _verdicts: Subscription,
     /// Back to the Rush panel, from the arrow at the top of the side column.
     on_back: OnBack,
@@ -95,6 +101,8 @@ impl RushView {
             record: None,
             _ticker: None,
             _next: None,
+            countdown: None,
+            _countdown: None,
             _verdicts,
             on_back: Rc::new(|_, _| {}),
         }
@@ -123,14 +131,52 @@ impl RushView {
         self.problem = None;
         self.record = None;
         self._ticker = None;
-        self.waiting = true;
         self.widened = false;
         self.fetching = false;
         self._fetch = None;
         self.solver.update(cx, |solver, cx| solver.clear(cx));
+        // The first puzzle is fetched during the count and shown once it ends.
+        self.waiting = false;
         self.fetch_next(cx);
-        play_sound(Sound::GameStart, cx);
+        self.count_down(cx);
         cx.notify();
+    }
+
+    /// 3, 2, 1 over the board, a beep on each, then the start: the puzzle and its clock.
+    fn count_down(&mut self, cx: &mut Context<Self>) {
+        self.countdown = Some(COUNT_FROM);
+        play_sound(Sound::Notify, cx);
+        self._countdown = Some(cx.spawn(async move |view, cx| {
+            loop {
+                cx.background_executor().timer(COUNT_STEP).await;
+                let counting = view
+                    .update(cx, |view, cx| view.count_step(cx))
+                    .unwrap_or(false);
+                if !counting {
+                    break;
+                }
+            }
+        }));
+    }
+
+    /// One second of the count; false once the rush has begun.
+    fn count_step(&mut self, cx: &mut Context<Self>) -> bool {
+        let next = self
+            .countdown
+            .and_then(|count| count.checked_sub(1))
+            .filter(|count| *count > 0);
+        self.countdown = next;
+        cx.notify();
+        if next.is_some() {
+            play_sound(Sound::Notify, cx);
+            return true;
+        }
+        play_sound(Sound::GameStart, cx);
+        match self.upcoming.take() {
+            Some(puzzle) => self.show(puzzle, cx),
+            None => self.waiting = true,
+        }
+        false
     }
 
     fn elapsed(&self) -> Duration {
@@ -224,7 +270,8 @@ impl RushView {
             PuzzleVerdict::Wrong => {
                 rush.missed_one();
                 self.report(false, cx);
-                self.advance(cx);
+                // The wrong move shows with its miss for a moment before the next puzzle.
+                self.next_after(MISS_PAUSE, cx);
             }
         }
         cx.notify();
@@ -251,8 +298,12 @@ impl RushView {
     }
 
     fn next_soon(&mut self, cx: &mut Context<Self>) {
+        self.next_after(NEXT_DELAY, cx);
+    }
+
+    fn next_after(&mut self, pause: Duration, cx: &mut Context<Self>) {
         self._next = Some(cx.spawn(async move |view, cx| {
-            cx.background_executor().timer(NEXT_DELAY).await;
+            cx.background_executor().timer(pause).await;
             let _ = view.update(cx, |view, cx| view.advance(cx));
         }));
     }
@@ -290,6 +341,8 @@ impl RushView {
         self.over = true;
         self._ticker = None;
         self._next = None;
+        self.countdown = None;
+        self._countdown = None;
         self.upcoming = None;
         self.solver.update(cx, |solver, cx| solver.clear(cx));
         play_sound(Sound::GameEnd, cx);
@@ -299,9 +352,23 @@ impl RushView {
 
     /// Leaving the page mid-rush ends it, and its score counts, as on chess.com.
     pub fn leave(&mut self, cx: &mut Context<Self>) {
+        if self.countdown.is_some() {
+            self.call_off();
+            return;
+        }
         if self.rush.is_some() && !self.over {
             self.finish(cx);
         }
+    }
+
+    /// Left during the count: the rush never began, so nothing counts and nothing is saved.
+    fn call_off(&mut self) {
+        self.rush = None;
+        self.countdown = None;
+        self._countdown = None;
+        self.upcoming = None;
+        self.fetching = false;
+        self._fetch = None;
     }
 
     fn save_score(&mut self, cx: &mut Context<Self>) {
@@ -358,13 +425,41 @@ impl RushView {
     }
 }
 
+/// The count's number, large in a dark circle over the middle of the board.
+fn countdown_overlay(count: u8) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .size(px(160.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .bg(black().opacity(0.65))
+                .text_color(white())
+                .text_size(px(96.))
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .child(count.to_string()),
+        )
+}
+
 impl Render for RushView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let on_back = Rc::clone(&self.on_back);
         let title = PanelTitle::new(RUSH_PICTURE, "Puzzle Rush")
             .on_back(move |window, cx| on_back(window, cx));
+        let board = div()
+            .relative()
+            .size_full()
+            .child(self.solver.clone())
+            .children(self.countdown.map(countdown_overlay));
         board_page(
-            BoardColumn::new(self.solver.clone()),
+            BoardColumn::new(board),
             SidePanel::new().child(title).child(self.panel(cx)),
         )
     }
@@ -376,7 +471,7 @@ mod tests {
 
     use gpui_kit::{Entity, TestAppContext, VisualTestContext};
 
-    use super::{NEXT_DELAY, RushView};
+    use super::{COUNT_FROM, COUNT_STEP, MISS_PAUSE, NEXT_DELAY, RushView};
     use crate::{
         enums::puzzles::RushKind,
         testing::{click, play_and_wait, puzzle_server, wait_until},
@@ -396,8 +491,17 @@ mod tests {
             RushView::new(puzzle_server(), Rc::new(|_| Some("abc".to_owned())), cx)
         });
         view.update(cx, |view, cx| view.start(kind, cx));
+        count_through(cx);
         wait_until(cx, |cx| has_puzzle(&view, cx));
         (view, cx)
+    }
+
+    /// The 3, 2, 1 before a rush, a second at a time.
+    fn count_through(cx: &mut VisualTestContext) {
+        for _ in 0..COUNT_FROM {
+            cx.executor().advance_clock(COUNT_STEP);
+            cx.run_until_parked();
+        }
     }
 
     #[gpui_kit::test]
@@ -424,6 +528,9 @@ mod tests {
             click(cx, "square-g6");
             let strikes = view.update(cx, |view, _| view.rush().map(|rush| rush.strikes()));
             assert_eq!(strikes, Some(strike));
+            // The wrong move shows with its miss before the rush moves on.
+            cx.executor().advance_clock(MISS_PAUSE);
+            cx.run_until_parked();
         }
         assert!(view.update(cx, |view, _| view.is_over()));
         assert!(!has_puzzle(&view, cx), "the board empties at the end");
@@ -480,6 +587,7 @@ mod tests {
             RushView::new(worn_out_server(), Rc::new(|_| Some("abc".to_owned())), cx)
         });
         view.update(cx, |view, cx| view.start(RushKind::Survival, cx));
+        count_through(cx);
         wait_until(cx, |cx| has_puzzle(&view, cx));
         let problem = view.update(cx, |view, _| view.problem.clone());
         assert_eq!(problem, None);
@@ -500,5 +608,27 @@ mod tests {
         assert_eq!(view.update(cx, |view, _| view.problem.clone()), None);
         wait_until(cx, |cx| view.update(cx, |view, _| view.problem.is_some()));
         assert!(!has_puzzle(&view, cx));
+    }
+
+    #[gpui_kit::test]
+    fn a_rush_counts_down_from_three_before_its_first_puzzle(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let (view, cx) = cx.add_window_view(|_, cx| {
+            RushView::new(puzzle_server(), Rc::new(|_| Some("abc".to_owned())), cx)
+        });
+        view.update(cx, |view, cx| view.start(RushKind::ThreeMinutes, cx));
+        let count = |cx: &mut VisualTestContext| view.update(cx, |view, _| view.countdown);
+        assert_eq!(count(cx), Some(3));
+        cx.executor().advance_clock(COUNT_STEP);
+        cx.run_until_parked();
+        assert_eq!(count(cx), Some(2));
+        assert!(!has_puzzle(&view, cx), "no puzzle while counting");
+        for _ in 0..2 {
+            cx.executor().advance_clock(COUNT_STEP);
+            cx.run_until_parked();
+        }
+        assert_eq!(count(cx), None);
+        wait_until(cx, |cx| has_puzzle(&view, cx));
     }
 }

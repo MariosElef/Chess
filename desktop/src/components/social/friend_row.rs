@@ -13,7 +13,7 @@ use gpui_kit::{
     *,
 };
 
-use super::avatar::pawn_avatar;
+use super::avatar::square_avatar;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -60,7 +60,7 @@ impl RenderOnce for FriendRow {
         let (muted, green, ground) = (theme.muted_foreground, theme.success, theme.muted);
         let picture = div()
             .relative()
-            .child(pawn_avatar(PICTURE))
+            .child(square_avatar(&self.name, PICTURE, cx))
             .when(self.online, |this| {
                 this.child(
                     div()

@@ -213,9 +213,16 @@ async fn the_stats_show_every_mode_and_puzzles(db: Db) {
         (blitz["losses"].clone(), blitz["draws"].clone()),
         (json!(0), json!(1))
     );
+    assert_eq!(
+        blitz["history"],
+        json!([1530]),
+        "her blitz rating over time"
+    );
     assert_eq!(modes[0]["rating"], Value::Null, "no bullet yet");
+    assert_eq!(modes[0]["history"], json!([]));
     assert_eq!(stats["puzzles"]["attempted"], 0);
     assert_eq!(stats["puzzles"]["rating"], Value::Null);
+    assert_eq!(stats["puzzles"]["history"], json!([]));
 }
 
 #[sqlx::test]

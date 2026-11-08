@@ -1,8 +1,41 @@
 # Chess
 
-A chess app for two people on one computer or online, a Stockfish analysis board, and puzzles: a GPUI
-desktop app (`desktop/`), an axum server (`backend/`) and the chess rules both share
-(`crates/chess-domain/`).
+A chess app, free to use and share for non-commercial purposes: play online, against bots or a
+friend at the same computer, solve puzzles, review your games with Stockfish, and keep up with
+friends. It is a GPUI desktop app (`desktop/`), an axum server (`backend/`), and the chess rules
+both share (`crates/chess-domain/`), all in Rust. A few of its pictures and sounds are other
+people's and for personal use only: see [CREDITS.md](CREDITS.md).
+
+Its look and feel follow [chess.com](https://www.chess.com), and its puzzles and much of its
+know-how come from [Lichess](https://lichess.org): see [Thanks](#thanks).
+
+This is a community, non-commercial project: anyone is welcome to use it, learn from it and
+contribute by opening a pull request (see [Contributing](#contributing)), for any purpose except
+a commercial one. See [License](#license).
+
+## What it does
+
+- **Play**: online games against other players, with ratings, premoves and reconnecting; bots
+  from 400 to 2800 on Stockfish; or two people at one computer.
+- **Puzzles**: Practice at the difficulty you pick, Puzzle Rush (3 minutes, 5 minutes or
+  Survival) and Puzzle Battle against another player, each with its own rating.
+- **Analysis**: paste a FEN or PGN, explore with Stockfish, and get a Game Review that labels
+  every move the way chess.com does, with accuracy and an evaluation graph.
+- **Social**: friends with who is online and when they last were, a friends' leaderboard,
+  challenges, and chats with friends and groups.
+- **Account**: your rating in every mode, each with its graph, and account deletion.
+- **Settings**: light or dark, four board themes, four piece sets (Classic, Modern, Staunty and
+  California), two sound sets (Standard and Lisp), and how hard Stockfish works.
+
+## Screenshots
+
+<table>
+  <tr><td width="50%"><img src="docs/screenshots/play.png" alt="Play: a game just won, with Game Review on the card"><br><sub>Play: a game just won, with Game Review on the card</sub></td><td width="50%"><img src="docs/screenshots/game-review.png" alt="Game Review: every move labelled, with accuracy"><br><sub>Game Review: every move labelled, with accuracy</sub></td></tr>
+  <tr><td width="50%"><img src="docs/screenshots/reviewing.png" alt="Reviewing: the board plays through the game"><br><sub>Reviewing: the board plays through the game</sub></td><td width="50%"><img src="docs/screenshots/game-review-2.png" alt="Game Review: the evaluation graph and move counts"><br><sub>Game Review: the evaluation graph and move counts</sub></td></tr>
+  <tr><td width="50%"><img src="docs/screenshots/analysis.png" alt="Analysis: Stockfish lines and arrows"><br><sub>Analysis: Stockfish lines and arrows</sub></td><td width="50%"><img src="docs/screenshots/analysis-2.png" alt="Analysis: a loaded game"><br><sub>Analysis: a loaded game</sub></td></tr>
+  <tr><td width="50%"><img src="docs/screenshots/puzzles.png" alt="Puzzles: Practice, Puzzle Rush and Puzzle Battle"><br><sub>Puzzles: Practice, Puzzle Rush and Puzzle Battle</sub></td><td width="50%"><img src="docs/screenshots/friends.png" alt="Friends, with the friends' leaderboard"><br><sub>Friends, with the friends' leaderboard</sub></td></tr>
+  <tr><td width="50%"><img src="docs/screenshots/messages.png" alt="Messages: chats with friends and groups"><br><sub>Messages: chats with friends and groups</sub></td><td width="50%"><img src="docs/screenshots/settings.png" alt="Settings: themes, pieces, sounds and Stockfish"><br><sub>Settings: themes, pieces, sounds and Stockfish</sub></td></tr>
+</table>
 
 ## Running it
 
@@ -48,8 +81,11 @@ DATABASE_URL=postgres://chess:change-me@localhost:5433/chess \
 Puzzles take premoves: while the opponent's answer is on its way, the player can queue their
 next move, played and judged the moment the answer lands.
 
-Puzzle Rush (3 minutes, 5 minutes or Survival) starts easy and gets harder with each puzzle;
-three mistakes end it. Its panel shows your best score of the kind picked, ever and today.
+A wrong move plays on the board with the miss icon on its square for a second, as on chess.com;
+in Practice it then goes back so you can try again. Puzzle Rush (3 minutes, 5 minutes or
+Survival) counts down 3, 2, 1 with a beep each, then starts easy and gets harder with each
+puzzle; three mistakes end it. Its panel shows your best score of the kind picked, ever and
+today.
 
 ## Online play
 
@@ -133,10 +169,11 @@ imported.
 
 ## Stats
 
-The Account page shows your rating in bullet, blitz, rapid, classical and puzzles, each with its
-best and how your games went (won, lost, drawn) or how many puzzles you solved, plus your Puzzle
-Rush bests and Puzzle Battle rating. A `?` after a rating means too few results for it to be
-sure yet.
+The Account page shows your rating in bullet, blitz, rapid, classical and puzzles, each on a
+card with how your last result moved it and a graph of your last 30 ratings, as chess.com's
+stats do, with its best and how your games went (won, lost, drawn) or how many puzzles you
+solved, plus your Puzzle Rush bests and Puzzle Battle rating. A `?` after a rating means too few
+results for it to be sure yet.
 
 Account → Delete account closes the account once its password is typed again: every app signed
 in as it is signed out and disconnected, its searches and invitations are withdrawn and any game
@@ -162,7 +199,27 @@ puzzles it never solved and move its puzzle or battle rating. Online games are d
 server checks every move. Fine among friends; checking puzzle answers on the server would mean
 sending each move and judging it against the solution there.
 
-## Checks
+## Contributing
+
+This is a community project, and contributions of any size are welcome, from a typo to a new
+feature. To contribute:
+
+1. Fork the repository and make a branch for your change.
+2. For anything bigger than a small fix, open an issue first, so the idea can be talked over
+   before you spend time on it.
+3. Keep a pull request to one change, with a title that says what it does.
+4. Run `./ci.sh` (below) and make sure it passes; add tests for what you change.
+5. Update this README if your change is something a player would notice.
+6. Open a pull request against `main`.
+
+The code keeps to a few house rules, which the checks enforce where they can: the layers go
+views → components → services → clients → models → enums, and services, models and enums never
+use GPUI; logic lives in small named functions, with shared helpers in a named module; every
+query has its own `.sql` file under `repositories/sql/`, with no table aliases and times from
+the database's `now()`; no `_ =>` arms on the project's enums; `expect("why")` rather than
+`unwrap`; and every `///` doc is one line.
+
+### Checks
 
 `./ci.sh` runs rustfmt, clippy with warnings as errors, every test, `cargo deny`, the layer
 rules (ast-grep, in `desktop/lint/` and `backend/lint/`) and the check that every source file
@@ -175,3 +232,37 @@ query or a migration:
 ```sh
 DATABASE_URL=postgres://chess:change-me@localhost:5433/chess cargo sqlx prepare --workspace -- --all-targets
 ```
+
+## Thanks
+
+- **[chess.com](https://www.chess.com)**: the app's look and much of how it plays are modelled
+  on chess.com: the Play lobby and its bots, Game Review's move labels and grading bands, Puzzle
+  Rush and Puzzle Battle, the Friends page and its leaderboard, and the stats cards. The
+  Standard sounds and the move-icon, page, speed and end-of-game pictures are chess.com's: they
+  belong to chess.com and are here for personal use only, to be replaced before the app is
+  shared (see [CREDITS.md](CREDITS.md)).
+- **[Lichess](https://lichess.org)**: the puzzles come from the
+  [Lichess puzzle database](https://database.lichess.org/#puzzles) (CC0) and its API; the Staunty
+  and California pieces (by sadsnake1 and Jerry S.) and the Lisp sounds (EdinburghCollective's)
+  are from [lila](https://github.com/lichess-org/lila), under CC BY-NC-SA 4.0, and the
+  Classic pieces are Colin M.L. Burnett's set from lila too, under GPLv2+, which is why they,
+  like the Modern pieces of unknown source, are to be replaced before the app is shared; and the
+  evaluation curve and accuracy formula Game Review uses are Lichess's, which publishes them.
+- **[Stockfish](https://stockfishchess.org)**: the engine behind analysis, Game Review and the
+  bots.
+
+## License
+
+The app is licensed under
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+(CC BY-NC-SA 4.0); the full text is in [LICENSE](LICENSE). In short:
+
+- **Share and adapt it**: copy it, change it and build on it, freely.
+- **Credit it**: say where it came from, link to this licence, and say what you changed.
+- **Not commercially**: no use for commercial advantage or money.
+- **Share alike**: anything you make from it is shared under this same licence.
+
+Because it forbids commercial use, it is source-available rather than open source in the Open
+Source Initiative's sense. Everything in the repository made by someone else, and its own
+licence, is listed in [CREDITS.md](CREDITS.md); some of those files are here for personal use
+only and must be replaced before the app is shared.

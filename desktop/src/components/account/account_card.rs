@@ -1,9 +1,11 @@
 use std::rc::Rc;
 
 use gpui_kit::{
+    assets::IconName,
     component::{
-        ActiveTheme as _,
+        ActiveTheme as _, Sizable as _,
         button::{Button, ButtonVariants},
+        h_flex,
         label::Label,
         v_flex,
     },
@@ -12,7 +14,14 @@ use gpui_kit::{
 };
 
 use super::form_field::FormField;
-use crate::enums::account::AccountForm;
+use crate::{
+    components::{
+        panel::{PanelHeader, StartButton},
+        shell::PLAY_PICTURE,
+        social::avatar,
+    },
+    enums::account::AccountForm,
+};
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -65,19 +74,19 @@ impl AccountCard {
 impl RenderOnce for AccountCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_submit, on_switch, on_guest) = (self.on_submit, self.on_switch, self.on_guest);
-        card(cx)
-            .child(Label::new(self.form.title()).text_xl())
+        let body = v_flex()
+            .gap_4()
+            .px_6()
+            .py_5()
             .children(self.fields)
             .when_some(self.problem, |this, problem| {
                 this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
             })
             .child(
-                Button::new("account-submit")
-                    .primary()
-                    .w_full()
-                    .label(self.form.title())
-                    .loading(self.busy)
-                    .on_click(move |_, window, cx| on_submit(window, cx)),
+                StartButton::new("account-submit", self.form.title(), move |window, cx| {
+                    on_submit(window, cx)
+                })
+                .busy(self.busy),
             )
             .child(
                 Button::new("account-switch")
@@ -86,13 +95,16 @@ impl RenderOnce for AccountCard {
                     .label(self.form.switch_label())
                     .on_click(move |_, window, cx| on_switch(window, cx)),
             )
+            .child(or_rule(cx))
             .child(
                 Button::new("continue-as-guest")
-                    .outline()
                     .w_full()
+                    .large()
+                    .icon(IconName::User)
                     .label("Continue as guest")
                     .on_click(move |_, window, cx| on_guest(window, cx)),
-            )
+            );
+        titled_card(self.form.title(), cx).child(body)
     }
 }
 
@@ -118,31 +130,33 @@ impl GuestCard {
 impl RenderOnce for GuestCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_sign_in, on_sign_up) = (self.on_sign_in, self.on_sign_up);
-        card(cx)
-            .child(Label::new("Playing as a guest").text_xl())
-            .child(
-                Label::new("Sign in or create an account to play online and keep a rating.")
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground),
-            )
-            .child(
-                Button::new("guest-sign-in")
-                    .primary()
-                    .w_full()
-                    .label(AccountForm::SignIn.title())
-                    .on_click(move |_, window, cx| on_sign_in(window, cx)),
-            )
-            .child(
-                Button::new("guest-sign-up")
-                    .outline()
-                    .w_full()
-                    .label(AccountForm::SignUp.title())
-                    .on_click(move |_, window, cx| on_sign_up(window, cx)),
-            )
+        titled_card("Playing as a guest", cx).child(
+            v_flex()
+                .gap_4()
+                .px_6()
+                .py_5()
+                .child(
+                    Label::new("Sign in or create an account to play online and keep a rating.")
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground),
+                )
+                .child(StartButton::new(
+                    "guest-sign-in",
+                    AccountForm::SignIn.title(),
+                    move |window, cx| on_sign_in(window, cx),
+                ))
+                .child(
+                    Button::new("guest-sign-up")
+                        .w_full()
+                        .large()
+                        .label(AccountForm::SignUp.title())
+                        .on_click(move |_, window, cx| on_sign_up(window, cx)),
+                ),
+        )
     }
 }
 
-/// Who is signed in, and the way out.
+/// Who is signed in, across the page: their letter, name and email, Sign out and Delete.
 #[derive(IntoElement)]
 pub struct SignedInCard {
     username: String,
@@ -170,33 +184,49 @@ impl SignedInCard {
 impl RenderOnce for SignedInCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_sign_out, on_delete) = (self.on_sign_out, self.on_delete);
-        card(cx)
+        let theme = cx.theme();
+        let who = v_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_1()
             .child(
-                Label::new("Signed in")
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground),
+                div()
+                    .text_2xl()
+                    .font_weight(FontWeight::BOLD)
+                    .child(self.username.clone()),
             )
-            .child(Label::new(self.username).text_xl())
             .child(
-                Label::new(self.email)
+                div()
                     .text_sm()
-                    .text_color(cx.theme().muted_foreground),
+                    .text_color(theme.muted_foreground)
+                    .child(self.email),
+            );
+        let actions = h_flex()
+            .flex_shrink_0()
+            .gap_2()
+            .child(
+                Button::new("delete-account")
+                    .ghost()
+                    .text_color(theme.danger)
+                    .label("Delete account")
+                    .on_click(move |_, window, cx| on_delete(window, cx)),
             )
             .child(
                 Button::new("sign-out")
                     .outline()
-                    .w_full()
+                    .icon(IconName::LogOut)
                     .label("Sign out")
                     .on_click(move |_, window, cx| on_sign_out(window, cx)),
-            )
-            .child(
-                Button::new("delete-account")
-                    .ghost()
-                    .w_full()
-                    .text_color(cx.theme().danger)
-                    .label("Delete account")
-                    .on_click(move |_, window, cx| on_delete(window, cx)),
-            )
+            );
+        h_flex()
+            .w_full()
+            .gap_5()
+            .p_5()
+            .rounded(px(8.))
+            .bg(theme.group_box)
+            .child(avatar(&self.username, px(72.), cx))
+            .child(who)
+            .child(actions)
     }
 }
 
@@ -281,13 +311,35 @@ impl RenderOnce for WaitingCard {
     }
 }
 
-/// The same bordered panel the new-game menu uses.
+/// A card with the panels' title band over it: the Play picture and `title`.
+fn titled_card(title: &'static str, cx: &App) -> Div {
+    v_flex()
+        .w(px(420.))
+        .rounded(px(8.))
+        .overflow_hidden()
+        .bg(cx.theme().group_box)
+        .child(PanelHeader::new(PLAY_PICTURE, title))
+}
+
+/// A thin line with "or" in its middle, between signing in and playing as a guest.
+fn or_rule(cx: &App) -> Div {
+    let theme = cx.theme();
+    let line = || div().flex_1().h_px().bg(theme.border);
+    h_flex()
+        .gap_3()
+        .text_xs()
+        .text_color(theme.muted_foreground)
+        .child(line())
+        .child("or")
+        .child(line())
+}
+
+/// The account's cards, as the app's panels: their colour and corners.
 fn card(cx: &App) -> Div {
     v_flex()
         .w_96()
         .gap_4()
         .p_6()
-        .rounded(cx.theme().radius)
-        .border_1()
-        .border_color(cx.theme().border)
+        .rounded(px(8.))
+        .bg(cx.theme().group_box)
 }

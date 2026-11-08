@@ -99,16 +99,22 @@ pub enum PieceSet {
     #[default]
     Classic,
     Modern,
+    /// sadsnake1's Staunton-style set, from Lichess.
+    Staunty,
+    /// Jerry S.'s set, from Lichess.
+    California,
 }
 
 impl PieceSet {
-    pub const ALL: [Self; 2] = [Self::Classic, Self::Modern];
+    pub const ALL: [Self; 4] = [Self::Classic, Self::Modern, Self::Staunty, Self::California];
 
     /// Its place in `ALL`, which is the order the settings page lists the choices.
     pub fn index(self) -> usize {
         match self {
             Self::Classic => 0,
             Self::Modern => 1,
+            Self::Staunty => 2,
+            Self::California => 3,
         }
     }
 
@@ -116,6 +122,8 @@ impl PieceSet {
         match self {
             Self::Classic => "Classic",
             Self::Modern => "Modern",
+            Self::Staunty => "Staunty",
+            Self::California => "California",
         }
     }
 
@@ -124,6 +132,49 @@ impl PieceSet {
         match self {
             Self::Classic => "classic",
             Self::Modern => "modern",
+            Self::Staunty => "staunty",
+            Self::California => "california",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|set| set.key() == key)
+    }
+}
+
+/// The sounds the app makes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum SoundSet {
+    /// chess.com's sounds, the app's first set: personal use only, see CREDITS.md.
+    #[default]
+    Standard,
+    /// EdinburghCollective's set, from Lichess.
+    Lisp,
+}
+
+impl SoundSet {
+    pub const ALL: [Self; 2] = [Self::Standard, Self::Lisp];
+
+    /// Its place in `ALL`, which is the order the settings page lists the choices.
+    pub fn index(self) -> usize {
+        match self {
+            Self::Standard => 0,
+            Self::Lisp => 1,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Lisp => "Lisp",
+        }
+    }
+
+    /// How the choice is written in the settings file.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Lisp => "lisp",
         }
     }
 
@@ -134,7 +185,7 @@ impl PieceSet {
 
 #[cfg(test)]
 mod tests {
-    use super::{Appearance, BoardTheme, PieceSet};
+    use super::{Appearance, BoardTheme, PieceSet, SoundSet};
 
     #[test]
     fn every_choice_reads_back_from_its_key() {
@@ -147,6 +198,9 @@ mod tests {
         for set in PieceSet::ALL {
             assert_eq!(PieceSet::from_key(set.key()), Some(set));
         }
+        for set in SoundSet::ALL {
+            assert_eq!(SoundSet::from_key(set.key()), Some(set));
+        }
         assert_eq!(BoardTheme::from_key("purple"), None);
     }
 
@@ -156,6 +210,9 @@ mod tests {
             assert_eq!(theme.index(), index);
         }
         for (index, set) in PieceSet::ALL.into_iter().enumerate() {
+            assert_eq!(set.index(), index);
+        }
+        for (index, set) in SoundSet::ALL.into_iter().enumerate() {
             assert_eq!(set.index(), index);
         }
     }

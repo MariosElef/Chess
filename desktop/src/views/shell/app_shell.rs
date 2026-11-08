@@ -12,8 +12,8 @@ use crate::{
         server::{ServerClient, server_url},
         settings::{
             SessionTokenFile, load_appearance, load_board_theme, load_engine_settings,
-            load_piece_set, save_appearance, save_board_theme, save_engine_settings,
-            save_piece_set,
+            load_piece_set, load_sound_set, save_appearance, save_board_theme,
+            save_engine_settings, save_piece_set, save_sound_set,
         },
     },
     components::{
@@ -21,7 +21,13 @@ use crate::{
         settings::{SettingsChoices, SettingsPage},
         shell::{AccountMenu, AppHeader, MESSAGES_PICTURE, MenuPerson, NavRail},
     },
-    enums::{play::LiveStatus, puzzles::BattleStatus, settings::Appearance, shell::Page},
+    enums::{
+        play::LiveStatus,
+        puzzles::BattleStatus,
+        settings::{Appearance, SoundSet},
+        shell::Page,
+        sound::Sound,
+    },
     models::{
         account::AccountChanged,
         engine::EngineSettings,
@@ -36,6 +42,7 @@ use crate::{
         puzzles::PuzzlesView,
         settings::apply_appearance,
         social::{OpenMessages, SocialView},
+        sound::{play_sound, use_sound_set},
     },
 };
 
@@ -83,6 +90,7 @@ pub struct AppShell {
     appearance: Appearance,
     /// The board theme and pieces every board draws with; also kept as a global for them.
     board_style: BoardStyle,
+    sound_set: SoundSet,
     /// Stockfish's threads, memory and depth, shared by Settings and the analysis board.
     engine_settings: EngineSettings,
     _appearance_changes: Subscription,
@@ -106,6 +114,8 @@ impl AppShell {
 
         let board_style = saved_board_style();
         cx.set_global(board_style);
+        let sound_set = load_sound_set().unwrap_or_default();
+        use_sound_set(sound_set, cx);
         let engine_settings = load_engine_settings();
         let ShellSetup { client, tokens } = setup;
         let account = cx.new(|cx| AccountView::new(client.clone(), tokens, window, cx));
@@ -130,6 +140,7 @@ impl AppShell {
             last_battle: None,
             appearance,
             board_style,
+            sound_set,
             engine_settings,
             _appearance_changes,
             _play_events: pages.play_events,
@@ -180,6 +191,16 @@ impl AppShell {
         self.analyze.update(cx, |analysis, cx| {
             analysis.set_engine_settings(settings, cx)
         });
+        cx.notify();
+    }
+
+    /// Saves the new sound set, plays from it from now on, and gives a move's sound to hear it.
+    fn set_sound_set(&mut self, set: SoundSet, cx: &mut Context<Self>) {
+        self.sound_set = set;
+        // A failed save only means the next launch starts on the standard sounds.
+        let _ = save_sound_set(set);
+        use_sound_set(set, cx);
+        play_sound(Sound::MoveSelf, cx);
         cx.notify();
     }
 
@@ -320,11 +341,13 @@ impl AppShell {
                 SettingsChoices {
                     appearance: self.appearance,
                     board_style: self.board_style,
+                    sound_set: self.sound_set,
                     engine: self.engine_settings,
                     cores: device_cores(),
                 },
                 change_appearance(shell.clone()),
                 change_board_style(shell.clone()),
+                change_sound_set(shell.clone()),
                 change_engine_settings(shell),
             )
             .into_any_element(),
@@ -345,6 +368,14 @@ fn change_engine_settings(
 ) -> impl Fn(EngineSettings, &mut Window, &mut App) + 'static {
     move |settings, _, cx| {
         let _ = shell.update(cx, |shell, cx| shell.set_engine_settings(settings, cx));
+    }
+}
+
+fn change_sound_set(
+    shell: WeakEntity<AppShell>,
+) -> impl Fn(SoundSet, &mut Window, &mut App) + 'static {
+    move |set, _, cx| {
+        let _ = shell.update(cx, |shell, cx| shell.set_sound_set(set, cx));
     }
 }
 
@@ -749,6 +780,37 @@ mod tests {
         });
         click(cx, "rail-menu-Messages");
         assert_eq!(shell.read_with(cx, |shell, _| shell.page), Page::Messages);
+    }
+
+    #[gpui_kit::test]
+    fn clicking_social_itself_opens_nothing(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let path = env::temp_dir().join(format!("chess-shell-social-test-{}", process::id()));
+        let setup = ShellSetup {
+            client: guest_server(),
+            tokens: SessionTokenFile::at(path),
+        };
+        let (shell, cx) = cx.add_window_view(|window, cx| AppShell::with(setup, window, cx));
+        let account = shell.update(cx, |shell, _| shell.account.clone());
+        account.update_in(cx, |account, window, cx| {
+            account.continue_as_guest(window, cx)
+        });
+        wait_until(cx, |cx| {
+            account.update(cx, |account, _| account.is_admitted())
+        });
+        let social = centre_of(cx, "rail-Social");
+        cx.simulate_mouse_move(social, None, Modifiers::none());
+        wait_until(cx, |cx| {
+            cx.executor().advance_clock(Duration::from_millis(200));
+            cx.debug_bounds("rail-menu-Messages").is_some()
+        });
+        click(cx, "rail-Social");
+        assert_eq!(
+            shell.read_with(cx, |shell, _| shell.page),
+            Page::Play,
+            "Friends and Messages are picked from the menu"
+        );
     }
 
     #[gpui_kit::test]
