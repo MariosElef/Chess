@@ -1,0 +1,8 @@
+//! Every closed set of values the layers share, one file per theme. An enum's own small rules
+//! stay on it; an enum private to one file stays in that file.
+pub mod analysis;
+pub mod board;
+pub mod engine;
+pub mod history;
+pub mod settings;
+pub mod shell;

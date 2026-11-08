@@ -1,21 +1,19 @@
-mod analysis;
 mod assets;
-mod board;
-mod engine;
-mod history;
-mod play;
-mod puzzles;
-mod settings;
-mod shell;
+mod clients;
+mod components;
+mod enums;
+mod models;
+mod services;
+mod views;
 
 use gpui_kit::*;
 
-use crate::{assets::AppAssets, shell::AppShell};
+use crate::{assets::AppAssets, views::shell::AppShell};
 
 fn main() {
     application().with_assets(AppAssets).run(|cx| {
         init(cx);
-        history::bind_keys(cx);
+        views::history::bind_keys(cx);
 
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

@@ -5,7 +5,7 @@ use gpui_kit::{
     assets::{Assets, icon_assets},
 };
 
-use crate::board::PIECE_IMAGES;
+use crate::components::board::PIECE_IMAGES;
 
 icon_assets!(
     ChessIcons,

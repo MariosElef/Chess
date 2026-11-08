@@ -1,0 +1,12 @@
+id: enums-imports
+language: Rust
+severity: error
+message: "An enum is a closed set of values: it names nothing else in the app."
+note: Imports point downward only — views → components → services → clients → models → enums.
+files: ['**/src/enums/**', '**/src/enums.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(views|components|services|clients|models)\b'
+    - matches: outer-path
+      regex: '^crate::(views|components|services|clients|models)\b'

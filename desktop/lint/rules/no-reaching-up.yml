@@ -1,0 +1,17 @@
+id: no-reaching-up
+language: Rust
+severity: error
+message: "`super::super::` reaches another layer past every import rule: name it from `crate::`."
+files:
+  - '**/src/views/**'
+  - '**/src/components/**'
+  - '**/src/services/**'
+  - '**/src/clients/**'
+  - '**/src/models/**'
+  - '**/src/enums/**'
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bsuper::super\b'
+    - matches: outer-path
+      regex: '^super::super\b'

@@ -1,0 +1,6 @@
+# The desktop's layering: views → components → services → clients → models → enums.
+# `ast-grep scan` checks the code; `ast-grep test` proves each rule catches what it must.
+ruleDirs: [lint/rules]
+utilDirs: [lint/utils]
+testConfigs:
+  - testDir: lint/rule-tests

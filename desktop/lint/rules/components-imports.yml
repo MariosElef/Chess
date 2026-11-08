@@ -1,0 +1,12 @@
+id: components-imports
+language: Rust
+severity: error
+message: "A component draws what it is handed: it never reaches a view or a client."
+note: Imports point downward only — views → components → services → clients → models → enums.
+files: ['**/src/components/**', '**/src/components.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(views|clients)\b'
+    - matches: outer-path
+      regex: '^crate::(views|clients)\b'

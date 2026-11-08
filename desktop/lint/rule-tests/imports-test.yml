@@ -1,0 +1,51 @@
+id: components-imports
+valid:
+  - "use crate::services::board::BoardInteraction;"
+  - "use crate::{enums::board::SquareHighlight, models::analysis::LineView};"
+  - "// crate::clients::engine in a comment"
+  - 'const NAME: &str = "crate::views::play";'
+invalid:
+  - "use crate::clients::engine::device_cores;"
+  - "use crate::views::shell::AppShell;"
+  - |
+    use crate::{
+        enums::shell::Page,
+        views::shell::AppShell,
+    };
+  - "fn f() { crate::clients::engine::device_cores(); }"
+---
+id: services-imports
+valid:
+  - "use crate::clients::engine::Engine;"
+  - "use crate::models::engine::EngineSettings;"
+  - "use crate::enums::board::ClickOutcome;"
+invalid:
+  - "use crate::components::board::BoardGrid;"
+  - "use crate::views::play::PlayPage;"
+  - "fn f() -> crate::views::play::PlayPage { todo!() }"
+---
+id: clients-imports
+valid:
+  - "use crate::models::engine::EngineSettings;"
+  - "use crate::enums::engine::EngineEvent;"
+invalid:
+  - "use crate::services::engine::SearchQueue;"
+  - "use crate::{models::engine::EngineSettings, components::board::BoardGrid};"
+  - "fn f() { crate::views::history::bind_keys(); }"
+---
+id: models-imports
+valid:
+  - "use chess_domain::Side;"
+  - "use crate::enums::settings::Appearance;"
+invalid:
+  - "use crate::services::history::GameHistory;"
+  - "use crate::clients::engine::Engine;"
+  - "use crate::components::board::BoardColors;"
+---
+id: enums-imports
+valid:
+  - "use chess_domain::{Move, Square};"
+invalid:
+  - "use crate::models::engine::EngineSettings;"
+  - "use crate::services::board::side_name;"
+  - "fn f(x: crate::models::play::AnalyzeGame) {}"

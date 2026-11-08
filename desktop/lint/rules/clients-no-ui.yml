@@ -1,0 +1,15 @@
+id: clients-no-ui
+language: Rust
+severity: error
+message: "A client may use gpui_kit's channels and executors (gpui_kit::base), nothing that draws."
+files: ['**/src/clients/**', '**/src/clients.rs']
+rule:
+  any:
+    - all:
+        - kind: use_declaration
+        - regex: '\buse\s+(::)?gpui_kit\b'
+        - not: {regex: '\buse\s+(::)?gpui_kit::base::'}
+    - all:
+        - matches: outer-path
+        - regex: '^(::)?gpui_kit::'
+        - not: {regex: '^(::)?gpui_kit::base::'}

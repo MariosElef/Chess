@@ -1,0 +1,12 @@
+id: clients-imports
+language: Rust
+severity: error
+message: "A client talks to the outside world: it never reaches a view, a component or a service."
+note: Imports point downward only — views → components → services → clients → models → enums.
+files: ['**/src/clients/**', '**/src/clients.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(views|components|services)\b'
+    - matches: outer-path
+      regex: '^crate::(views|components|services)\b'

@@ -1,0 +1,17 @@
+id: no-gpui-below-components
+language: Rust
+severity: error
+message: "Services, models and enums are plain Rust: GPUI belongs to views and components."
+files:
+  - '**/src/services/**'
+  - '**/src/services.rs'
+  - '**/src/models/**'
+  - '**/src/models.rs'
+  - '**/src/enums/**'
+  - '**/src/enums.rs'
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\buse\s+(::)?(gpui_kit|gpui)\b'
+    - matches: outer-path
+      regex: '^(::)?(gpui_kit|gpui)::'

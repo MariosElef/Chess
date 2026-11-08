@@ -1,0 +1,12 @@
+id: services-imports
+language: Rust
+severity: error
+message: "A service is logic: it never reaches a view or a component."
+note: Imports point downward only — views → components → services → clients → models → enums.
+files: ['**/src/services/**', '**/src/services.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(views|components)\b'
+    - matches: outer-path
+      regex: '^crate::(views|components)\b'

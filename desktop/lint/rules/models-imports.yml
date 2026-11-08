@@ -1,0 +1,12 @@
+id: models-imports
+language: Rust
+severity: error
+message: "A model is plain data: it only names other models and enums."
+note: Imports point downward only — views → components → services → clients → models → enums.
+files: ['**/src/models/**', '**/src/models.rs']
+rule:
+  any:
+    - kind: use_declaration
+      regex: '\bcrate::(\{[^;]*\b)?(views|components|services|clients)\b'
+    - matches: outer-path
+      regex: '^crate::(views|components|services|clients)\b'
