@@ -7,10 +7,14 @@ use std::{
     time::Duration,
 };
 
+mod challenges;
+mod presence;
+
 use chess_domain::{Position, Rating, TimeControl};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use self::challenges::PendingChallenge;
 use super::{
     live_game::{GameCommand, GameStart, spawn_game},
     pairing::{Seek, cancel, queue, take_match},
@@ -45,6 +49,7 @@ struct HubInner {
     next_connection: AtomicU64,
     games: Mutex<HashMap<Uuid, LiveEntry>>,
     seeks: Mutex<Vec<Seek>>,
+    challenges: Mutex<Vec<PendingChallenge>>,
 }
 
 /// One open socket's queue of messages to send.
@@ -74,24 +79,37 @@ impl PlayHub {
                 next_connection: AtomicU64::new(0),
                 games: Mutex::new(HashMap::new()),
                 seeks: Mutex::new(Vec::new()),
+                challenges: Mutex::new(Vec::new()),
             }),
         }
     }
 
-    /// A new socket for `player`; their games in progress are sent to it straight away, so
-    /// reconnecting puts them back at the board.
+    /// A new socket for `player`; their games in progress and challenges are sent to it
+    /// straight away, so reconnecting puts them back where they were. Their friends hear they
+    /// came online.
     pub fn connect(&self, player: &Player) -> Connection {
         let (sender, messages) = mpsc::channel(OUTBOX_SIZE);
         let id = self.inner.next_connection.fetch_add(1, Ordering::Relaxed);
-        lock(&self.inner.connections)
-            .entry(player.id)
-            .or_default()
-            .push(Outbox { id, sender });
+        let first = {
+            let mut connections = lock(&self.inner.connections);
+            let outboxes = connections.entry(player.id).or_default();
+            outboxes.push(Outbox { id, sender });
+            outboxes.len() == 1
+        };
         for commands in self.games_of(player.id) {
             // A full or finished game has its own way to reach the player.
             let _ = commands.try_send(GameCommand::Snapshot { player: player.id });
         }
+        self.send_challenges(player.id);
+        if first {
+            self.tell_friends(player);
+        }
         Connection { id, messages }
+    }
+
+    /// Whether the player has the app open: at least one socket connected.
+    pub fn is_online(&self, player: Uuid) -> bool {
+        lock(&self.inner.connections).contains_key(&player)
     }
 
     /// Everyone the live server is holding a place for: connected now, or at a board waiting
@@ -108,7 +126,8 @@ impl PlayHub {
         present
     }
 
-    /// A socket closed; with the player's last one gone, their seek goes too.
+    /// A socket closed; with the player's last one gone, their seek and challenges go too, and
+    /// their friends hear they left.
     pub fn disconnect(&self, player: &Player, connection_id: u64) {
         let gone = {
             let mut connections = lock(&self.inner.connections);
@@ -122,6 +141,8 @@ impl PlayHub {
         };
         if gone {
             cancel(&mut lock(&self.inner.seeks), player);
+            self.drop_challenges_of(player.id);
+            self.tell_friends(player);
         }
     }
 
@@ -163,6 +184,24 @@ impl PlayHub {
                 let command = GameCommand::DeclineDraw { player: player.id };
                 self.command(player, game_id, command).await;
             }
+            ClientMessage::Challenge {
+                user_id,
+                initial_s,
+                increment_s,
+                rated,
+            } => {
+                self.challenge(player, user_id, (initial_s, increment_s), rated)
+                    .await;
+            }
+            ClientMessage::CancelChallenge { challenge_id } => {
+                self.cancel_challenge(player, challenge_id);
+            }
+            ClientMessage::AcceptChallenge { challenge_id } => {
+                self.accept_challenge(player, challenge_id).await;
+            }
+            ClientMessage::DeclineChallenge { challenge_id } => {
+                self.decline_challenge(player, challenge_id);
+            }
         }
     }
 
@@ -203,7 +242,10 @@ impl PlayHub {
             opponent
         };
         match opponent {
-            Some(opponent) => self.start_game(opponent, new).await,
+            Some(opponent) => {
+                self.start_game((&opponent.player, &new.player), new.control, rated)
+                    .await;
+            }
             None => self.send(
                 player.id,
                 ServerMessage::Seeking {
@@ -215,42 +257,57 @@ impl PlayHub {
         }
     }
 
-    /// Two seeks met: colours are drawn, the game is stored and its task starts.
-    async fn start_game(&self, first: Seek, second: Seek) {
+    /// Two players meet, from seeks or a challenge: colours are drawn, any seeks and
+    /// challenges of theirs go, the game is stored and its task starts. The game's id, unless it could not start.
+    async fn start_game(
+        &self,
+        (first, second): (&Player, &Player),
+        control: TimeControl,
+        rated: bool,
+    ) -> Option<Uuid> {
         let (white, black) = if rand::random() {
             (first, second)
         } else {
             (second, first)
         };
-        let category = white.control.category().name().to_lowercase();
+        {
+            let mut seeks = lock(&self.inner.seeks);
+            cancel(&mut seeks, white);
+            cancel(&mut seeks, black);
+        }
+        let category = control.category().name().to_lowercase();
         let start = GameStart {
             id: Uuid::now_v7(),
-            white: self.at_board(&white.player, &category).await,
-            black: self.at_board(&black.player, &category).await,
-            rated: white.rated,
-            control: white.control,
+            white: self.at_board(white, &category).await,
+            black: self.at_board(black, &category).await,
+            rated,
+            control,
             category,
         };
         let new_game = NewGame {
             id: start.id,
-            white_id: white.player.id,
-            black_id: black.player.id,
+            white_id: white.id,
+            black_id: black.id,
             category: start.category.clone(),
-            initial_s: i32::try_from(white.control.initial.as_secs()).unwrap_or(i32::MAX),
-            increment_s: i32::try_from(white.control.increment.as_secs()).unwrap_or(i32::MAX),
-            rated: start.rated,
+            initial_s: i32::try_from(control.initial.as_secs()).unwrap_or(i32::MAX),
+            increment_s: i32::try_from(control.increment.as_secs()).unwrap_or(i32::MAX),
+            rated,
             fen: Position::starting().to_string(),
         };
         if let Err(error) = game::insert(&self.inner.db, &new_game).await {
             tracing::error!(?error, "starting a game failed");
-            for player in [white.player.id, black.player.id] {
+            for player in [white.id, black.id] {
                 self.refuse(player, "The game could not start: try again");
             }
-            return;
+            return None;
         }
-        let players = [white.player.id, black.player.id];
+        let players = [white.id, black.id];
         let commands = spawn_game(start, self.clone(), self.inner.db.clone());
         lock(&self.inner.games).insert(new_game.id, LiveEntry { players, commands });
+        // Both are playing now, so nothing else they had waiting can start.
+        self.drop_challenges_of(white.id);
+        self.drop_challenges_of(black.id);
+        Some(new_game.id)
     }
 
     /// The player as their opponent sees them: with their rating in the category, or none for

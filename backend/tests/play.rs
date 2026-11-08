@@ -201,8 +201,8 @@ async fn an_instant_reply_still_costs_time(db: Db) {
     };
     let black_ms = game["black_ms"].as_u64().expect("a clock");
     assert!(
-        black_ms <= 179_990,
-        "a premove costs at least 10 ms, left {black_ms}"
+        black_ms <= 179_000,
+        "a premove costs at least a second, left {black_ms}"
     );
 }
 

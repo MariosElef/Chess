@@ -7,3 +7,4 @@ pub mod play;
 pub mod puzzles;
 pub mod settings;
 pub mod shell;
+pub mod social;

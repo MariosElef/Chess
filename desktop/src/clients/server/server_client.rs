@@ -12,6 +12,7 @@ use crate::{
         play::LiveEvent,
         puzzles::{AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, RatingRange, RushRecord},
         server::{Problem, ServerError},
+        social::{FoundUser, Friends},
     },
 };
 
@@ -133,6 +134,79 @@ impl ServerClient {
             .bearer_auth(token);
         self.http
             .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// Friends, online first, and the requests each way.
+    pub fn friends(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<Friends, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/social/friends"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// Players whose name contains `query`, and where `token`'s player stands with each.
+    pub fn search_players(
+        &self,
+        token: &str,
+        query: &str,
+    ) -> impl Future<Output = Result<Vec<FoundUser>, ServerError>> + use<> {
+        let url = reqwest::Url::parse_with_params(&self.url("/api/social/search"), [("q", query)]);
+        let request = url.map(|url| self.http.client().get(url).bearer_auth(token));
+        self.http.run(async move {
+            let request = request
+                .map_err(|_| ServerError::Unexpected("the search could not be sent".to_owned()))?;
+            read_json(send(request).await?).await
+        })
+    }
+
+    /// Asks the player to be friends; if they had asked first, this accepts.
+    pub fn request_friend(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let body = serde_json::json!({ "user_id": user_id });
+        let request = self
+            .http
+            .client()
+            .post(self.url("/api/social/friends/requests"))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    pub fn accept_friend(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/social/friends/requests/{user_id}/accept");
+        let request = self.http.client().post(self.url(&path)).bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// Unfriends the player, declines their request, or withdraws one sent to them.
+    pub fn remove_friend(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/social/friends/{user_id}");
+        let request = self
+            .http
+            .client()
+            .delete(self.url(&path))
+            .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
     }
 
     /// The live socket for online play, signed in as `token`.

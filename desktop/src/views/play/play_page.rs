@@ -17,8 +17,9 @@ use gpui_kit::{
 
 /// How often the running clock is redrawn and checked for a flag.
 const TICK: Duration = Duration::from_millis(100);
-/// What a premove costs on the clock, as on chess.com; a side with less than this cannot play one.
-const PREMOVE_COST: Duration = Duration::from_millis(100);
+/// What a premove costs on the clock: a second, as the clock shows it (5:02 becomes 5:01). A
+/// side with less than this cannot play one.
+const PREMOVE_COST: Duration = Duration::from_secs(1);
 
 /// The page shows the new-game menu until a game starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,7 +136,7 @@ impl PlayPage {
 
     /// An online game takes the page; otherwise the online lobby, while that is the mode and
     /// no local game is going on.
-    fn shows_online(&self, cx: &App) -> bool {
+    pub fn shows_online(&self, cx: &App) -> bool {
         self.online.read(cx).in_game()
             || (self.mode == PlayMode::Online && self.stage == Stage::Setup)
     }
@@ -652,8 +653,11 @@ mod tests {
         enums::{history::NavStep, sound::Sound},
         testing::{click, drag, lift, release},
         views::history::HistoryNavigation as _,
-        views::play::OnlineView,
         views::sound::{played_sounds, record_sounds},
+        views::{
+            live::{LiveConnection, SessionSource},
+            play::OnlineView,
+        },
     };
 
     fn sq(name: &str) -> Square {
@@ -668,7 +672,9 @@ mod tests {
     fn offline_page(cx: &mut gpui_kit::Context<PlayPage>) -> PlayPage {
         let client =
             ServerClient::new(HttpRuntime::new().expect("a runtime"), "http://127.0.0.1:9");
-        let online = cx.new(|cx| OnlineView::new(client, Rc::new(|_| None), cx));
+        let session: SessionSource = Rc::new(|_| None);
+        let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
+        let online = cx.new(|cx| OnlineView::new(connection, session, cx));
         PlayPage::new(online, cx)
     }
 

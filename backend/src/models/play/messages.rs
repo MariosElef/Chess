@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::game::GameSnapshot;
+use super::{challenge::ChallengeModel, game::GameSnapshot};
 
 /// What the app sends over the live socket.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -34,6 +34,23 @@ pub enum ClientMessage {
     DeclineDraw {
         game_id: Uuid,
     },
+    /// Invite a friend who is online to a game.
+    Challenge {
+        user_id: Uuid,
+        initial_s: u32,
+        increment_s: u32,
+        rated: bool,
+    },
+    /// Withdraw a challenge sent.
+    CancelChallenge {
+        challenge_id: Uuid,
+    },
+    AcceptChallenge {
+        challenge_id: Uuid,
+    },
+    DeclineChallenge {
+        challenge_id: Uuid,
+    },
 }
 
 /// What the server sends over the live socket.
@@ -54,5 +71,12 @@ pub enum ServerMessage {
     /// A message refused, in a sentence.
     Error {
         message: String,
+    },
+    /// A friend came or went, or a friendship or request changed: fetch the friends again.
+    FriendsChanged,
+    /// The challenges waiting, each way, whenever they change.
+    Challenges {
+        sent: Vec<ChallengeModel>,
+        received: Vec<ChallengeModel>,
     },
 }

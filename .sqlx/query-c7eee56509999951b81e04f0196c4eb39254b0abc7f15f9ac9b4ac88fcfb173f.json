@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The ids of $1's friends.\nSELECT\n    CASE\n        WHEN friendships.user_a_id = $1 THEN friendships.user_b_id\n        ELSE friendships.user_a_id\n    END AS \"id!\"\nFROM social.friendships\nWHERE\n    (friendships.user_a_id = $1 OR friendships.user_b_id = $1)\n    AND friendships.status = 'accepted'\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c7eee56509999951b81e04f0196c4eb39254b0abc7f15f9ac9b4ac88fcfb173f"
+}

@@ -6,3 +6,4 @@ pub mod engine;
 pub mod play;
 pub mod puzzles;
 pub mod server;
+pub mod social;

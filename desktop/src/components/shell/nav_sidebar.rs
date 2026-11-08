@@ -3,13 +3,14 @@ use std::rc::Rc;
 use gpui_kit::{
     assets::IconName,
     component::{
-        Icon, Selectable,
+        ActiveTheme as _, Icon, Selectable,
         button::{Button, ButtonVariants},
         h_flex,
         popover::{Popover, PopoverState},
         sidebar::{Sidebar, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuItem},
         v_flex,
     },
+    prelude::FluentBuilder as _,
     *,
 };
 
@@ -22,6 +23,8 @@ pub struct NavSidebar {
     active: Page,
     /// The signed-in username or "Guest", shown on the profile row; `None` shows "Player".
     player: Option<String>,
+    /// Challenges and friend requests waiting, shown on Social.
+    waiting: usize,
     on_select: OnSelect,
 }
 
@@ -34,8 +37,14 @@ impl NavSidebar {
         Self {
             active,
             player,
+            waiting: 0,
             on_select: Rc::new(on_select),
         }
+    }
+
+    pub fn waiting(mut self, waiting: usize) -> Self {
+        self.waiting = waiting;
+        self
     }
 }
 
@@ -50,12 +59,16 @@ impl RenderOnce for NavSidebar {
 }
 
 impl NavSidebar {
-    fn nav_items(&self) -> [SidebarMenuItem; 3] {
+    fn nav_items(&self) -> [SidebarMenuItem; 4] {
+        let waiting = self.waiting;
         Page::NAV.map(|page| {
             let on_select = Rc::clone(&self.on_select);
             SidebarMenuItem::new(page.label())
                 .icon(page_icon(page))
                 .active(page == self.active)
+                .when(page == Page::Social && waiting > 0, |item| {
+                    item.suffix(move |_, cx| count_pill(waiting, cx))
+                })
                 .on_click(move |_, window, cx| on_select(page, window, cx))
         })
     }
@@ -111,11 +124,23 @@ fn menu_button(page: Page, on_select: OnSelect, cx: &mut Context<PopoverState>) 
         })
 }
 
+/// A small red count, for what waits on a page.
+fn count_pill(count: usize, cx: &App) -> Div {
+    div()
+        .px_1p5()
+        .rounded_full()
+        .bg(cx.theme().red)
+        .text_color(white())
+        .text_xs()
+        .child(count.to_string())
+}
+
 fn page_icon(page: Page) -> IconName {
     match page {
         Page::Play => IconName::ChessKnight,
         Page::Puzzles => IconName::Puzzle,
         Page::Analyze => IconName::Microscope,
+        Page::Social => IconName::Users,
         Page::Settings => IconName::Settings,
         Page::Account => IconName::CircleUser,
     }

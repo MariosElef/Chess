@@ -1,9 +1,12 @@
 //! An online game as the server sends it, read for the board and the panel.
 use std::time::Duration;
 
-use chess_domain::{Game, Move, Side};
+use chess_domain::{Game, Move, Side, TimeControl};
 
-use crate::{enums::play::LiveStatus, models::play::GameSnapshot};
+use crate::{
+    enums::play::LiveStatus,
+    models::play::{Challenge, GameSnapshot},
+};
 
 /// The game the snapshot's moves make, played from the start; `None` if a move does not parse
 /// or is not legal, which the server never sends.
@@ -59,6 +62,16 @@ pub fn result_line(snapshot: &GameSnapshot, me: Option<Side>) -> Option<String> 
     Some(line)
 }
 
+/// What a challenge asks for: `5 | 3 · rated`, `3 min · casual`.
+pub fn challenge_terms(challenge: &Challenge) -> String {
+    let control = TimeControl {
+        initial: Duration::from_secs(challenge.initial_s.into()),
+        increment: Duration::from_secs(challenge.increment_s.into()),
+    };
+    let kind = if challenge.rated { "rated" } else { "casual" };
+    format!("{} · {kind}", control.label())
+}
+
 /// The game can still be called off: neither side has made its second move.
 pub fn can_abort(snapshot: &GameSnapshot) -> bool {
     snapshot.status == LiveStatus::Ongoing && snapshot.moves.len() < 2
@@ -88,10 +101,15 @@ mod tests {
 
     use chess_domain::Side;
 
-    use super::{can_abort, clock_left, my_side, rating_line, replay, result_line};
+    use super::{
+        can_abort, challenge_terms, clock_left, my_side, rating_line, replay, result_line,
+    };
     use crate::{
         enums::play::{Color, GameResult, LiveStatus},
-        models::play::{GameSnapshot, PlayerAtBoard, RatingChanges},
+        models::{
+            play::{Challenge, GameSnapshot, PlayerAtBoard, RatingChanges},
+            social::UserRef,
+        },
     };
 
     fn snapshot() -> GameSnapshot {
@@ -200,5 +218,28 @@ mod tests {
             ..snapshot()
         };
         assert!(can_abort(&one_move));
+    }
+
+    #[test]
+    fn a_challenge_says_its_clock_and_whether_it_counts() {
+        let person = |name: &str| UserRef {
+            id: name.to_owned(),
+            username: name.to_owned(),
+        };
+        let challenge = Challenge {
+            id: "c".to_owned(),
+            from: person("ann"),
+            to: person("bob"),
+            initial_s: 300,
+            increment_s: 3,
+            rated: true,
+        };
+        assert_eq!(challenge_terms(&challenge), "5 | 3 · rated");
+        let casual = Challenge {
+            increment_s: 0,
+            rated: false,
+            ..challenge
+        };
+        assert_eq!(challenge_terms(&casual), "5 min · casual");
     }
 }

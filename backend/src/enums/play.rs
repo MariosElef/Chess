@@ -89,3 +89,23 @@ impl From<Outcome> for GameResult {
         }
     }
 }
+
+/// How a challenge was settled, as `play.challenges.status` stores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ChallengeStatus {
+    Accepted,
+    Declined,
+    Cancelled,
+    Expired,
+}
+
+impl ChallengeStatus {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Accepted => "accepted",
+            Self::Declined => "declined",
+            Self::Cancelled => "cancelled",
+            Self::Expired => "expired",
+        }
+    }
+}

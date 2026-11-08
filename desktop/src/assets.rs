@@ -17,7 +17,10 @@ icon_assets!(
         Flag,
         Handshake,
         ArrowUpDown,
-        Microscope
+        Microscope,
+        Users,
+        UserPlus,
+        Swords
     ]
 );
 

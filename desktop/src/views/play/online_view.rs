@@ -18,14 +18,12 @@ use gpui_kit::{
 };
 
 use crate::{
-    clients::server::{LiveSocket, ServerClient},
     components::{
         history::{MoveList, NavigationBar},
         play::{CapturedRow, ClockFace, GameSetup, OnlineOptions},
     },
     enums::{history::NavStep, play::LiveStatus, sound::Sound},
     models::{
-        account::Session,
         board::{MoveMade, ShownPosition},
         play::{AnalyzeGame, ClientMessage, GameSnapshot, LiveEvent, ServerMessage},
     },
@@ -39,15 +37,13 @@ use crate::{
     views::{
         board::BoardView,
         history::{HistoryNavigation, select_move, step_history, with_history_keys},
+        live::{LiveConnection, SessionSource},
         sound::{play_move_sound, play_sound},
     },
 };
 
 /// How often the running clock is redrawn.
 const TICK: Duration = Duration::from_millis(100);
-
-/// Reads the signed-in session, for the live socket and for knowing which player is "me".
-pub type SessionSource = Rc<dyn Fn(&App) -> Option<Session>>;
 
 /// An online game on the board: the server's last word on it, when it arrived, the history to
 /// browse, and the player's own move while the server has not yet confirmed it.
@@ -64,10 +60,11 @@ struct LiveBoard {
 /// Play against someone online: a lobby to ask for a game, then the game on the shared board,
 /// over the live socket.
 pub struct OnlineView {
-    client: ServerClient,
+    connection: Entity<LiveConnection>,
+    _live: Subscription,
     session: SessionSource,
-    socket: Option<LiveSocket>,
-    connected: bool,
+    /// A seek was sent and its answer, or refusal, is still to come.
+    awaiting: bool,
     choice: TimeControl,
     rated: bool,
     seeking: bool,
@@ -75,13 +72,19 @@ pub struct OnlineView {
     problem: Option<String>,
     board: Entity<BoardView>,
     _board_moves: Subscription,
-    _events: Option<Task<()>>,
     _ticker: Option<Task<()>>,
     focus_handle: FocusHandle,
 }
 
 impl OnlineView {
-    pub fn new(client: ServerClient, session: SessionSource, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        connection: Entity<LiveConnection>,
+        session: SessionSource,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let _live = cx.subscribe(&connection, |view, _, event: &LiveEvent, cx| {
+            view.on_event(event.clone(), cx);
+        });
         let view = cx.weak_entity();
         let board = cx.new(|_| {
             BoardView::new(move |cx| view.upgrade().map(|view| view.read(cx).shown_position()))
@@ -90,10 +93,10 @@ impl OnlineView {
             view.move_made(*mv, cx);
         });
         Self {
-            client,
+            connection,
+            _live,
             session,
-            socket: None,
-            connected: false,
+            awaiting: false,
             choice: DEFAULT_TIME_CONTROL.unwrap_or(TimeControl::new(3, 2)),
             rated: true,
             seeking: false,
@@ -101,7 +104,6 @@ impl OnlineView {
             problem: None,
             board,
             _board_moves,
-            _events: None,
             _ticker: None,
             focus_handle: cx.focus_handle(),
         }
@@ -116,45 +118,24 @@ impl OnlineView {
         self.live.is_some()
     }
 
-    /// Opens the live socket for the signed-in player, unless it is open. A game they are in
-    /// arrives on its own as soon as it connects.
+    /// Opens the live connection, unless it is open. A game the player is in arrives on its
+    /// own as soon as it connects.
     pub fn connect(&mut self, cx: &mut Context<Self>) {
-        if self.socket.is_some() {
-            return;
-        }
-        let Some(session) = (self.session)(cx) else {
-            return;
-        };
-        let (socket, mut events) = self.client.live_socket(&session.token);
-        self.socket = Some(socket);
-        self._events = Some(cx.spawn(async move |view, cx| {
-            while let Some(event) = events.recv().await {
-                if view
-                    .update(cx, |view, cx| view.on_event(event, cx))
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        }));
+        self.connection
+            .update(cx, |connection, cx| connection.connect(cx));
     }
 
-    fn send(&self, message: ClientMessage) {
-        if let Some(socket) = &self.socket {
-            socket.send(message);
-        }
+    fn send(&self, message: ClientMessage, cx: &App) {
+        self.connection.read(cx).send(message);
     }
 
     fn on_event(&mut self, event: LiveEvent, cx: &mut Context<Self>) {
         match event {
-            LiveEvent::Connected => {
-                self.connected = true;
-                self.problem = None;
-            }
+            LiveEvent::Connected => self.problem = None,
             LiveEvent::Disconnected => {
                 // The server forgets a seek when its player goes; the game waits for them.
-                self.connected = false;
                 self.seeking = false;
+                self.awaiting = false;
             }
             LiveEvent::Message(message) => self.on_message(*message, cx),
         }
@@ -163,15 +144,26 @@ impl OnlineView {
 
     fn on_message(&mut self, message: ServerMessage, cx: &mut Context<Self>) {
         match message {
-            ServerMessage::Seeking { .. } => self.seeking = true,
+            ServerMessage::Seeking { .. } => {
+                self.seeking = true;
+                self.awaiting = false;
+            }
             ServerMessage::SeekCancelled => self.seeking = false,
-            ServerMessage::Game { game } => self.on_snapshot(game, cx),
-            ServerMessage::Error { message } => {
+            ServerMessage::Game { game } => {
+                self.awaiting = false;
+                self.on_snapshot(game, cx);
+            }
+            // Only a refusal of this view's own seek or game is its to show.
+            ServerMessage::Error { message } if self.awaiting || self.live.is_some() => {
+                self.awaiting = false;
                 if let Some(live) = self.live.as_mut() {
                     live.pending = None;
                 }
                 self.problem = Some(message);
             }
+            ServerMessage::Error { .. }
+            | ServerMessage::FriendsChanged
+            | ServerMessage::Challenges { .. } => {}
         }
     }
 
@@ -295,7 +287,7 @@ impl OnlineView {
             game_id: live.snapshot.id.clone(),
             uci: mv.to_string(),
         };
-        self.send(message);
+        self.send(message, cx);
         cx.notify();
     }
 
@@ -339,8 +331,10 @@ impl OnlineView {
     }
 
     /// While the connection is down, that it is being tried again.
-    fn connection_line(&self) -> Option<String> {
-        (self.socket.is_some() && !self.connected)
+    fn connection_line(&self, cx: &App) -> Option<String> {
+        self.connection
+            .read(cx)
+            .is_reconnecting()
             .then(|| "Connection lost, reconnecting…".to_owned())
     }
 
@@ -348,15 +342,15 @@ impl OnlineView {
         self.live.as_ref().map(|live| live.snapshot.id.clone())
     }
 
-    fn resign(&mut self, _: &mut Context<Self>) {
+    fn resign(&mut self, cx: &mut Context<Self>) {
         if let Some(game_id) = self.game_id() {
-            self.send(ClientMessage::Resign { game_id });
+            self.send(ClientMessage::Resign { game_id }, cx);
         }
     }
 
-    fn abort(&mut self, _: &mut Context<Self>) {
+    fn abort(&mut self, cx: &mut Context<Self>) {
         if let Some(game_id) = self.game_id() {
-            self.send(ClientMessage::Abort { game_id });
+            self.send(ClientMessage::Abort { game_id }, cx);
         }
     }
 
@@ -374,19 +368,20 @@ impl OnlineView {
         self.board.update(cx, |board, cx| board.flip(cx));
     }
 
-    fn offer_draw(&mut self, _: &mut Context<Self>) {
+    fn offer_draw(&mut self, cx: &mut Context<Self>) {
         if let Some(game_id) = self.game_id() {
-            self.send(ClientMessage::OfferDraw { game_id });
+            self.send(ClientMessage::OfferDraw { game_id }, cx);
         }
     }
 
-    fn answer_draw(&mut self, accept: bool, _: &mut Context<Self>) {
+    fn answer_draw(&mut self, accept: bool, cx: &mut Context<Self>) {
         if let Some(game_id) = self.game_id() {
-            self.send(if accept {
+            let answer = if accept {
                 ClientMessage::AcceptDraw { game_id }
             } else {
                 ClientMessage::DeclineDraw { game_id }
-            });
+            };
+            self.send(answer, cx);
         }
     }
 
@@ -402,16 +397,20 @@ impl OnlineView {
         self.connect(cx);
         let can_rate = (self.session)(cx).is_some_and(|session| !session.user.guest);
         self.problem = None;
-        self.send(ClientMessage::Seek {
-            initial_s: seconds(self.choice.initial),
-            increment_s: seconds(self.choice.increment),
-            rated: self.rated && can_rate,
-        });
+        self.awaiting = true;
+        self.send(
+            ClientMessage::Seek {
+                initial_s: seconds(self.choice.initial),
+                increment_s: seconds(self.choice.increment),
+                rated: self.rated && can_rate,
+            },
+            cx,
+        );
         cx.notify();
     }
 
     fn cancel_seek(&mut self, cx: &mut Context<Self>) {
-        self.send(ClientMessage::CancelSeek);
+        self.send(ClientMessage::CancelSeek, cx);
         cx.notify();
     }
 
@@ -420,7 +419,9 @@ impl OnlineView {
         let view = cx.entity().downgrade();
         let (choose, start, rated, cancel) = (view.clone(), view.clone(), view.clone(), view);
         let problem = self.problem.clone().or_else(|| {
-            (self.socket.is_some() && !self.connected)
+            self.connection
+                .read(cx)
+                .is_reconnecting()
                 .then(|| "Connecting to the server…".to_owned())
         });
         let setup = GameSetup::new(
@@ -524,7 +525,7 @@ impl OnlineView {
                         )
                     })
                     .when_some(
-                        self.problem.clone().or_else(|| self.connection_line()),
+                        self.problem.clone().or_else(|| self.connection_line(cx)),
                         |this, problem| {
                             this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
                         },
@@ -712,7 +713,7 @@ mod tests {
         extract::ws::{Message, WebSocket, WebSocketUpgrade},
         routing::get,
     };
-    use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+    use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
 
     use super::OnlineView;
@@ -722,6 +723,7 @@ mod tests {
         models::account::{Session, User},
         models::play::AnalyzeGame,
         testing::{click, wait_until},
+        views::live::{LiveConnection, SessionSource},
         views::sound::{played_sounds, record_sounds},
     };
 
@@ -798,7 +800,9 @@ mod tests {
             },
         };
         cx.add_window_view(|_, cx| {
-            OnlineView::new(client, Rc::new(move |_| Some(session.clone())), cx)
+            let session: SessionSource = Rc::new(move |_| Some(session.clone()));
+            let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
+            OnlineView::new(connection, session, cx)
         })
     }
 

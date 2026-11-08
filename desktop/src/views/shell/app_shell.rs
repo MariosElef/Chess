@@ -18,14 +18,20 @@ use crate::{
         settings::{SettingsChoices, SettingsPage},
         shell::NavSidebar,
     },
-    enums::{settings::Appearance, shell::Page},
-    models::{account::AccountChanged, engine::EngineSettings, play::AnalyzeGame},
+    enums::{play::LiveStatus, settings::Appearance, shell::Page},
+    models::{
+        account::AccountChanged,
+        engine::EngineSettings,
+        play::{AnalyzeGame, LiveEvent, ServerMessage},
+    },
     views::{
         account::AccountView,
         analysis::AnalysisPage,
-        play::{OnlineView, PlayPage, SessionSource},
+        live::{LiveConnection, SessionSource},
+        play::{OnlineView, PlayPage},
         puzzles::PuzzlesView,
         settings::apply_appearance,
+        social::SocialView,
     },
 };
 
@@ -57,6 +63,12 @@ pub struct AppShell {
     _account_changes: Subscription,
     /// Puzzles from the server, fetched the first time the page opens.
     puzzles: Entity<PuzzlesView>,
+    /// The live connection Play's online games and Social share.
+    live: Entity<LiveConnection>,
+    social: Entity<SocialView>,
+    /// A game starting from a challenge opens Play; Social's waiting count redraws the sidebar.
+    _live_events: Subscription,
+    _social_changes: Subscription,
     appearance: Appearance,
     /// The board theme and pieces every board draws with; also kept as a global for them.
     board_style: BoardStyle,
@@ -96,6 +108,10 @@ impl AppShell {
             account,
             _account_changes,
             puzzles: pages.puzzles,
+            live: pages.live,
+            social: pages.social,
+            _live_events: pages.live_events,
+            _social_changes: pages.social_changes,
             appearance,
             board_style,
             engine_settings,
@@ -109,6 +125,9 @@ impl AppShell {
         self.page = page;
         if page == Page::Puzzles {
             self.puzzles.update(cx, |puzzles, cx| puzzles.opened(cx));
+        }
+        if page == Page::Social {
+            self.social.update(cx, |social, cx| social.opened(cx));
         }
         self.analyze.update(cx, |analysis, cx| {
             analysis.set_shown(page == Page::Analyze, cx)
@@ -124,7 +143,7 @@ impl AppShell {
         match page {
             Page::Play => Some(self.play.read(cx).focus_handle()),
             Page::Analyze => Some(self.analyze.read(cx).focus_handle()),
-            Page::Puzzles | Page::Settings | Page::Account => None,
+            Page::Puzzles | Page::Social | Page::Settings | Page::Account => None,
         }
     }
 
@@ -161,6 +180,10 @@ impl AppShell {
         self.play = pages.play;
         self.analyze = pages.analyze;
         self.puzzles = pages.puzzles;
+        self.live = pages.live;
+        self.social = pages.social;
+        self._live_events = pages.live_events;
+        self._social_changes = pages.social_changes;
         self._play_events = pages.play_events;
     }
 
@@ -189,15 +212,14 @@ impl Render for AppShell {
                 .into_any_element();
         }
         let player = account.player_name();
+        let waiting = self.social.read(cx).waiting_for_me();
         let shell = cx.entity().downgrade();
         h_flex()
             .size_full()
             .items_stretch()
-            .child(
-                div()
-                    .debug_selector(|| "nav-sidebar".to_owned())
-                    .child(NavSidebar::new(self.page, player, open_page(shell.clone()))),
-            )
+            .child(div().debug_selector(|| "nav-sidebar".to_owned()).child(
+                NavSidebar::new(self.page, player, open_page(shell.clone())).waiting(waiting),
+            ))
             .child(div().flex_1().min_w_0().child(self.content(shell)))
             .into_any_element()
     }
@@ -209,6 +231,7 @@ impl AppShell {
             Page::Play => self.play.clone().into_any_element(),
             Page::Puzzles => self.puzzles.clone().into_any_element(),
             Page::Analyze => self.analyze.clone().into_any_element(),
+            Page::Social => self.social.clone().into_any_element(),
             Page::Account => self.account.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
                 SettingsChoices {
@@ -283,7 +306,7 @@ fn account_changed(
 ) {
     if account.read(cx).is_admitted() {
         shell.page = Page::Play;
-        shell.play.update(cx, |play, cx| play.connect_online(cx));
+        shell.live.update(cx, |live, cx| live.connect(cx));
     } else {
         shell.fresh_pages(window, cx);
     }
@@ -295,6 +318,10 @@ struct Pages {
     play: Entity<PlayPage>,
     analyze: Entity<AnalysisPage>,
     puzzles: Entity<PuzzlesView>,
+    live: Entity<LiveConnection>,
+    social: Entity<SocialView>,
+    live_events: Subscription,
+    social_changes: Subscription,
     /// Play's "Analyze" button hands its game over to the shell.
     play_events: Subscription,
 }
@@ -307,12 +334,22 @@ impl Pages {
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Self {
-        let play = new_play_page(client.clone(), account, window, cx);
+        let session = session_of(account);
+        let live = cx.new(|_| LiveConnection::new(client.clone(), Rc::clone(&session)));
+        let live_events = cx.subscribe_in(&live, window, open_play_for_new_game);
+        let play = new_play_page(&live, Rc::clone(&session), window, cx);
         let play_events = cx.subscribe_in(&play, window, analyze_game);
+        let social =
+            cx.new(|cx| SocialView::new(client.clone(), session, live.clone(), window, cx));
+        let social_changes = cx.observe(&social, |_, _, cx| cx.notify());
         Self {
             play,
             analyze: cx.new(|cx| AnalysisPage::new(engine_settings, window, cx)),
             puzzles: new_puzzles_view(client.clone(), account, cx),
+            live,
+            social,
+            live_events,
+            social_changes,
             play_events,
         }
     }
@@ -320,22 +357,46 @@ impl Pages {
 
 /// Starts with keyboard focus, so the arrow keys work before anything is clicked.
 fn new_play_page(
-    client: ServerClient,
-    account: &Entity<AccountView>,
+    live: &Entity<LiveConnection>,
+    session: SessionSource,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) -> Entity<PlayPage> {
-    let account = account.downgrade();
-    let session: SessionSource = Rc::new(move |cx| {
-        account
-            .upgrade()
-            .and_then(|account| account.read(cx).session())
-    });
-    let online = cx.new(|cx| OnlineView::new(client, session, cx));
+    let online = cx.new(|cx| OnlineView::new(live.clone(), session, cx));
     let play = cx.new(|cx| PlayPage::new(online, cx));
     let focus = play.read(cx).focus_handle();
     focus.focus(window, cx);
     play
+}
+
+/// Reads the signed-in session from the account, for the pages that need who is playing.
+fn session_of(account: &Entity<AccountView>) -> SessionSource {
+    let account = account.downgrade();
+    Rc::new(move |cx| {
+        account
+            .upgrade()
+            .and_then(|account| account.read(cx).session())
+    })
+}
+
+/// A game just starting, as a challenge accepted on the Social page starts one, opens Play.
+fn open_play_for_new_game(
+    shell: &mut AppShell,
+    _: &Entity<LiveConnection>,
+    event: &LiveEvent,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let LiveEvent::Message(message) = event else {
+        return;
+    };
+    if let ServerMessage::Game { game } = message.as_ref()
+        && game.status == LiveStatus::Ongoing
+        && game.moves.is_empty()
+        && shell.page != Page::Play
+    {
+        shell.open(Page::Play, window, cx);
+    }
 }
 
 /// The board style saved last time, or the defaults on a first launch.
@@ -372,8 +433,9 @@ mod tests {
 
     use axum::{
         Json, Router,
+        extract::ws::{Message, WebSocket, WebSocketUpgrade},
         http::StatusCode,
-        routing::{delete, post},
+        routing::{delete, get, post},
     };
     use gpui_kit::{TestAppContext, VisualTestContext};
     use serde_json::json;
@@ -381,6 +443,8 @@ mod tests {
     use super::{AppShell, ShellSetup};
     use crate::{
         clients::{server::ServerClient, settings::SessionTokenFile},
+        enums::shell::Page,
+        models::play::ClientMessage,
         testing::wait_until,
     };
 
@@ -407,8 +471,34 @@ mod tests {
                 .route(
                     "/api/sessions/current",
                     delete(|| async { Json(json!({ "message": "Signed out successfully" })) }),
+                )
+                .route(
+                    "/api/ws",
+                    get(
+                        |upgrade: WebSocketUpgrade| async move { upgrade.on_upgrade(start_a_game) },
+                    ),
                 ),
         )
+    }
+
+    /// Answers the app's first message with a new game, as a friend accepting a challenge
+    /// starts one.
+    async fn start_a_game(mut socket: WebSocket) {
+        if !matches!(socket.recv().await, Some(Ok(Message::Text(_)))) {
+            return;
+        }
+        let game = json!({ "type": "game", "game": {
+            "id": "g1",
+            "white": { "id": "3", "username": "Guest3", "rating": null },
+            "black": { "id": "4", "username": "Guest4", "rating": null },
+            "rated": false, "initial_s": 180, "increment_s": 2, "moves": [],
+            "white_ms": 180_000, "black_ms": 180_000, "running": null,
+            "status": "ongoing", "result": null, "winner": null, "draw_offer": null,
+            "rating_changes": null
+        }});
+        let _ = socket.send(Message::Text(game.to_string().into())).await;
+        // Kept open, as the server keeps it, until the app goes.
+        while let Some(Ok(_)) = socket.recv().await {}
     }
 
     fn sidebar_shown(cx: &mut VisualTestContext) -> bool {
@@ -448,5 +538,33 @@ mod tests {
             play_before, play_after,
             "the next player gets a fresh Play page"
         );
+    }
+
+    #[gpui_kit::test]
+    fn a_game_starting_elsewhere_opens_play(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let path = env::temp_dir().join(format!("chess-shell-game-test-{}", process::id()));
+        let setup = ShellSetup {
+            client: guest_server(),
+            tokens: SessionTokenFile::at(path),
+        };
+        let (shell, cx) = cx.add_window_view(|window, cx| AppShell::with(setup, window, cx));
+        let account = shell.update(cx, |shell, _| shell.account.clone());
+        account.update_in(cx, |account, window, cx| {
+            account.continue_as_guest(window, cx)
+        });
+        wait_until(cx, |cx| {
+            account.update(cx, |account, _| account.is_admitted())
+        });
+        shell.update_in(cx, |shell, window, cx| {
+            shell.open(Page::Social, window, cx);
+            shell.live.read(cx).send(ClientMessage::CancelSeek);
+        });
+        wait_until(cx, |cx| {
+            shell.update(cx, |shell, _| shell.page == Page::Play)
+        });
+        let in_game = shell.update(cx, |shell, cx| shell.play.read(cx).shows_online(cx));
+        assert!(in_game, "Play shows the online game");
     }
 }

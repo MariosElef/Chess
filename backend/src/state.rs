@@ -10,6 +10,7 @@ use crate::{
         health::HealthService,
         play::PlayHub,
         puzzles::{attempt::AttemptService, puzzle::PuzzleService, rush::RushService},
+        social::FriendService,
     },
 };
 
@@ -23,6 +24,7 @@ pub struct AppState {
     pub attempts: AttemptService,
     pub rushes: RushService,
     pub play: PlayHub,
+    pub friends: FriendService,
 }
 
 impl AppState {
@@ -47,6 +49,7 @@ impl AppState {
         Self {
             users: UserService::new(db.clone()),
             sessions: SessionService::new(db.clone(), play.clone()),
+            friends: FriendService::new(db.clone(), play.clone()),
             puzzles: PuzzleService::new(db.clone(), lichess),
             attempts: AttemptService::new(db.clone()),
             rushes: RushService::new(db.clone()),

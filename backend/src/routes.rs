@@ -2,6 +2,7 @@ mod account;
 mod health;
 mod play;
 mod puzzles;
+mod social;
 
 use std::time::Duration;
 
@@ -32,7 +33,8 @@ pub fn build_router(state: AppState) -> Router {
     let api = Router::new()
         .merge(account::router())
         .nest("/puzzles", puzzles::router())
-        .merge(play::router());
+        .merge(play::router())
+        .nest("/social", social::router());
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(

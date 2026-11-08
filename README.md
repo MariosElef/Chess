@@ -52,11 +52,21 @@ and, for a rated game between two accounts, updates both ratings. Guests play un
 app drops its connection it reconnects on its own, and the game comes back where it was.
 Before both sides have moved, either player can abort; a side that does not make its first
 move within 30 seconds has the game aborted for it. An aborted game is never rated. Every move
-costs at least 0.01 s, so a premove is never free. Games left unfinished when the server stops
+costs at least a second, so a premove is never free: 5:02 becomes 5:01. Local games charge a
+premove the same second. Games left unfinished when the server stops
 are marked aborted when it starts again.
 
 A guest is free again once no app signed in as it is connected, so Continue as guest always
 gives the lowest-numbered guest nobody is using.
+
+## Social
+
+The Social page lists your friends, with who is online, and the friend requests each way.
+Find players by name to add them; a friend who is online can be challenged to a game with the
+time control and rating you pick. A challenge waits a minute for an answer, and accepting it
+opens the game on Play for both. Challenges and requests waiting for you show as a count on
+Social in the sidebar. Guests have friends too; a guest's friends stay with that guest account,
+so the next person to get it has them.
 
 ## Checks
 

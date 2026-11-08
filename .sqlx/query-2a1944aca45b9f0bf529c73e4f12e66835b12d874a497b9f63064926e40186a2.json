@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The friendship of one pair, given smaller id first.\nSELECT\n    friendships.status,\n    friendships.requester_id\nFROM social.friendships\nWHERE friendships.user_a_id = $1 AND friendships.user_b_id = $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social.friendships",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "requester_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.friendships",
+            "name": "requester_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2a1944aca45b9f0bf529c73e4f12e66835b12d874a497b9f63064926e40186a2"
+}

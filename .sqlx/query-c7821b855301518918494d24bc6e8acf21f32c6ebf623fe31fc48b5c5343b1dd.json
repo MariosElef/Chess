@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Settles a pending challenge: accepted with its game, or declined, cancelled or expired.\nUPDATE play.challenges\nSET status = $2, game_id = $3, resolved_at = now()\nWHERE challenges.id = $1 AND challenges.status = 'pending'\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7821b855301518918494d24bc6e8acf21f32c6ebf623fe31fc48b5c5343b1dd"
+}

@@ -20,9 +20,9 @@ use crate::{
 
 /// Commands waiting for a game; a player sending faster than this waits.
 const COMMANDS_AHEAD: usize = 32;
-/// The least a move costs on the clock, so a premove played the instant the turn comes is
-/// not free.
-const LEAST_MOVE_TIME: Duration = Duration::from_millis(10);
+/// The least a move costs on the clock, so a premove played the instant the turn comes takes
+/// a second, as the clock shows it: 5:02 becomes 5:01.
+const LEAST_MOVE_TIME: Duration = Duration::from_secs(1);
 /// How long each side has for its first move before the game is called off.
 pub const FIRST_MOVE_WAIT: Duration = Duration::from_secs(30);
 /// Moves after which the game can no longer be aborted: one each.
@@ -159,7 +159,8 @@ impl LiveGame {
         let Ok(mv) = uci.parse::<Move>() else {
             return self.refuse(player, &format!("'{uci}' is not a move"));
         };
-        let elapsed = self.move_time();
+        // The flag goes by the time really taken; the least a move costs is charged after.
+        let (elapsed, charged) = (self.elapsed(), self.move_time());
         if self.clock.is_flagged(side, elapsed) {
             self.flag();
             return;
@@ -167,7 +168,7 @@ impl LiveGame {
         if let Err(error) = self.game.play(mv) {
             return self.refuse(player, &error.to_string());
         }
-        self.clock.finish_turn(side, elapsed);
+        self.clock.finish_turn(side, charged);
         self.turn_started = (!self.game.is_over()).then(Instant::now);
         self.first_move_since = Instant::now();
         self.store_move(mv).await;
