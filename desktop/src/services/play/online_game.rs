@@ -1,10 +1,10 @@
 //! An online game as the server sends it, read for the board and the panel.
 use std::time::Duration;
 
-use chess_domain::{Game, Move, Side, TimeControl};
+use chess_domain::{Game, Move, Outcome, Side, TimeControl};
 
 use crate::{
-    enums::play::LiveStatus,
+    enums::play::{GameResult, LiveStatus},
     models::play::{Challenge, GameSnapshot},
 };
 
@@ -72,6 +72,28 @@ pub fn challenge_terms(challenge: &Challenge) -> String {
     format!("{} · {kind}", control.label())
 }
 
+/// How a finished game ended, for the kings' badges; `None` while it goes on or once aborted.
+pub fn outcome_of(snapshot: &GameSnapshot) -> Option<Outcome> {
+    if snapshot.status != LiveStatus::Finished {
+        return None;
+    }
+    let winner = snapshot.winner.map(Side::from);
+    let outcome = match (snapshot.result?, winner) {
+        (GameResult::Checkmate, Some(winner)) => Outcome::Checkmate { winner },
+        (GameResult::Resignation, Some(winner)) => Outcome::Resignation { winner },
+        (GameResult::Timeout, Some(winner)) => Outcome::Timeout { winner },
+        (GameResult::Checkmate | GameResult::Resignation | GameResult::Timeout, None) => {
+            return None;
+        }
+        (GameResult::Stalemate, _) => Outcome::Stalemate,
+        (GameResult::DrawAgreement, _) => Outcome::DrawAgreement,
+        (GameResult::InsufficientMaterial, _) => Outcome::InsufficientMaterial,
+        (GameResult::Repetition, _) => Outcome::Repetition,
+        (GameResult::FiftyMove, _) => Outcome::FiftyMoves,
+    };
+    Some(outcome)
+}
+
 /// The game can still be called off: neither side has made its second move.
 pub fn can_abort(snapshot: &GameSnapshot) -> bool {
     snapshot.status == LiveStatus::Ongoing && snapshot.moves.len() < 2
@@ -102,7 +124,8 @@ mod tests {
     use chess_domain::Side;
 
     use super::{
-        can_abort, challenge_terms, clock_left, my_side, rating_line, replay, result_line,
+        can_abort, challenge_terms, clock_left, my_side, outcome_of, rating_line, replay,
+        result_line,
     };
     use crate::{
         enums::play::{Color, GameResult, LiveStatus},
@@ -194,6 +217,13 @@ mod tests {
             rating_line(&mated, Side::Black).as_deref(),
             Some("Rating 1508 (+8)")
         );
+        assert_eq!(
+            outcome_of(&mated),
+            Some(chess_domain::Outcome::Checkmate {
+                winner: Side::Black
+            })
+        );
+        assert_eq!(outcome_of(&snapshot()), None, "still going");
         let drawn = GameSnapshot {
             status: LiveStatus::Finished,
             result: Some(GameResult::DrawAgreement),

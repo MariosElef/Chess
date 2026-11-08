@@ -2,8 +2,9 @@ use std::time::{Duration, Instant};
 
 use crate::enums::history::StepPace;
 
-/// Steps further apart than this are separate presses; closer, a key or button being held.
-const HELD_GAP: Duration = Duration::from_millis(300);
+/// Steps further apart than this are separate presses; closer, a key or button being held. A
+/// held key repeats every tenth of a second or so, quicker than anyone taps.
+const HELD_GAP: Duration = Duration::from_millis(150);
 /// Held this long, the walk goes fast.
 const FAST_AFTER: Duration = Duration::from_secs(2);
 
@@ -59,5 +60,19 @@ mod tests {
             StepPace::Normal,
             "let go, then pressed again"
         );
+    }
+
+    #[test]
+    fn quick_taps_are_not_a_held_key() {
+        let start = Instant::now();
+        let mut streak = StepStreak::default();
+        for millis in (0..=3_000).step_by(200) {
+            let pace = streak.step(start + Duration::from_millis(millis));
+            assert_eq!(
+                pace,
+                StepPace::Normal,
+                "a tap every fifth of a second, at {millis} ms"
+            );
+        }
     }
 }

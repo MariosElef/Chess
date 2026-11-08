@@ -1,16 +1,20 @@
 mod arrows;
 mod board_colors;
 mod board_grid;
-mod board_press;
 mod board_square;
 mod board_style;
+mod end_pictures;
+mod held_piece;
 mod piece_images;
 mod promotion_picker;
 mod sliding_pieces;
 
 pub use board_colors::{BoardColors, square_colors};
-pub use board_grid::BoardGrid;
+pub use board_grid::{BoardBounds, BoardGrid};
+pub use board_square::DRAG_START;
 pub use board_style::BoardStyle;
+pub use end_pictures::{end_picture, end_picture_paths};
+pub use held_piece::HeldPiece;
 pub use piece_images::{ALL as PIECE_IMAGES, piece_image};
 pub use promotion_picker::PromotionPrompt;
 pub use sliding_pieces::SLIDE_TIME;

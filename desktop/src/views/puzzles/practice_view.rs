@@ -219,7 +219,7 @@ mod tests {
     use crate::{
         enums::puzzles::PuzzleState,
         models::puzzles::RatingRange,
-        testing::{click, drag, play_and_wait, puzzle_server, wait_until},
+        testing::{ANSWER_WAIT, click, drag, play_and_wait, puzzle_server, wait_until},
     };
 
     fn state(view: &Entity<PracticeView>, cx: &mut VisualTestContext) -> Option<PuzzleState> {
@@ -292,7 +292,45 @@ mod tests {
                 .premoves()
                 .is_empty()
         });
-        assert!(premoves, "nothing is premoved on a puzzle");
+        assert!(
+            premoves,
+            "the opponent's pieces are never the player's to premove"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_move_premoved_during_the_answer_plays_as_it_lands(cx: &mut TestAppContext) {
+        let (view, cx) = opened(cx, Some("abc"));
+        wait_until(cx, |cx| state(&view, cx).is_some());
+        click(cx, "square-h5");
+        click(cx, "square-e8");
+        assert_eq!(state(&view, cx), Some(PuzzleState::Answering));
+        click(cx, "square-e1");
+        click(cx, "square-e8");
+        let queued = view.update(cx, |view, cx| {
+            !view
+                .solver()
+                .read(cx)
+                .board()
+                .read(cx)
+                .premoves()
+                .is_empty()
+        });
+        assert!(queued, "Rxe8 waits for Black's answer");
+        cx.executor().advance_clock(ANSWER_WAIT);
+        cx.run_until_parked();
+        let moves = view.update(cx, |view, cx| {
+            view.solver()
+                .read(cx)
+                .run()
+                .map(|run| run.position().to_string())
+        });
+        assert!(
+            moves.as_ref().is_some_and(|fen| fen.starts_with("4Rb1k/")),
+            "the answer Rxe8, the premove Rxe8, then the next answer Bf8: {moves:?}"
+        );
+        play_and_wait(cx, "square-e8", "square-f8");
+        assert_eq!(state(&view, cx), Some(PuzzleState::Solved));
     }
 
     #[gpui_kit::test]

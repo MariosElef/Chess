@@ -7,8 +7,8 @@ use gpui_kit::{
 
 use crate::components::{
     analysis::{review_icon, review_icon_paths},
-    board::PIECE_IMAGES,
-    play::{speed_picture_bytes, speed_picture_paths},
+    board::{PIECE_IMAGES, end_picture, end_picture_paths},
+    play::{bot_picture, bot_picture_paths, speed_picture_bytes, speed_picture_paths},
     shell::{nav_picture, nav_picture_paths},
 };
 
@@ -42,6 +42,8 @@ impl AssetSource for AppAssets {
         if let Some(icon) = review_icon(path)
             .or_else(|| nav_picture(path))
             .or_else(|| speed_picture_bytes(path))
+            .or_else(|| bot_picture(path))
+            .or_else(|| end_picture(path))
         {
             return Ok(Some(Cow::Borrowed(icon)));
         }
@@ -61,6 +63,8 @@ impl AssetSource for AppAssets {
             review_icon_paths()
                 .chain(nav_picture_paths())
                 .chain(speed_picture_paths())
+                .chain(bot_picture_paths())
+                .chain(end_picture_paths())
                 .filter(|icon| icon.starts_with(path))
                 .map(SharedString::from),
         );
@@ -100,12 +104,14 @@ mod tests {
             "speed/bullet.png",
             "speed/blitz.png",
             "speed/rapid.png",
+            "bots/sporos.jpg",
+            "bots/andreas.jpg",
+            "end/winner.png",
+            "end/checkmate_black.png",
+            "end/timeout_white.png",
         ] {
             let served = AppAssets.load(path).expect("loading never fails");
-            assert!(
-                served.is_some_and(|bytes| bytes.starts_with(b"\x89PNG")),
-                "{path}"
-            );
+            assert!(served.is_some_and(|bytes| !bytes.is_empty()), "{path}");
         }
     }
 

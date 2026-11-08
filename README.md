@@ -9,9 +9,10 @@ desktop app (`desktop/`), an axum server (`backend/`) and the chess rules both s
 ```sh
 docker compose up -d                       # Postgres on localhost:5433
 DATABASE_URL=postgres://chess:change-me@localhost:5433/chess cargo run -p chess-backend
-cargo run -p chess-desktop                 # in another terminal
+cargo run --release -p chess-desktop       # in another terminal
 ```
 
+Play with `--release`; `cargo run -p chess-desktop` is a development build, slower to draw.
 The server applies its migrations when it starts. The app opens on sign-in: create an account,
 sign in, or continue as one of the ten guests (Guest, Guest2 … Guest10). The analysis board runs
 Stockfish (`brew install stockfish`), found at `STOCKFISH_PATH`, else in Homebrew's folders,
@@ -44,6 +45,9 @@ DATABASE_URL=postgres://chess:change-me@localhost:5433/chess \
   cargo run --release -p chess-backend -- import-puzzles lichess_db_puzzle.csv.zst
 ```
 
+Puzzles take premoves: while the opponent's answer is on its way, the player can queue their
+next move, played and judged the moment the answer lands.
+
 ## Online play
 
 Play → Online finds an opponent who asked for the same time control. The game runs on the
@@ -59,10 +63,23 @@ are marked aborted when it starts again.
 A guest is free again once no app signed in as it is connected, so Continue as guest always
 gives the lowest-numbered guest nobody is using.
 
+## Bots
+
+Play → Bots: pick Vasilis (400), Danis (800), Stefanos (1200), Andreas (1600) or Sporos (2000),
+or a custom bot from 400 to 2800, the colour to play, and a time control or none. Each bot
+plays on a Stockfish of its own in the app, so it works offline. From 1400 up, Stockfish's own
+strength limit plays it; below, it looks only a few moves ahead, chooses among its best few,
+and now and then plays any move, so a low bot plays like a beginner rather than a slowed-down
+master. It pauses between half a second and two seconds before moving, less when its clock is
+low. Bot games are unrated; a bot makes and takes no draw offers.
+
 ## Game review
 
-On the Analysis board, **Review** (shown once the game has a move) runs a Stockfish of its own
-over every position, depth 16, and labels each move the way chess.com's Game Review does:
+On the Analysis board, paste a FEN for one position or a PGN for a whole game (as chess.com or
+Lichess give it), then Load. **Review** (shown once the game has a move) searches every position
+at depth 16 with a few engines of one thread each, a quarter of the cores at most (one to
+three), so it stays light on any computer; positions the opening table covers are not searched.
+It labels each move the way chess.com's Game Review does:
 Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss or Blunder.
 While it runs, the board plays through the game with each move's slide and sound; when it is
 ready, it goes back to the start. Each move's icon shows beside it and on the board, where the
@@ -83,7 +100,7 @@ will be close to theirs, not equal.
 
 Every board shares the same behaviour. Stepping through a game (arrow keys, the ◀ ▶ buttons or
 the move list) plays each move's sound and slides the piece; a jump does not slide. Holding a key
-or button keeps stepping, and after two seconds goes fast, several moves a step without sounds.
+or button keeps stepping, and after two seconds goes fast, several moves a step, still with sound.
 Pressing a piece lifts it to the cursor at once; dragging it outlines the square under it, and a
 right-click puts it back. Your own moves do not slide: you already put the piece there.
 

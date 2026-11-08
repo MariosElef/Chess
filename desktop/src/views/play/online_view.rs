@@ -30,8 +30,8 @@ use crate::{
     services::{
         history::GameHistory,
         play::{
-            ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, my_side, rating_line,
-            replay, result_line,
+            ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, my_side, outcome_of,
+            rating_line, replay, result_line,
         },
     },
     views::{
@@ -90,8 +90,11 @@ impl OnlineView {
             view.on_event(event.clone(), cx);
         });
         let view = cx.weak_entity();
-        let board = cx.new(|_| {
-            BoardView::new(move |cx| view.upgrade().map(|view| view.read(cx).shown_position()))
+        let board = cx.new(|board| {
+            BoardView::new(
+                move |cx| view.upgrade().map(|view| view.read(cx).shown_position()),
+                board,
+            )
         });
         let _board_moves = cx.subscribe(&board, |view, _, MoveMade(mv), cx| {
             view.move_made(*mv, cx);
@@ -309,6 +312,7 @@ impl OnlineView {
                 engine_arrow: None,
                 badge: None,
                 best_arrow: None,
+                outcome: None,
             };
         };
         let ongoing = live.snapshot.status == LiveStatus::Ongoing;
@@ -327,6 +331,7 @@ impl OnlineView {
                 engine_arrow: None,
                 badge: None,
                 best_arrow: None,
+                outcome: None,
             },
             None => ShownPosition {
                 position: *live.history.shown(),
@@ -337,6 +342,7 @@ impl OnlineView {
                 engine_arrow: None,
                 badge: None,
                 best_arrow: None,
+                outcome: looking_live.then(|| outcome_of(&live.snapshot)).flatten(),
             },
         }
     }

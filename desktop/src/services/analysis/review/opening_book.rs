@@ -16,11 +16,6 @@ static BOOK: LazyLock<HashSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Builds the table now, so the first review does not wait for it when it finishes.
-pub fn warm_opening_book() {
-    LazyLock::force(&BOOK);
-}
-
 /// Whether the position is on one of the opening lines.
 pub fn is_book(position: &Position) -> bool {
     BOOK.contains(&position_key(position))

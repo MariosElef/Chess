@@ -59,21 +59,24 @@ impl GameResult {
     }
 }
 
-/// Who the game is against: someone at this computer, or someone online.
+/// Who the game is against: someone at this computer, someone online, or a bot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PlayMode {
     #[default]
-    Local,
     Online,
+    Bots,
+    Local,
 }
 
 impl PlayMode {
-    pub const ALL: [Self; 2] = [Self::Local, Self::Online];
+    /// In the order the tabs show them, the first being where Play opens.
+    pub const ALL: [Self; 3] = [Self::Online, Self::Bots, Self::Local];
 
     pub fn index(self) -> usize {
         match self {
-            Self::Local => 0,
-            Self::Online => 1,
+            Self::Online => 0,
+            Self::Bots => 1,
+            Self::Local => 2,
         }
     }
 
@@ -81,6 +84,28 @@ impl PlayMode {
         match self {
             Self::Local => "On this computer",
             Self::Online => "Online",
+            Self::Bots => "Bots",
+        }
+    }
+}
+
+/// The colour the player asks for against a bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ColourChoice {
+    White,
+    #[default]
+    Random,
+    Black,
+}
+
+impl ColourChoice {
+    pub const ALL: [Self; 3] = [Self::White, Self::Random, Self::Black];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::White => "White",
+            Self::Random => "Random",
+            Self::Black => "Black",
         }
     }
 }

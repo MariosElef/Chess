@@ -28,6 +28,10 @@ enum SearchState {
 pub struct SearchQueue {
     state: SearchState,
     settings: EngineSettings,
+    /// Engine options set after the usual ones, overriding them where they overlap.
+    options: Vec<(&'static str, String)>,
+    /// Each search runs this long instead of to the settings' depth.
+    move_time_ms: Option<u64>,
 }
 
 impl SearchQueue {
@@ -36,8 +40,22 @@ impl SearchQueue {
         let queue = Self {
             state: SearchState::Starting { next: None },
             settings,
+            options: Vec::new(),
+            move_time_ms: None,
         };
         (queue, vec![Command::Uci])
+    }
+
+    /// Sets these engine options too, after the usual ones: a bot's strength, say.
+    pub fn with_options(mut self, options: Vec<(&'static str, String)>) -> Self {
+        self.options = options;
+        self
+    }
+
+    /// Searches each position for this long rather than to a depth.
+    pub fn searching_for(mut self, millis: u64) -> Self {
+        self.move_time_ms = Some(millis);
+        self
     }
 
     /// The FEN being searched now.
@@ -55,12 +73,18 @@ impl SearchQueue {
 
     /// The engine identified itself: set it up, then ask whether it is ready.
     pub fn on_uciok(&mut self) -> Vec<Command> {
-        vec![
+        let mut commands = vec![
             Command::SetOption("MultiPV", LINES.to_string()),
             Command::SetOption("Threads", self.settings.threads.to_string()),
             Command::SetOption("Hash", self.settings.hash_mb.to_string()),
-            Command::IsReady,
-        ]
+        ];
+        commands.extend(
+            self.options
+                .iter()
+                .map(|(name, value)| Command::SetOption(name, value.clone())),
+        );
+        commands.push(Command::IsReady);
+        commands
     }
 
     /// The engine is ready: start the position asked for while it was starting, if any.
@@ -131,10 +155,11 @@ impl SearchQueue {
     }
 
     fn start(&mut self, fen: String) -> Vec<Command> {
-        let go = self
-            .settings
-            .depth
-            .map_or(Command::GoInfinite, Command::GoDepth);
+        let go = match (self.move_time_ms, self.settings.depth) {
+            (Some(millis), _) => Command::GoMoveTime(millis),
+            (None, Some(depth)) => Command::GoDepth(depth),
+            (None, None) => Command::GoInfinite,
+        };
         let commands = vec![Command::Position(fen.clone()), go];
         self.state = SearchState::Searching { fen };
         commands

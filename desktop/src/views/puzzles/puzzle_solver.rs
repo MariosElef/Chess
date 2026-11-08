@@ -41,12 +41,15 @@ impl EventEmitter<PuzzleVerdict> for PuzzleSolver {}
 impl PuzzleSolver {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let solver = cx.weak_entity();
-        let board = cx.new(|_| {
-            BoardView::new(move |cx| {
-                solver
-                    .upgrade()
-                    .map(|solver| solver.read(cx).shown_position())
-            })
+        let board = cx.new(|board| {
+            BoardView::new(
+                move |cx| {
+                    solver
+                        .upgrade()
+                        .map(|solver| solver.read(cx).shown_position())
+                },
+                board,
+            )
         });
         let _board_moves = cx.subscribe(&board, |solver, _, MoveMade(mv), cx| {
             solver.play(*mv, cx);
@@ -120,7 +123,10 @@ impl PuzzleSolver {
         match verdict {
             PuzzleVerdict::Wrong => {
                 play_sound(Sound::Illegal, cx);
-                self.board.update(cx, |board, cx| board.put_down(cx));
+                self.board.update(cx, |board, cx| {
+                    board.drop_all_premoves();
+                    board.put_down(cx);
+                });
             }
             PuzzleVerdict::Correct => {
                 play_move_sound(&before, run.position(), mv, Sound::MoveSelf, false, cx);
@@ -128,6 +134,7 @@ impl PuzzleSolver {
             }
             PuzzleVerdict::Solved => {
                 play_move_sound(&before, run.position(), mv, Sound::MoveSelf, false, cx);
+                self.board.update(cx, |board, _| board.drop_all_premoves());
             }
         }
         cx.emit(verdict);
@@ -142,6 +149,8 @@ impl PuzzleSolver {
         }));
     }
 
+    /// The opponent's answer; then the player's premove, if they queued one, is played and
+    /// judged like any move.
     fn play_answer(&mut self, cx: &mut Context<Self>) {
         let Some(run) = self.run.as_mut() else {
             return;
@@ -157,21 +166,30 @@ impl PuzzleSolver {
                 cx,
             );
         }
-        cx.notify();
+        let position = *run.position();
+        let premove = self
+            .board
+            .update(cx, |board, _| board.next_premove(&position));
+        match premove {
+            Some(mv) => self.play(mv, cx),
+            None => cx.notify(),
+        }
     }
 
-    /// The puzzle's position, taking only the player's own moves, only on their turn.
+    /// The puzzle's position, taking only the player's own pieces: moved on their turn, or
+    /// premoved while the opponent's answer is on its way.
     fn shown_position(&self) -> ShownPosition {
         match &self.run {
             Some(run) => ShownPosition {
                 position: *run.position(),
                 last_move: run.last_move(),
-                can_move: run.state() == PuzzleState::Solving,
-                premoves: false,
-                player: None,
+                can_move: run.state() != PuzzleState::Solved,
+                premoves: true,
+                player: Some(run.solver()),
                 engine_arrow: None,
                 badge: None,
                 best_arrow: None,
+                outcome: None,
             },
             None => ShownPosition {
                 position: Position::starting(),
@@ -182,6 +200,7 @@ impl PuzzleSolver {
                 engine_arrow: None,
                 badge: None,
                 best_arrow: None,
+                outcome: None,
             },
         }
     }

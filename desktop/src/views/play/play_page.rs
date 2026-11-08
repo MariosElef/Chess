@@ -4,10 +4,11 @@ use chess_domain::{Clock, Move, Side, TimeControl};
 use gpui_kit::{
     assets::IconName,
     component::{
-        Disableable as _,
+        ActiveTheme as _, Disableable as _,
         button::{Button, ButtonVariants},
         h_flex,
         label::Label,
+        slider::{SliderEvent, SliderState},
         tab::{Tab, TabBar},
         v_flex,
     },
@@ -28,28 +29,43 @@ enum Stage {
     Playing,
 }
 use crate::{
+    clients::engine::{Engine, locate_stockfish},
     components::{
         history::{MoveList, NavigationBar, PositionPanel},
-        play::{CapturedRow, ClockFace, GameSetup},
+        play::{BotOptions, BotPicker, CapturedRow, ClockFace, GameSetup},
     },
-    enums::{play::PlayMode, sound::Sound},
+    enums::{
+        play::{ColourChoice, PlayMode},
+        sound::Sound,
+    },
     models::{
         board::{MoveMade, ShownPosition},
-        play::AnalyzeGame,
+        play::{AnalyzeGame, Bot},
     },
     services::{
         history::GameHistory,
-        play::{ClockWarning, DEFAULT_TIME_CONTROL, status_text},
+        play::{
+            BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, player_side,
+            status_text, think_time,
+        },
     },
     views::{
         board::BoardView,
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
-        play::OnlineView,
+        play::{BotEvent, BotPlayer, OnlineView},
         sound::{play_move_sound, play_sound},
     },
 };
+
+/// A game against a bot: who it is, the side it plays, and its engine.
+struct BotGame {
+    bot: Bot,
+    side: Side,
+    player: Entity<BotPlayer>,
+    _moves: Subscription,
+}
 
 /// The game being played, the position on the board, and what the player is in the middle of.
 pub struct PlayPage {
@@ -76,6 +92,15 @@ pub struct PlayPage {
     holding: Holding,
     /// Who has heard the low-time warning this game.
     clock_warning: ClockWarning,
+    /// The bot picked in the menu, by its place among the named bots; `None` is the custom one.
+    bot_pick: Option<usize>,
+    custom_rating: u32,
+    bot_strength: Entity<SliderState>,
+    _strength_changes: Subscription,
+    colour_choice: ColourChoice,
+    /// Why a bot game could not start, or why it stopped.
+    bot_problem: Option<String>,
+    versus: Option<BotGame>,
     /// Keyboard focus, so the arrow keys reach this page.
     focus_handle: FocusHandle,
 }
@@ -87,16 +112,25 @@ impl PlayPage {
             cx.emit(event.clone());
         });
         let page = cx.weak_entity();
-        let board = cx.new(|_| {
-            BoardView::new(move |cx| page.upgrade().map(|page| page.read(cx).shown_position()))
+        let board = cx.new(|board| {
+            BoardView::new(
+                move |cx| page.upgrade().map(|page| page.read(cx).shown_position()),
+                board,
+            )
         });
         let _board_moves = cx.subscribe(&board, |page, _, MoveMade(mv), cx| {
             page.play(*mv, cx);
             cx.notify();
         });
+        let bot_strength = cx.new(|_| strength_slider());
+        let _strength_changes = cx.subscribe(&bot_strength, |page, _, event: &SliderEvent, cx| {
+            let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+            page.custom_rating = rating_of(value.start());
+            cx.notify();
+        });
         Self {
             stage: Stage::Setup,
-            mode: PlayMode::Local,
+            mode: PlayMode::default(),
             online,
             _online_changes,
             _online_analyze,
@@ -109,6 +143,13 @@ impl PlayPage {
             _board_moves,
             holding: Holding::default(),
             clock_warning: ClockWarning::default(),
+            bot_pick: Some(0),
+            custom_rating: CUSTOM_STRENGTH.3,
+            bot_strength,
+            _strength_changes,
+            colour_choice: ColourChoice::default(),
+            bot_problem: None,
+            versus: None,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -146,22 +187,22 @@ impl PlayPage {
             || (self.mode == PlayMode::Online && self.stage == Stage::Setup)
     }
 
-    /// Moves can be made only on the live position of a game still going.
-    fn can_play(&self) -> bool {
-        self.history.is_live() && !self.history.game().is_over()
-    }
-
-    /// What the board shows: the position being looked at, taking moves only while live.
+    /// What the board shows: the position being looked at, taking moves only on the live
+    /// position of a game still going.
     fn shown_position(&self) -> ShownPosition {
+        // Worked out once: it looks at every legal move and every earlier position.
+        let outcome = self.history.game().outcome();
+        let live = self.history.is_live();
         ShownPosition {
             position: *self.history.shown(),
             last_move: self.history.shown_last_move(),
-            can_move: self.can_play(),
+            can_move: live && outcome.is_none(),
             premoves: true,
-            player: None,
+            player: self.versus.as_ref().map(|game| game.side.opponent()),
             engine_arrow: None,
             badge: None,
             best_arrow: None,
+            outcome: outcome.filter(|_| live),
         }
     }
 
@@ -170,8 +211,14 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// Leaves the menu with a fresh game and, for a timed game, a ticking clock.
+    /// Leaves the menu with a fresh game and, for a timed game, a ticking clock; against a bot,
+    /// once its engine has started.
     fn start_game(&mut self, cx: &mut Context<Self>) {
+        self.versus = None;
+        if self.mode == PlayMode::Bots && !self.start_bot(cx) {
+            cx.notify();
+            return;
+        }
         self.history = GameHistory::new();
         self.clock = self.setup_choice.map(Clock::new);
         self.turn_started = None;
@@ -180,6 +227,80 @@ impl PlayPage {
         self.clock_warning = ClockWarning::default();
         self.end_interaction(cx);
         play_sound(Sound::GameStart, cx);
+        self.bot_turn_if_due(cx);
+    }
+
+    /// The bot picked in the menu.
+    fn picked_bot(&self) -> Bot {
+        self.bot_pick
+            .and_then(|place| BOTS.get(place).copied())
+            .unwrap_or_else(|| custom_bot(self.custom_rating))
+    }
+
+    /// Starts the picked bot on its own Stockfish, the board turned to the player's side;
+    /// whether it started.
+    fn start_bot(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(path) = locate_stockfish() else {
+            self.bot_problem =
+                Some("Stockfish was not found: install it (brew install stockfish)".to_owned());
+            return false;
+        };
+        let Ok(started) = Engine::spawn(&path) else {
+            self.bot_problem = Some("Stockfish would not start".to_owned());
+            return false;
+        };
+        let bot = self.picked_bot();
+        let player = cx.new(|cx| BotPlayer::new(started, bot.rating, cx));
+        let _moves = cx.subscribe(&player, |page, _, event: &BotEvent, cx| {
+            page.on_bot_event(event, cx);
+        });
+        let side = player_side(self.colour_choice, rand::random::<bool>()).opponent();
+        self.board
+            .update(cx, |board, cx| board.face(side.opponent(), cx));
+        self.bot_problem = None;
+        self.versus = Some(BotGame {
+            bot,
+            side,
+            player,
+            _moves,
+        });
+        true
+    }
+
+    /// On the bot's turn in a game still going, asks it for a move.
+    fn bot_turn_if_due(&mut self, cx: &mut Context<Self>) {
+        let Some(game) = &self.versus else {
+            return;
+        };
+        if self.history.game().is_over() || self.side_to_move() != game.side {
+            return;
+        }
+        let think = think_time(self.time_left(game.side), rand::random::<f64>());
+        let position = *self.history.live();
+        game.player
+            .update(cx, |player, cx| player.ask(position, think, cx));
+    }
+
+    /// The bot's answer: its move, if it still fits the game, or that its engine stopped.
+    fn on_bot_event(&mut self, event: &BotEvent, cx: &mut Context<Self>) {
+        let Some(game) = &self.versus else {
+            return;
+        };
+        match event {
+            BotEvent::Moved { fen, mv } => {
+                let still_due = !self.history.game().is_over()
+                    && self.side_to_move() == game.side
+                    && self.history.live().to_string() == *fen;
+                if still_due {
+                    self.play(*mv, cx);
+                    cx.notify();
+                }
+            }
+            BotEvent::Failed => {
+                self.bot_problem = Some("The bot's engine stopped".to_owned());
+                cx.notify();
+            }
+        }
     }
 
     /// Plays a move picked from the legal ones; the mover's clock is charged, and the
@@ -189,12 +310,18 @@ impl PlayPage {
         self.charge_clock(mover, Clock::finish_turn);
         self.record_move(mv, cx);
         self.run_premoves(cx);
+        self.bot_turn_if_due(cx);
     }
 
     /// Adds the move to the game with its sound, and the game's end sound if it was the last.
     fn record_move(&mut self, mv: Move, cx: &App) {
         let before = *self.history.live();
-        let plain = mover_sound(before.side_to_move());
+        let mover = before.side_to_move();
+        let plain = match &self.versus {
+            Some(game) if game.side == mover => Sound::MoveOpponent,
+            Some(_) => Sound::MoveSelf,
+            None => mover_sound(mover),
+        };
         self.history
             .play(mv)
             .expect("moves come from the legal ones");
@@ -313,10 +440,15 @@ impl PlayPage {
         self.history.live().side_to_move()
     }
 
+    /// The side to move resigns; against a bot, always the player, whoever is to move.
     fn resign(&mut self, cx: &mut Context<Self>) {
+        let side = self
+            .versus
+            .as_ref()
+            .map_or(self.side_to_move(), |game| game.side.opponent());
         self.stop_clock();
         self.history
-            .resign(self.side_to_move())
+            .resign(side)
             .expect("the button only shows while the game is on");
         self.end_interaction(cx);
         play_sound(Sound::GameEnd, cx);
@@ -361,6 +493,7 @@ impl PlayPage {
 
     /// Back to the menu, keeping the last time control picked.
     fn new_game(&mut self, cx: &mut Context<Self>) {
+        self.versus = None;
         self._ticker = None;
         self.turn_started = None;
         self.stage = Stage::Setup;
@@ -387,7 +520,10 @@ impl PlayPage {
                 v_flex()
                     .gap_1()
                     .child(Label::new("Play").text_2xl())
-                    .child(Label::new(status_text(self.history.game())).text_lg()),
+                    .child(Label::new(status_text(self.history.game())).text_lg())
+                    .when_some(self.bot_problem.clone(), |this, problem| {
+                        this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
+                    }),
             )
             .child(self.actions(cx))
     }
@@ -399,6 +535,9 @@ impl PlayPage {
         let row = h_flex().gap_2().child(flip_button(cx));
         if game.is_over() {
             row.child(analyze_button(cx)).child(new_game_button(cx))
+        } else if self.versus.is_some() {
+            // A bot makes no offers and takes none.
+            row.child(resign_button(cx))
         } else if self.has_offer_to_answer() {
             row.child(accept_draw_button(cx))
                 .child(decline_draw_button(cx))
@@ -447,30 +586,93 @@ impl PlayPage {
             .child(self.player_bar(bottom))
     }
 
-    /// One side's captured pieces and, in a timed game, its clock.
+    /// One side's captured pieces and, in a timed game, its clock; against a bot, who plays it.
     fn player_bar(&self, side: Side) -> Div {
         h_flex()
             .w_full()
             .justify_between()
             .gap_4()
-            .child(CapturedRow::for_side(self.history.shown().board(), side))
+            .child(
+                h_flex()
+                    .gap_3()
+                    .when_some(self.player_label(side), |this, label| this.child(label))
+                    .child(CapturedRow::for_side(self.history.shown().board(), side)),
+            )
             .when_some(self.time_left(side), |this, left| {
                 this.child(ClockFace::new(left, self.running_side() == Some(side)))
             })
     }
 
+    /// Against a bot, its picture and name with its rating; the player is "You".
+    fn player_label(&self, side: Side) -> Option<Div> {
+        let game = self.versus.as_ref()?;
+        if side != game.side {
+            return Some(h_flex().child(Label::new("You")));
+        }
+        let bot = game.bot;
+        Some(
+            h_flex()
+                .gap_2()
+                .when_some(bot.picture, |this, path| {
+                    this.child(img(path).size_6().rounded_full())
+                })
+                .child(Label::new(format!("{} ({})", bot.name, bot.rating))),
+        )
+    }
+
     fn setup_view(&self, page: WeakEntity<Self>) -> Div {
+        let setup = GameSetup::new(
+            self.setup_choice,
+            choose_time(page.clone()),
+            start_game(page.clone()),
+        );
+        let against_bot = self.mode == PlayMode::Bots;
+        let setup = if against_bot {
+            let bot = self.picked_bot();
+            setup.bot(BotOptions {
+                name: bot.name,
+                rating: bot.rating,
+                problem: self.bot_problem.clone(),
+            })
+        } else {
+            setup
+        };
+        let picker = against_bot.then(|| self.bot_picker(page.clone()));
         v_flex()
             .size_full()
             .p_6()
             .gap_4()
             .child(Label::new("Play").text_2xl())
-            .child(mode_tabs(self.mode, page.clone()))
-            .child(div().flex().justify_center().child(GameSetup::new(
-                self.setup_choice,
-                choose_time(page.clone()),
-                start_game(page),
-            )))
+            .child(mode_tabs(self.mode, page))
+            .child(
+                h_flex()
+                    .justify_center()
+                    .items_start()
+                    .gap_6()
+                    .children(picker)
+                    .child(setup),
+            )
+    }
+
+    fn bot_picker(&self, page: WeakEntity<Self>) -> BotPicker {
+        let (pick, colour) = (page.clone(), page);
+        BotPicker::new(
+            (BOTS.to_vec(), self.bot_pick),
+            (self.custom_rating, self.bot_strength.clone()),
+            self.colour_choice,
+            move |place, _, cx| {
+                let _ = pick.update(cx, |page, cx| {
+                    page.bot_pick = place;
+                    cx.notify();
+                });
+            },
+            move |choice, _, cx| {
+                let _ = colour.update(cx, |page, cx| {
+                    page.colour_choice = choice;
+                    cx.notify();
+                });
+            },
+        )
     }
 
     /// The online lobby under the same heading and tabs; an online game alone.
@@ -635,6 +837,32 @@ fn mover_sound(mover: Side) -> Sound {
     }
 }
 
+/// The custom bot's strength slider, at its starting strength.
+fn strength_slider() -> SliderState {
+    let (lowest, highest, step, start) = CUSTOM_STRENGTH;
+    // The maximum first: a minimum above the default maximum of 100 panics.
+    SliderState::new()
+        .max(slider_point(highest))
+        .min(slider_point(lowest))
+        .step(slider_point(step))
+        .default_value(slider_point(start))
+}
+
+fn slider_point(rating: u32) -> f32 {
+    f32::from(u16::try_from(rating).unwrap_or(u16::MAX))
+}
+
+/// A point on the strength slider as a rating.
+fn rating_of(point: f32) -> u32 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the slider's points are whole ratings between 400 and 2800"
+    )]
+    let rating = point.round() as u32;
+    rating
+}
+
 /// Wakes every tick until the game is over or the page is gone.
 fn start_ticker(cx: &mut Context<PlayPage>) -> Task<()> {
     cx.spawn(async move |page, cx| {
@@ -661,6 +889,10 @@ mod tests {
     use std::rc::Rc;
 
     use super::PlayPage;
+    use crate::{
+        clients::engine::locate_stockfish,
+        enums::play::{ColourChoice, PlayMode},
+    };
     use crate::{
         clients::{http::HttpRuntime, server::ServerClient},
         enums::{history::NavStep, sound::Sound},
@@ -855,6 +1087,158 @@ mod tests {
         assert!(
             cx.debug_bounds("pressed-piece").is_none(),
             "and no longer lifted"
+        );
+    }
+
+    /// A bot game against the bot at `pick` (`None`: the custom one), the player as `colour`.
+    fn against_bot(
+        cx: &mut TestAppContext,
+        pick: Option<usize>,
+        colour: ColourChoice,
+    ) -> (Entity<PlayPage>, &mut VisualTestContext) {
+        cx.executor().allow_parking();
+        cx.update(gpui_kit::init);
+        let (page, cx) = cx.add_window_view(|_, cx| offline_page(cx));
+        page.update(cx, |page, cx| {
+            page.choose_mode(PlayMode::Bots, cx);
+            page.bot_pick = pick;
+            page.colour_choice = colour;
+            page.choose_time(None, cx);
+            page.start_game(cx);
+        });
+        (page, cx)
+    }
+
+    /// Waits, real time and the bot's pause, until the game has `plies` moves.
+    fn wait_for_moves(page: &Entity<PlayPage>, cx: &mut VisualTestContext, plies: usize) {
+        for _ in 0..500 {
+            cx.executor().advance_clock(Duration::from_secs(3));
+            cx.run_until_parked();
+            if page.read_with(cx, |page, _| page.history.sans().len()) >= plies {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("the bot never moved");
+    }
+
+    #[gpui_kit::test]
+    fn a_bot_answers_the_players_move_and_opens_when_it_is_white(cx: &mut TestAppContext) {
+        if locate_stockfish().is_none() {
+            return;
+        }
+        let (page, cx) = against_bot(cx, Some(4), ColourChoice::White);
+        page.update(cx, |page, cx| {
+            let versus = page.versus.as_ref().expect("a bot game");
+            assert_eq!(versus.side, Side::Black, "the player asked for White");
+            assert_eq!(versus.bot.name, "Sporos", "the strongest");
+            page.play(mv("e2", "e4"), cx);
+        });
+        wait_for_moves(&page, cx, 2);
+        page.read_with(cx, |page, _| {
+            assert!(
+                page.shown_position().player == Some(Side::White),
+                "only White's pieces"
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn a_weak_bot_moves_first_when_the_player_is_black(cx: &mut TestAppContext) {
+        if locate_stockfish().is_none() {
+            return;
+        }
+        let (page, cx) = against_bot(cx, Some(0), ColourChoice::Black);
+        wait_for_moves(&page, cx, 1);
+        page.read_with(cx, |page, cx| {
+            assert!(page.board.read(cx).flipped(), "Black plays from the bottom");
+        });
+    }
+
+    #[gpui_kit::test]
+    fn the_kings_show_how_the_game_ended_on_its_final_position_only(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        page.update(cx, |page, cx| {
+            page.play(mv("e2", "e4"), cx);
+            page.resign(cx);
+            assert_eq!(
+                page.shown_position().outcome,
+                Some(chess_domain::Outcome::Resignation {
+                    winner: Side::White
+                }),
+                "Black, to move, resigned"
+            );
+            page.navigate(crate::enums::history::NavStep::Start, cx);
+            assert_eq!(page.shown_position().outcome, None, "not before the end");
+        });
+    }
+
+    #[gpui_kit::test]
+    fn a_piece_dropped_off_the_board_goes_back(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        lift(cx, "square-e2");
+        let board = cx.debug_bounds("square-a1").expect("a1").origin;
+        let outside = board - point(px(40.), px(-40.));
+        cx.simulate_mouse_move(outside, Some(MouseButton::Left), Modifiers::none());
+        release(cx, outside);
+        assert!(sans(&page, cx).is_empty(), "nothing moved");
+        assert!(cx.debug_bounds("piece-e2").is_some(), "back on e2");
+    }
+
+    #[gpui_kit::test]
+    fn a_piece_dragged_away_and_back_is_not_a_click(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        let start = lift(cx, "square-e2");
+        let e4 = cx.debug_bounds("square-e4").expect("e4").center();
+        cx.simulate_mouse_move(e4, Some(MouseButton::Left), Modifiers::none());
+        cx.simulate_mouse_move(start, Some(MouseButton::Left), Modifiers::none());
+        release(cx, start);
+        let selected = page.update(cx, |page, cx| page.board.read(cx).selected());
+        assert_eq!(selected, None, "a drag back home selects nothing");
+        assert!(sans(&page, cx).is_empty());
+    }
+
+    #[gpui_kit::test]
+    fn the_square_under_a_dragged_piece_is_outlined(cx: &mut TestAppContext) {
+        let (_, cx) = started(cx, false);
+        lift(cx, "square-e2");
+        let e4 = cx.debug_bounds("square-e4").expect("e4");
+        cx.simulate_mouse_move(e4.center(), Some(MouseButton::Left), Modifiers::none());
+        cx.run_until_parked();
+        let outline = cx.debug_bounds("hover-outline").expect("an outline");
+        assert!(
+            (outline.center().x - e4.center().x).abs() < px(1.)
+                && (outline.center().y - e4.center().y).abs() < px(1.),
+            "on e4: {outline:?} for {e4:?}"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn moving_a_held_piece_redraws_the_board_only_when_it_crosses_a_square(
+        cx: &mut TestAppContext,
+    ) {
+        let (page, cx) = started(cx, false);
+        let start = lift(cx, "square-e2");
+        let board = page.read_with(cx, |page, _| page.board.clone());
+        let square = cx.debug_bounds("square-e2").expect("e2").size.height;
+        let before = board.read_with(cx, |board, _| board.renders());
+        // Twelve moves up through e3 into e4, by shares of a square: two squares crossed.
+        let shares = [
+            0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, 1.35, 1.5, 1.65, 1.8,
+        ];
+        for share in shares {
+            let at = start - point(px(0.), square * share);
+            cx.simulate_mouse_move(at, Some(MouseButton::Left), Modifiers::none());
+            cx.run_until_parked();
+        }
+        let redrawn = board.read_with(cx, |board, _| board.renders()) - before;
+        assert!(
+            redrawn <= 2,
+            "the board redraws as the hovered square changes, not on every move: {redrawn}"
+        );
+        assert!(
+            cx.debug_bounds("pressed-piece").is_some(),
+            "the piece is still held"
         );
     }
 

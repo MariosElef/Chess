@@ -20,6 +20,11 @@ unimplemented = "warn"
 [profile.release]
 overflow-checks = true
 
-# GPUI renders slowly unoptimized; these crates are optimized even in debug builds.
-[profile.dev.package]
-gpui-kit = { opt-level = 3 }
+# The chess rules run on every frame; unoptimised, they drop frames.
+[profile.dev]
+opt-level = 1
+
+# GPUI and everything it draws with render slowly unoptimised, so every dependency is optimised
+# even in debug builds; the workspace's own crates stay quick to compile.
+[profile.dev.package."*"]
+opt-level = 3

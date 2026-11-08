@@ -1,4 +1,4 @@
-//! A FEN that could not be read.
+//! A FEN or PGN that could not be read.
 
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,3 +29,33 @@ impl std::fmt::Display for FenError {
 }
 
 impl std::error::Error for FenError {}
+
+/// A PGN that could not be read.
+#[must_use]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PgnError {
+    /// Its `[FEN "…"]` header is not a position.
+    StartingPosition(FenError),
+    NoMoves,
+    /// The move at this ply (1 is White's first) is not legal where it stands.
+    Move {
+        ply: usize,
+        written: String,
+    },
+}
+
+impl std::fmt::Display for PgnError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StartingPosition(error) => write!(f, "its starting position: {error}"),
+            Self::NoMoves => f.write_str("it has no moves"),
+            Self::Move { ply, written } => {
+                let number = ply.div_ceil(2);
+                let dots = if ply % 2 == 1 { "." } else { "..." };
+                write!(f, "{number}{dots} {written} is not a legal move there")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PgnError {}

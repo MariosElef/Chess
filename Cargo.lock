@@ -1096,6 +1096,7 @@ dependencies = [
  "dirs 7.0.0",
  "futures-util",
  "gpui-kit",
+ "rand 0.10.3",
  "reqwest",
  "rodio",
  "serde",

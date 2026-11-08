@@ -20,38 +20,61 @@ const BOOK_PLIES: usize = 20;
 /// A sacrifice is only looked for in moves this close to best: no other can be Brilliant.
 const NEARLY_BEST: f64 = 0.02;
 
-/// A review under way: the game's positions, the engine's word on each so far, and the one being
-/// searched. Finished positions need no search: their result is their value.
+/// A review under way: the game's positions, the engine's word on each so far, and those being
+/// searched, several at once by several engines. A finished position needs no search, its result
+/// being its value; nor do the positions of the opening table's moves, which are Book whatever
+/// the engine says.
 #[derive(Debug, Clone)]
 pub struct ReviewRun {
     game: Game,
     evals: Vec<Option<PositionEval>>,
-    searching: Option<usize>,
+    searching: Vec<usize>,
 }
 
 impl ReviewRun {
+    /// Builds the opening table the first time, which takes a moment: call it off the UI thread.
     pub fn new(game: &Game) -> Self {
-        let evals = game.positions().iter().map(finished_eval).collect();
+        let book = book_plies(game);
+        let evals = game
+            .positions()
+            .iter()
+            .enumerate()
+            .map(|(index, position)| {
+                // The position before each Book move but the last needs no search.
+                if index < book {
+                    Some(level())
+                } else {
+                    finished_eval(position)
+                }
+            })
+            .collect();
         Self {
             game: game.clone(),
             evals,
-            searching: None,
+            searching: Vec::new(),
         }
     }
 
     /// The next position to search: its index in the game, 0 being the start, and its FEN;
-    /// `None` once every position has its value.
+    /// `None` once every position has its value or is being searched.
     pub fn next_position(&mut self) -> Option<(usize, String)> {
-        let index = self.evals.iter().position(Option::is_none)?;
-        self.searching = Some(index);
+        let index = (0..self.evals.len())
+            .find(|index| self.evals[*index].is_none() && !self.searching.contains(index))?;
+        self.searching.push(index);
         Some((index, self.game.positions()[index].to_string()))
     }
 
-    /// The engine's lines for the position being searched, any order.
-    pub fn store(&mut self, lines: &[SearchInfo]) {
-        let Some(index) = self.searching.take() else {
+    /// How many positions from the start have their value: the review is known that far.
+    pub fn known_from_start(&self) -> usize {
+        self.evals.iter().take_while(|eval| eval.is_some()).count()
+    }
+
+    /// The engine's lines for the position at `index`, any order.
+    pub fn store(&mut self, index: usize, lines: &[SearchInfo]) {
+        if !self.searching.contains(&index) {
             return;
-        };
+        }
+        self.searching.retain(|searching| *searching != index);
         let side_to_move = self.game.positions()[index].side_to_move();
         let mut lines: Vec<&SearchInfo> = lines.iter().collect();
         lines.sort_by_key(|info| info.multipv);
@@ -86,6 +109,26 @@ impl ReviewRun {
             .map(Option::as_ref)
             .collect::<Option<_>>()?;
         Some(review(&self.game, &evals))
+    }
+}
+
+/// How many of the game's first moves follow the opening table.
+fn book_plies(game: &Game) -> usize {
+    game.positions()
+        .iter()
+        .skip(1)
+        .take(BOOK_PLIES)
+        .take_while(|position| is_book(position))
+        .count()
+}
+
+/// The value a skipped position stands in with: even, and no best move.
+fn level() -> PositionEval {
+    PositionEval {
+        lines: vec![EngineLine {
+            first: None,
+            eval: Eval::Centipawns(0),
+        }],
     }
 }
 
@@ -232,8 +275,17 @@ mod tests {
         let (index, first) = run.next_position().expect("the start");
         assert_eq!(index, 0);
         assert!(first.starts_with("rnbqkbnr/pppppppp"));
-        run.store(&[line(1, 30, "e2e4")]);
-        assert_eq!(run.progress(), (2, 5));
+        let (second, _) = run.next_position().expect("another engine takes the next");
+        assert_eq!(second, 1);
+        run.store(second, &[line(1, 40, "e7e5")]);
+        assert_eq!(
+            run.known_from_start(),
+            0,
+            "the start is still being searched"
+        );
+        run.store(index, &[line(1, 30, "e2e4")]);
+        assert_eq!(run.progress(), (3, 5));
+        assert_eq!(run.known_from_start(), 2);
         assert!(run.finish().is_none(), "not done yet");
     }
 
@@ -248,18 +300,21 @@ mod tests {
             vec![line(1, -60, "e2e4"), line(2, -70, "b1c3")],
         ];
         for answer in answers {
-            run.next_position().expect("a position to search");
-            run.store(&answer);
+            let (index, _) = run.next_position().expect("a position to search");
+            run.store(index, &answer);
         }
-        run.next_position().expect("the position after g4");
-        run.store(&[SearchInfo {
-            depth: 16,
-            multipv: 1,
-            score: UciScore::Mate(1),
-            nodes: 0,
-            nps: 0,
-            pv: vec![mv("d8h4")],
-        }]);
+        let (index, _) = run.next_position().expect("the position after g4");
+        run.store(
+            index,
+            &[SearchInfo {
+                depth: 16,
+                multipv: 1,
+                score: UciScore::Mate(1),
+                nodes: 0,
+                nps: 0,
+                pv: vec![mv("d8h4")],
+            }],
+        );
         assert!(run.next_position().is_none());
         let review = run.finish().expect("done");
         assert_eq!(review.moves[2].class, MoveClass::Blunder, "g4");
@@ -275,5 +330,20 @@ mod tests {
             [None, None],
             "two moves each say nothing of a rating"
         );
+    }
+
+    #[test]
+    fn opening_moves_need_no_search_but_the_first_move_out_of_book_does() {
+        let mut game = Game::new();
+        for uci in ["e2e4", "e7e5", "g1f3", "d8h4"] {
+            game.play(mv(uci)).expect("legal");
+        }
+        let mut run = ReviewRun::new(&game);
+        let (first, _) = run.next_position().expect("a position to search");
+        assert_eq!(
+            first, 3,
+            "e4, e5 and Nf3 are Book; the position before Qh4 is searched"
+        );
+        assert_eq!(run.known_from_start(), 3);
     }
 }

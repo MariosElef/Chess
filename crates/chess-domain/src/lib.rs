@@ -13,7 +13,7 @@ pub use errors::{
     board::ParseSquareError,
     game::GameError,
     moves::{IllegalMove, ParseMoveError},
-    notation::FenError,
+    notation::{FenError, PgnError},
 };
 pub use models::{
     board::{Board, CastlingRights, Piece, Square},

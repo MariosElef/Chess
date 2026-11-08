@@ -1,13 +1,16 @@
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use chess_domain::{Board, Move, PieceKind, Position, Side, Square};
 use gpui_kit::*;
 
+use super::drag_layer::DragLayer;
 use crate::{
-    components::board::{BoardGrid, PromotionPrompt, SLIDE_TIME},
+    components::board::{
+        BoardBounds, BoardGrid, BoardStyle, PromotionPrompt, SLIDE_TIME, piece_image,
+    },
     enums::{board::ClickMode, sound::Sound},
     models::board::{MoveMade, ShownPosition},
-    services::board::{BoardInteraction, PremoveQueue, click_mode, move_slides},
+    services::board::{BoardInteraction, PremoveQueue, click_mode, end_badges, move_slides},
     views::sound::play_sound,
 };
 
@@ -32,12 +35,30 @@ pub struct BoardView {
     /// A move made on this board: the player already put the piece there, so it does not slide.
     own_move: Option<Move>,
     _slide_end: Option<Task<()>>,
+    /// The square whose piece the player holds down, drawn by the drag layer meanwhile.
+    held: Option<Square>,
+    /// Where the board is drawn, measured as it is laid out, for the held piece.
+    bounds: BoardBounds,
+    /// The held piece, following the cursor: only it redraws as the mouse moves.
+    drag_layer: Entity<DragLayer>,
+    /// A piece dragged away and back to its own square: the click that the press and release
+    /// make there is not one.
+    skip_click: Option<Square>,
+    /// How many times the board was drawn, for tests that it is not redrawn needlessly.
+    #[cfg(test)]
+    renders: usize,
 }
 
 impl EventEmitter<MoveMade> for BoardView {}
 
 impl BoardView {
-    pub fn new(shown: impl Fn(&App) -> Option<ShownPosition> + 'static) -> Self {
+    pub fn new(
+        shown: impl Fn(&App) -> Option<ShownPosition> + 'static,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let bounds = BoardBounds::new(Cell::new(Bounds::default()));
+        let view = cx.weak_entity();
+        let drag_layer = cx.new(|_| DragLayer::new(Rc::clone(&bounds), view));
         Self {
             interaction: BoardInteraction::default(),
             premoves: PremoveQueue::default(),
@@ -48,6 +69,12 @@ impl BoardView {
             slide_run: 0,
             own_move: None,
             _slide_end: None,
+            held: None,
+            bounds,
+            drag_layer,
+            skip_click: None,
+            #[cfg(test)]
+            renders: 0,
         }
     }
 
@@ -85,11 +112,13 @@ impl BoardView {
     /// keeping the premoves.
     pub fn put_down(&mut self, cx: &mut Context<Self>) {
         self.interaction.clear();
+        self.let_go(cx);
         cx.notify();
     }
 
     /// Everything the player was doing on the board goes, premoves too.
     pub fn reset(&mut self, cx: &mut Context<Self>) {
+        self.let_go(cx);
         self.interaction.clear();
         self.premoves.clear_all();
         self.pending_premove = false;
@@ -102,11 +131,19 @@ impl BoardView {
     }
 
     #[cfg(test)]
+    pub fn renders(&self) -> usize {
+        self.renders
+    }
+
+    #[cfg(test)]
     pub fn selected(&self) -> Option<Square> {
         self.interaction.selected()
     }
 
     fn click_square(&mut self, square: Square, cx: &mut Context<Self>) {
+        if self.skip_click.take() == Some(square) {
+            return;
+        }
         let Some(shown) = (self.shown)(cx) else {
             return;
         };
@@ -185,8 +222,59 @@ impl BoardView {
         cx.notify();
     }
 
-    /// A right-click with premoves queued cancels them all, as on chess.com, and draws nothing.
+    /// A piece that can be moved is pressed: it is held, gliding to the cursor and then
+    /// following it, until the button comes up.
+    fn grab(&mut self, square: Square, cursor: Point<Pixels>, cx: &mut Context<Self>) {
+        let Some(shown) = (self.shown)(cx) else {
+            return;
+        };
+        let Some(piece) = self.preview(&shown).piece_at(square) else {
+            return;
+        };
+        let picture = piece_image(piece, BoardStyle::current(cx).pieces).path;
+        let flipped = self.interaction.flipped();
+        self.held = Some(square);
+        self.drag_layer.update(cx, |layer, cx| {
+            layer.hold((square, picture), flipped, cursor, cx);
+        });
+        cx.notify();
+    }
+
+    /// The held piece is let go: dragged onto a square, it is a drop there, as a move or a
+    /// premove; otherwise it goes back, and a press without a drag counts as a click.
+    pub(super) fn land(
+        &mut self,
+        from: Square,
+        to: Option<Square>,
+        dragged: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.held = None;
+        match to.filter(|_| dragged) {
+            Some(to) if to == from => {
+                self.skip_click = Some(from);
+                cx.notify();
+            }
+            Some(to) => self.drop_piece(from, to, cx),
+            None => cx.notify(),
+        }
+    }
+
+    /// The held piece goes back to its square without a move.
+    fn let_go(&mut self, cx: &mut Context<Self>) {
+        if self.held.take().is_some() {
+            self.drag_layer.update(cx, |layer, cx| layer.let_go(cx));
+            cx.notify();
+        }
+    }
+
+    /// A right-click puts back a held piece; with premoves queued it cancels them all, as on
+    /// chess.com; either way it draws nothing.
     fn right_down(&mut self, square: Square, cx: &mut Context<Self>) {
+        if self.held.is_some() {
+            self.let_go(cx);
+            return;
+        }
         if self.premoves.is_empty() {
             self.interaction.right_down(square);
         } else {
@@ -320,6 +408,19 @@ impl BoardView {
     }
 }
 
+/// The icons on the board: the reviewed move's class, and the kings' once the game is over.
+fn badges_of(shown: &ShownPosition) -> Vec<(Square, &'static str)> {
+    let review = shown
+        .badge
+        .map(|(square, class)| (square, class.icon_path()));
+    let kings = shown.outcome.into_iter().flat_map(|outcome| {
+        end_badges(shown.position.board(), outcome)
+            .into_iter()
+            .map(|(square, badge)| (square, badge.icon_path()))
+    });
+    review.into_iter().chain(kings).collect()
+}
+
 /// Puts the pieces back on their squares once `run` has had its time.
 fn end_slide_later(run: usize, cx: &mut Context<BoardView>) -> Task<()> {
     cx.spawn(async move |view, cx| {
@@ -339,6 +440,10 @@ impl Render for BoardView {
             return div().into_any_element();
         };
         self.follow_shown(&shown, cx);
+        #[cfg(test)]
+        {
+            self.renders += 1;
+        }
         let view = cx.entity().downgrade();
         let board = self.preview(&shown);
         BoardGrid::for_interaction(
@@ -351,18 +456,17 @@ impl Render for BoardView {
         )
         .premoves(self.premoves.pairs())
         .engine_arrow(shown.engine_arrow)
-        .badge(
-            shown
-                .badge
-                .map(|(square, class)| (square, class.icon_path())),
-        )
+        .badges(badges_of(&shown))
         .last_move_tint(shown.badge.map(|(_, class)| class.color()))
         .best_arrow(shown.best_arrow)
         .slides(self.sliding.clone(), self.slide_run)
         .promotion(self.promotion_prompt(&shown, view.clone()))
         .on_right_button(right_down(view.clone()), right_up(view.clone()))
         .on_square_click(click_square(view.clone()))
-        .on_piece_drop(drop_piece(view))
+        .on_piece_grab(grab(view))
+        .held(self.held)
+        .bounds(Rc::clone(&self.bounds))
+        .overlay(self.drag_layer.clone())
         .into_any_element()
     }
 }
@@ -397,11 +501,11 @@ fn click_square(view: WeakEntity<BoardView>) -> impl Fn(Square, &mut Window, &mu
     }
 }
 
-fn drop_piece(
+fn grab(
     view: WeakEntity<BoardView>,
-) -> impl Fn(Square, Square, &mut Window, &mut App) + 'static {
-    move |from, to, _, cx| {
-        let _ = view.update(cx, |view, cx| view.drop_piece(from, to, cx));
+) -> impl Fn(Square, Point<Pixels>, &mut Window, &mut App) + 'static {
+    move |square, cursor, _, cx| {
+        let _ = view.update(cx, |view, cx| view.grab(square, cursor, cx));
     }
 }
 

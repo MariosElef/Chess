@@ -27,11 +27,6 @@ pub fn paint_arrows(
     }
 }
 
-/// One square's width: the board is eight squares across.
-pub fn square_width(bounds: Bounds<Pixels>) -> Pixels {
-    bounds.size.width / 8.0
-}
-
 fn paint_shape(shape: &ArrowShape, cell: f32, color: Hsla, window: &mut Window) {
     let mut shaft = PathBuilder::stroke(px(SHAFT_WIDTH * cell));
     if let Some((&first, rest)) = shape.shaft.split_first() {

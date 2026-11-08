@@ -1,4 +1,4 @@
-use chess_domain::{Move, Position, Side, Square};
+use chess_domain::{Move, Outcome, Position, Side, Square};
 
 use crate::enums::analysis::MoveClass;
 
@@ -21,4 +21,6 @@ pub struct ShownPosition {
     pub best_arrow: Option<(Square, Square)>,
     /// A reviewed move's class, drawn on the square it went to.
     pub badge: Option<(Square, MoveClass)>,
+    /// How the game ended, while its final position is shown: the kings wear it.
+    pub outcome: Option<Outcome>,
 }

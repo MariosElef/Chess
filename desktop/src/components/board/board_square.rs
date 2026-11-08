@@ -1,18 +1,18 @@
-use std::{cell::Cell, rc::Rc};
+use std::rc::Rc;
 
 use chess_domain::{Piece, Square};
 use gpui_kit::{prelude::FluentBuilder as _, *};
 
-use super::{
-    board_colors::BoardColors,
-    board_press::{BoardPress, press_down, press_up},
-    board_style::BoardStyle,
-    piece_images::piece_image,
-};
+use super::{board_colors::BoardColors, piece_images::piece_image};
 use crate::enums::{board::SquareHighlight, settings::PieceSet};
 
 pub type OnSquareClick = Rc<dyn Fn(Square, &mut Window, &mut App)>;
-pub type OnPieceDrop = Rc<dyn Fn(Square, Square, &mut Window, &mut App)>;
+/// A piece pressed on its square, with where the cursor is on the window.
+pub type OnPieceGrab = Rc<dyn Fn(Square, Point<Pixels>, &mut Window, &mut App)>;
+
+/// Moved this far from where it was pressed, a held piece is being dragged, and a press and
+/// release this far apart was a drag, not a click.
+pub const DRAG_START: Pixels = px(4.);
 
 /// The right button pressed and released over squares, for marks and arrows.
 #[derive(Clone)]
@@ -21,63 +21,47 @@ pub struct RightButton {
     pub on_up: OnSquareClick,
 }
 
-/// One square's width on screen, measured each time the board is drawn.
-pub type SquareSize = Rc<Cell<Pixels>>;
-
-/// The value carried while a piece is dragged across the board.
-#[derive(Debug, Clone)]
-pub struct DraggedPiece {
-    pub from: Square,
-    pub piece: Piece,
-    /// So the dragged piece stays the size it is on the board.
-    pub size: SquareSize,
-}
-
 #[derive(IntoElement)]
 pub struct BoardSquare {
     square: Square,
     piece: Option<Piece>,
+    pieces: PieceSet,
     colors: BoardColors,
     highlight: SquareHighlight,
     target: bool,
     draggable: bool,
-    size: SquareSize,
     /// The file letter on the bottom edge, the rank number on the left edge.
     file_label: Option<char>,
     rank_label: Option<char>,
     /// An icon in the top-right corner, by asset path: a reviewed move's class.
     badge: Option<&'static str>,
-    /// A piece is sliding onto the square: it shows when it arrives.
+    /// The piece is elsewhere for now: held by the player, or sliding onto the square.
     hide_piece: bool,
-    /// The board's press: a press on this square's piece glides it to the cursor.
-    press: Option<Entity<BoardPress>>,
     on_click: Option<OnSquareClick>,
-    on_drop: Option<OnPieceDrop>,
+    on_grab: Option<OnPieceGrab>,
     right_button: Option<RightButton>,
 }
 
 impl BoardSquare {
     pub fn new(
         square: Square,
-        piece: Option<Piece>,
+        (piece, pieces): (Option<Piece>, PieceSet),
         colors: BoardColors,
-        size: SquareSize,
     ) -> Self {
         Self {
             square,
             piece,
+            pieces,
             colors,
             highlight: SquareHighlight::None,
             target: false,
             draggable: false,
-            size,
             file_label: None,
             rank_label: None,
             badge: None,
             hide_piece: false,
-            press: None,
             on_click: None,
-            on_drop: None,
+            on_grab: None,
             right_button: None,
         }
     }
@@ -113,13 +97,9 @@ impl BoardSquare {
         self
     }
 
-    pub fn on_drop(mut self, handler: Option<OnPieceDrop>) -> Self {
-        self.on_drop = handler;
-        self
-    }
-
-    pub fn press(mut self, press: Entity<BoardPress>) -> Self {
-        self.press = Some(press);
+    /// A press on the square's piece picks it up, when it can be moved.
+    pub fn on_grab(mut self, handler: Option<OnPieceGrab>) -> Self {
+        self.on_grab = handler;
         self
     }
 
@@ -135,22 +115,10 @@ impl BoardSquare {
 }
 
 impl RenderOnce for BoardSquare {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let square = self.square;
         let coordinate = self.colors.coordinate(square);
-        let lifted = lifted_state(square, window, cx);
-        let hidden = self.hide_piece || is_lifted(&lifted, cx);
-        let pieces = BoardStyle::current(cx).pieces;
-        let bounds = Rc::new(Cell::new(Bounds::default()));
         let grabbable = self.draggable && self.piece.is_some();
-        let press = self.press.clone();
-        let right_press = press.clone();
-        let pressed_here = press.as_ref().is_some_and(|state| {
-            state
-                .read(cx)
-                .pressed()
-                .is_some_and(|(pressed, _)| pressed == square)
-        });
         div()
             .id(("square", square.index()))
             .debug_selector(|| format!("square-{square}"))
@@ -160,22 +128,15 @@ impl RenderOnce for BoardSquare {
             .items_center()
             .justify_center()
             .bg(self.colors.background(square, self.highlight))
-            // Always there, so the square keeps its size; white while a piece hovers over it.
-            .border(HOVER_BORDER)
-            .border_color(transparent_black())
-            .drag_over::<DraggedPiece>(|style, _, _, _| style.border_color(hover_border_color()))
             .when_some(self.rank_label, |this, label| {
                 this.child(rank_label(label, coordinate))
             })
             .when_some(self.file_label, |this, label| {
                 this.child(file_label(label, coordinate))
             })
-            .child(measure(Rc::clone(&bounds)))
-            // A pressed piece is drawn by the board, gliding to the cursor above the squares.
-            .when_some(
-                self.piece.filter(|_| !hidden && !pressed_here),
-                |this, piece| this.child(piece_picture(piece, square, pieces)),
-            )
+            .when_some(self.piece.filter(|_| !self.hide_piece), |this, piece| {
+                this.child(piece_picture(piece, square, self.pieces))
+            })
             .when_some(self.badge, |this, path| {
                 this.child(
                     img(path)
@@ -189,85 +150,39 @@ impl RenderOnce for BoardSquare {
                 this.child(move_marker(self.piece.is_some(), self.colors))
             })
             .when_some(self.on_click, |this, handler| {
-                this.on_click(move |_, window, cx| handler(square, window, cx))
-            })
-            .when_some(self.on_drop, |this, handler| {
-                this.on_drop(move |dragged: &DraggedPiece, window, cx| {
-                    handler(dragged.from, square, window, cx);
+                this.on_click(move |event, window, cx| {
+                    // A piece dragged away and back lands where it started: that was no click.
+                    if !was_dragged(event) {
+                        handler(square, window, cx);
+                    }
                 })
             })
             .when_some(self.right_button, |this, handlers| {
                 let RightButton { on_down, on_up } = handlers;
-                let held = right_press;
                 this.on_mouse_down(MouseButton::Right, move |_, window, cx| {
-                    // A right-click while a piece is held or pressed puts it back, drawing nothing.
-                    let dragged = cx.stop_active_drag(window);
-                    let pressed = held
-                        .as_ref()
-                        .is_some_and(|press| press.read(cx).pressed().is_some());
-                    if let Some(press) = &held {
-                        press_up(press, window, cx);
-                    }
-                    if !dragged && !pressed {
-                        on_down(square, window, cx);
-                    }
+                    on_down(square, window, cx);
                 })
                 .on_mouse_up(MouseButton::Right, move |_, window, cx| {
                     on_up(square, window, cx);
                 })
             })
-            .when_some(press.filter(|_| grabbable), |this, press| {
-                let (down, up, up_out) = (press.clone(), press.clone(), press);
+            .when_some(self.on_grab.filter(|_| grabbable), |this, on_grab| {
                 this.on_mouse_down(MouseButton::Left, move |event, window, cx| {
-                    let shift = event.position - bounds.get().center();
-                    press_down(&down, (square, shift), window, cx);
-                })
-                .on_mouse_up(MouseButton::Left, move |_, window, cx| {
-                    press_up(&up, window, cx);
-                })
-                .on_mouse_up_out(MouseButton::Left, move |_, window, cx| {
-                    press_up(&up_out, window, cx);
+                    on_grab(square, event.position, window, cx);
                 })
             })
-            .when_some(self.piece.filter(|_| self.draggable), |this, piece| {
-                this.on_drag(
-                    DraggedPiece {
-                        from: square,
-                        piece,
-                        size: self.size,
-                    },
-                    move |dragged, grab_offset, window, cx| {
-                        lifted.update(cx, |lifted, _| *lifted = true);
-                        drag_preview(dragged, grab_offset, window, cx)
-                    },
-                )
-            })
     }
 }
 
-/// Notes where the square is drawn, for a press to know how far the cursor is from its centre.
-fn measure(bounds: Rc<Cell<Bounds<Pixels>>>) -> Canvas<()> {
-    canvas(move |drawn, _, _| bounds.set(drawn), |_, _, _, _| {})
-        .absolute()
-        .inset_0()
-}
-
-/// Whether this square's piece is the one being dragged, kept across redraws so the square can
-/// leave its piece out while it follows the cursor.
-fn lifted_state(square: Square, window: &mut Window, cx: &mut App) -> Entity<bool> {
-    window.use_keyed_state(("lifted", square.index()), cx, |_, _| false)
-}
-
-/// A piece is lifted only while a drag is going on; once it ends, the flag is cleared so the
-/// piece shows again (or has moved, if it was dropped on a legal square).
-fn is_lifted(lifted: &Entity<bool>, cx: &mut App) -> bool {
-    if cx.has_active_drag() {
-        return *lifted.read(cx);
+/// Whether the button went down and up far enough apart to have been a drag.
+fn was_dragged(event: &ClickEvent) -> bool {
+    match event {
+        ClickEvent::Mouse(click) => {
+            let moved = click.up.position - click.down.position;
+            moved.x.abs() >= DRAG_START || moved.y.abs() >= DRAG_START
+        }
+        ClickEvent::Keyboard(_) | ClickEvent::Touch(_) => false,
     }
-    if *lifted.read(cx) {
-        lifted.update(cx, |lifted, _| *lifted = false);
-    }
-    false
 }
 
 fn piece_picture(piece: Piece, square: Square, pieces: PieceSet) -> Img {
@@ -321,48 +236,4 @@ fn file_label(label: char, color: Hsla) -> Div {
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(color)
         .child(label.to_string())
-}
-
-fn drag_preview(
-    dragged: &DraggedPiece,
-    grab_offset: Point<Pixels>,
-    _: &mut Window,
-    cx: &mut App,
-) -> Entity<DragPreview> {
-    let (piece, size) = (dragged.piece, dragged.size.get());
-    let shift = centre_on_cursor(grab_offset, size);
-    cx.new(|_| DragPreview { piece, size, shift })
-}
-
-/// GPUI draws the dragged view where the square was grabbed; moving it by the grab point minus
-/// half a square puts the piece's centre on the cursor, wherever it was picked up.
-fn centre_on_cursor(grab_offset: Point<Pixels>, size: Pixels) -> Point<Pixels> {
-    let half = size / 2.;
-    point(grab_offset.x - half, grab_offset.y - half)
-}
-
-/// The outline of the square a dragged piece hovers over.
-pub const HOVER_BORDER: Pixels = px(3.);
-
-fn hover_border_color() -> Hsla {
-    hsla(0., 0., 1., 0.65)
-}
-
-/// The piece that follows the pointer while it is dragged, as big as on the board and centred
-/// on the cursor: the press already glided it there.
-pub struct DragPreview {
-    piece: Piece,
-    size: Pixels,
-    shift: Point<Pixels>,
-}
-
-impl Render for DragPreview {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .relative()
-            .left(self.shift.x)
-            .top(self.shift.y)
-            .size(self.size)
-            .child(img(piece_image(self.piece, BoardStyle::current(cx).pieces).path).size_full())
-    }
 }

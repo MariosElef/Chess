@@ -35,8 +35,15 @@ pub struct OnlineOptions {
     pub on_cancel: OnStart,
 }
 
+/// What changes when the game is against a bot: who it is, and why a game would not start.
+pub struct BotOptions {
+    pub name: &'static str,
+    pub rating: u32,
+    pub problem: Option<String>,
+}
+
 /// The new-game menu: a time control by speed, or none, then Start; online, then Find an
-/// opponent.
+/// opponent; against a bot, Play.
 #[derive(IntoElement)]
 pub struct GameSetup {
     /// `None` is a game without a clock.
@@ -44,6 +51,7 @@ pub struct GameSetup {
     on_choose: OnChoose,
     on_start: OnStart,
     online: Option<OnlineOptions>,
+    bot: Option<BotOptions>,
 }
 
 impl GameSetup {
@@ -57,7 +65,13 @@ impl GameSetup {
             on_choose: Rc::new(on_choose),
             on_start: Rc::new(on_start),
             online: None,
+            bot: None,
         }
+    }
+
+    pub fn bot(mut self, options: BotOptions) -> Self {
+        self.bot = Some(options);
+        self
     }
 
     pub fn online(mut self, options: OnlineOptions) -> Self {
@@ -75,7 +89,7 @@ impl RenderOnce for GameSetup {
             .rounded(cx.theme().radius)
             .border_1()
             .border_color(cx.theme().border)
-            .child(mode_heading(self.online.is_some(), cx))
+            .child(mode_heading(self.subtitle(), cx))
             .children(Category::ALL.map(|category| self.category_section(category)))
             .when(self.online.is_none(), |this| {
                 this.child(self.no_clock_button())
@@ -88,6 +102,12 @@ impl RenderOnce for GameSetup {
                     },
                 )
             })
+            .when_some(
+                self.bot.as_ref().and_then(|bot| bot.problem.clone()),
+                |this, problem| {
+                    this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
+                },
+            )
             .child(self.start_button())
             .when_some(
                 self.online.as_ref().filter(|online| online.seeking),
@@ -136,6 +156,7 @@ impl GameSetup {
         let (label, seeking) = match &self.online {
             Some(online) if online.seeking => ("Looking for an opponent…", true),
             Some(_) => ("Find an opponent", false),
+            None if self.bot.is_some() => ("Play", false),
             None => ("Start game", false),
         };
         Button::new("start-game")
@@ -148,12 +169,17 @@ impl GameSetup {
     }
 }
 
-fn mode_heading(online: bool, cx: &App) -> Div {
-    let subtitle = if online {
-        "Online · against the next player who wants the same game"
-    } else {
-        "Local · two players on this computer"
-    };
+impl GameSetup {
+    fn subtitle(&self) -> String {
+        match (&self.online, &self.bot) {
+            (Some(_), _) => "Online · against the next player who wants the same game".to_owned(),
+            (None, Some(bot)) => format!("Bot · against {} ({})", bot.name, bot.rating),
+            (None, None) => "Local · two players on this computer".to_owned(),
+        }
+    }
+}
+
+fn mode_heading(subtitle: String, cx: &App) -> Div {
     v_flex()
         .gap_1()
         .child(Label::new("New game").text_xl())

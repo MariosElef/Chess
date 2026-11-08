@@ -32,7 +32,7 @@ pub struct Holding {
 /// A page that walks through a game's history. The keys, buttons and move list all come here:
 /// the history moves, the move that led to the position reached makes its sound, and the page
 /// then does what reaching a position means for it. Held for two seconds, a key or button goes
-/// fast: several moves a step, without sounds or slides.
+/// fast: several moves a step, each step with the sound of the move it lands on.
 pub trait HistoryNavigation: Sized + 'static {
     /// The history being walked; `None` while the page has none.
     fn history_mut(&mut self) -> Option<&mut GameHistory>;
@@ -48,10 +48,9 @@ pub trait HistoryNavigation: Sized + 'static {
             StepPace::Fast if step.is_single() => FAST_MOVES,
             StepPace::Fast | StepPace::Normal => 1,
         };
-        let with_sound = pace == StepPace::Normal;
         self.walk(
             |history| (0..moves).for_each(|_| history.step(step)),
-            with_sound,
+            true,
             cx,
         );
     }

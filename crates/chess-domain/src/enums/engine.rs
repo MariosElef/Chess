@@ -165,6 +165,8 @@ pub enum Command {
     GoInfinite,
     /// Search until this depth, then report the best move.
     GoDepth(u32),
+    /// Search for this many milliseconds, then report the best move.
+    GoMoveTime(u64),
     Stop,
     Quit,
 }
@@ -179,6 +181,7 @@ impl fmt::Display for Command {
             Self::Position(fen) => write!(f, "position fen {fen}"),
             Self::GoInfinite => f.write_str("go infinite"),
             Self::GoDepth(depth) => write!(f, "go depth {depth}"),
+            Self::GoMoveTime(millis) => write!(f, "go movetime {millis}"),
             Self::Stop => f.write_str("stop"),
             Self::Quit => f.write_str("quit"),
         }
@@ -188,7 +191,10 @@ impl fmt::Display for Command {
 impl Command {
     /// Whether this starts a search.
     pub fn is_go(&self) -> bool {
-        matches!(self, Self::GoInfinite | Self::GoDepth(_))
+        matches!(
+            self,
+            Self::GoInfinite | Self::GoDepth(_) | Self::GoMoveTime(_)
+        )
     }
 }
 
@@ -378,6 +384,7 @@ mod uci_tests {
             Command::Position(fen),
             Command::GoInfinite,
             Command::GoDepth(24),
+            Command::GoMoveTime(500),
             Command::Stop,
             Command::Quit,
         ]
@@ -394,6 +401,7 @@ mod uci_tests {
                 "position fen 8/8/8/8/8/8/8/k6K w - - 0 1",
                 "go infinite",
                 "go depth 24",
+                "go movetime 500",
                 "stop",
                 "quit",
             ]
