@@ -20,6 +20,7 @@ use crate::{
         social::avatar,
     },
     models::social::Friend,
+    services::social::avatar_path,
 };
 
 type OnCreate = Rc<dyn Fn(String, Vec<String>, &mut Window, &mut App)>;
@@ -127,7 +128,12 @@ impl NewGroupForm {
             .rounded(px(6.))
             .cursor_pointer()
             .hover(move |this| this.bg(hover))
-            .child(avatar(&friend.username, px(32.), cx))
+            .child(avatar(
+                &friend.username,
+                avatar_path(&friend.id, friend.avatar.as_deref()).as_deref(),
+                px(32.),
+                cx,
+            ))
             .child(
                 div()
                     .flex_1()
@@ -216,6 +222,7 @@ mod tests {
         Friend {
             id: name.to_owned(),
             username: name.to_owned(),
+            avatar: None,
             online: true,
             away_s: None,
             ratings: BTreeMap::new(),

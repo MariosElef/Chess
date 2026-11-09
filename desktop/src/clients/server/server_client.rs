@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use reqwest::{RequestBuilder, Response};
 use serde::{Deserialize, de::DeserializeOwned};
@@ -19,6 +19,11 @@ use crate::{
         social::{FoundUser, Friends},
     },
 };
+
+/// How long fetching a 20 KB picture may take before the initial shows instead.
+const PICTURE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long sending a picture may take: longer than the server's 90 s, so its answer comes first.
+const UPLOAD_TIMEOUT: Duration = Duration::from_secs(100);
 
 /// The chess server's API, over the app's shared HTTP runtime. Cloning is cheap.
 #[derive(Clone)]
@@ -81,6 +86,58 @@ impl ServerClient {
             .bearer_auth(token);
         self.http
             .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// A player's picture, waited for on this thread: the asset loader asks from its own.
+    pub fn avatar_now(&self, user_id: &str, hash: &str) -> Result<Vec<u8>, ServerError> {
+        let request = self
+            .http
+            .client()
+            .get(self.url(&format!("/api/avatars/{user_id}/{hash}")))
+            // A picture is small: a slow one gives up soon, holding a loader thread no longer.
+            .timeout(PICTURE_TIMEOUT);
+        self.http.block_on(async move {
+            let response = send(request).await?;
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|error| ServerError::Unexpected(error.to_string()))?;
+            Ok(bytes.to_vec())
+        })
+    }
+
+    /// Makes `picture` (a JPEG, PNG, WebP or GIF file's bytes) the player's picture; its hash.
+    pub fn set_avatar(
+        &self,
+        token: &str,
+        picture: Vec<u8>,
+    ) -> impl Future<Output = Result<String, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .put(self.url("/api/users/me/avatar"))
+            .bearer_auth(token)
+            // A phone photo on a slow uplink takes longer than the usual request is allowed.
+            .timeout(UPLOAD_TIMEOUT)
+            .body(picture);
+        self.http.run(async move {
+            let set: SetAvatar = read_json(send(request).await?).await?;
+            Ok(set.avatar)
+        })
+    }
+
+    /// The player goes back to their initial.
+    pub fn remove_avatar(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .delete(self.url("/api/users/me/avatar"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
     }
 
     /// The devices signed in to the account, this one marked.
@@ -550,6 +607,12 @@ impl ServerClient {
     fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base_url)
     }
+}
+
+/// The answer to a new picture: the hash that names it.
+#[derive(Deserialize)]
+struct SetAvatar {
+    avatar: String,
 }
 
 /// The answer to an attempt: the new rating, or none.

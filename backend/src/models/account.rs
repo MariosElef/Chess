@@ -11,4 +11,4 @@ pub use stats::{
     CategoryRatingRow, GameResultsRow, GetStatsModel, HistoryRow, ModeStatsModel, PuzzleCountsRow,
     PuzzleStatsModel,
 };
-pub use user::{CreateUserModel, GetUserModel, NewUser, UserCredentials};
+pub use user::{CreateUserModel, GetAvatarModel, GetUserModel, NewUser, UserCredentials};

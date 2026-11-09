@@ -25,6 +25,8 @@ const PICTURE: Pixels = px(72.);
 pub struct FriendRow {
     id: SharedString,
     name: SharedString,
+    /// Their picture's asset path; none shows their initial.
+    picture: Option<String>,
     online: bool,
     seen: SharedString,
     on_challenge: OnClick,
@@ -47,6 +49,7 @@ impl FriendRow {
         Self {
             id: id.into(),
             name: name.into(),
+            picture: None,
             online,
             seen: seen.into(),
             on_challenge: Rc::new(on_challenge),
@@ -54,6 +57,11 @@ impl FriendRow {
             on_remove: Rc::new(on_remove),
             on_block: Rc::new(on_block),
         }
+    }
+
+    pub fn picture(mut self, picture: Option<String>) -> Self {
+        self.picture = picture;
+        self
     }
 }
 
@@ -63,7 +71,12 @@ impl RenderOnce for FriendRow {
         let (muted, green, ground) = (theme.muted_foreground, theme.success, theme.muted);
         let picture = div()
             .relative()
-            .child(square_avatar(&self.name, PICTURE, cx))
+            .child(square_avatar(
+                &self.name,
+                self.picture.as_deref(),
+                PICTURE,
+                cx,
+            ))
             .when(self.online, |this| {
                 this.child(
                     div()

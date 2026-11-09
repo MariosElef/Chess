@@ -85,3 +85,10 @@ pub async fn with_any(
     .fetch_one(db)
     .await
 }
+
+/// Everyone who has blocked `player`.
+pub async fn blockers_of(db: impl PgExecutor<'_>, player: Uuid) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_file_scalar!("src/repositories/sql/social/block/blockers_of.sql", player)
+        .fetch_all(db)
+        .await
+}

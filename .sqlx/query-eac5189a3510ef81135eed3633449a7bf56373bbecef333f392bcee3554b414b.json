@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The first guest nobody is using: not among the players the live server has ($1: connected\n-- or at a board), and not signed in within the last minute, which covers an app that has\n-- signed in but not yet connected. Locked until the transaction ends, so a sign-in running at\n-- the same moment skips it and takes the next one.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\"\nFROM account.users\nWHERE\n    users.guest_number IS NOT NULL\n    AND NOT (users.id = ANY($1::uuid[]))\n    AND NOT EXISTS (\n        SELECT 1\n        FROM account.sessions\n        WHERE\n            sessions.user_id = users.id\n            AND sessions.revoked_at IS NULL\n            AND sessions.expires_at > now()\n            AND sessions.created_at > now() - interval '1 minute'\n    )\nORDER BY users.guest_number\nLIMIT 1\nFOR UPDATE SKIP LOCKED\n",
+  "query": "-- Emails are stored lowercased; usernames keep their case but are unique without it. Guests\n-- have no password, so they are never found here.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\",\n    users.avatar_hash AS avatar,\n    users.password_hash\nFROM account.users\nWHERE\n    (users.email = lower($1) OR lower(users.username) = lower($1))\n    AND users.deleted_at IS NULL\n    AND users.guest_number IS NULL\n",
   "describe": {
     "columns": [
       {
@@ -52,11 +52,33 @@
         "name": "guest!",
         "type_info": "Bool",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "password_hash",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "password_hash"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "Text"
       ]
     },
     "nullable": [
@@ -64,8 +86,10 @@
       false,
       false,
       false,
-      null
+      null,
+      true,
+      false
     ]
   },
-  "hash": "5857cba50958722dbf9450fe0a505ad118387abdcdebb433aae5cce107e066dc"
+  "hash": "eac5189a3510ef81135eed3633449a7bf56373bbecef333f392bcee3554b414b"
 }

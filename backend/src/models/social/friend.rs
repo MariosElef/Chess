@@ -10,6 +10,8 @@ use crate::enums::social::Relation;
 pub struct UserRef {
     pub id: Uuid,
     pub username: String,
+    /// Their picture's hash, which names it at `/api/avatars/{id}/{hash}`; none without one.
+    pub avatar: Option<String>,
 }
 
 /// A player found by search, and where the searcher stands with them.
@@ -17,6 +19,7 @@ pub struct UserRef {
 pub struct FoundUserModel {
     pub id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     pub relation: Relation,
 }
 
@@ -25,6 +28,7 @@ pub struct FoundUserModel {
 pub struct FriendModel {
     pub id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     pub online: bool,
     /// Seconds since they last had the app open or used a session; `None` if neither is known.
     pub away_s: Option<i64>,
@@ -74,6 +78,7 @@ pub struct PairRow {
 pub struct FriendshipRow {
     pub user_id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     pub status: Option<String>,
     pub requester_id: Option<Uuid>,
     /// The searcher has blocked them.
@@ -85,6 +90,7 @@ pub struct FriendshipRow {
 pub struct ListedFriendRow {
     pub user_id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     /// Seconds since they last had the app open or used a session; `None` if neither is known.
     pub away_s: Option<i64>,
     pub status: Option<String>,

@@ -54,6 +54,7 @@ pub struct MemberRow {
     pub conversation_id: Uuid,
     pub user_id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     pub owner: bool,
 }
 

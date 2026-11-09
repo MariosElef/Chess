@@ -7,13 +7,10 @@ use super::{PlayHub, lock, seek_refusal};
 use crate::{
     enums::{play::ChallengeStatus, social::FriendshipStatus},
     errors::AppError,
-    models::{
-        play::{
-            challenge::{ChallengeModel, NewChallenge},
-            messages::ServerMessage,
-            player::Player,
-        },
-        social::friend::UserRef,
+    models::play::{
+        challenge::{ChallengeModel, NewChallenge},
+        messages::ServerMessage,
+        player::Player,
     },
     repositories::{account::user, play::challenge, social::friendship},
 };
@@ -68,8 +65,8 @@ impl PlayHub {
         let pending = PendingChallenge {
             model: ChallengeModel {
                 id: new.id,
-                from: user_ref(player),
-                to: user_ref(&opponent),
+                from: self.user_ref(player),
+                to: self.user_ref(&opponent),
                 initial_s,
                 increment_s,
                 rated,
@@ -86,6 +83,24 @@ impl PlayHub {
         self.send_challenges(from);
         self.send_challenges(to);
         self.expire_later(new.id);
+    }
+
+    /// The player's waiting challenges show their new picture, to both sides.
+    pub(super) fn repicture_challenges(&self, player: Uuid, avatar: Option<&str>) {
+        let mut told = Vec::new();
+        for pending in lock(&self.inner.challenges).iter_mut() {
+            for side in [&mut pending.model.from, &mut pending.model.to] {
+                if side.id == player {
+                    side.avatar = avatar.map(str::to_owned);
+                    told.extend([pending.from.id, pending.to.id]);
+                }
+            }
+        }
+        told.sort_unstable();
+        told.dedup();
+        for other in told {
+            self.send_challenges(other);
+        }
     }
 
     /// Whether the two are friends now: a block or unfriending since a challenge calls it off.
@@ -118,6 +133,7 @@ impl PlayHub {
             id: found.id,
             username: found.username,
             guest: found.guest,
+            avatar: found.avatar,
         };
         if !self.is_online(to) {
             return Err(format!("{} is offline", opponent.username));
@@ -255,12 +271,5 @@ impl PlayHub {
                 tracing::error!(?error, "storing how a challenge ended failed");
             }
         });
-    }
-}
-
-pub(super) fn user_ref(player: &Player) -> UserRef {
-    UserRef {
-        id: player.id,
-        username: player.username.clone(),
     }
 }

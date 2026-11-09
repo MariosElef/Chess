@@ -276,7 +276,8 @@ impl BattleView {
             | ServerMessage::Game { .. }
             | ServerMessage::Challenges { .. }
             | ServerMessage::ChatMessage { .. }
-            | ServerMessage::ConversationsChanged => return,
+            | ServerMessage::ConversationsChanged
+            | ServerMessage::ProfileChanged => return,
         }
         cx.notify();
     }
@@ -570,6 +571,7 @@ mod tests {
                 email: "ann@example.com".to_owned(),
                 username: "ann".to_owned(),
                 guest: false,
+                avatar: None,
             },
         };
         let session: SessionSource = Rc::new(move |_| Some(session.clone()));

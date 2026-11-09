@@ -1071,6 +1071,7 @@ dependencies = [
  "chrono",
  "csv",
  "http-body-util",
+ "image",
  "rand 0.10.3",
  "reqwest",
  "serde",

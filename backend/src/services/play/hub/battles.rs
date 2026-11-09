@@ -4,7 +4,7 @@ use chess_domain::Rating;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::{PlayHub, challenges::user_ref, lock};
+use super::{PlayHub, lock};
 use crate::{
     models::{
         play::{messages::ServerMessage, player::Player},
@@ -147,8 +147,8 @@ impl PlayHub {
         let pending = PendingBattle {
             model: BattleChallengeModel {
                 id: Uuid::now_v7(),
-                from: user_ref(player),
-                to: user_ref(&opponent),
+                from: self.user_ref(player),
+                to: self.user_ref(&opponent),
                 rated,
             },
             from: player.clone(),
@@ -315,6 +315,24 @@ impl PlayHub {
     /// In a battle, or about to be.
     fn is_battling(&self, player: Uuid) -> bool {
         self.battle_of(player).is_some() || lock(&self.inner.battles_starting).contains(&player)
+    }
+
+    /// The player's waiting battle invitations show their new picture, to both sides.
+    pub(super) fn repicture_battle_challenges(&self, player: Uuid, avatar: Option<&str>) {
+        let mut told = Vec::new();
+        for pending in lock(&self.inner.battle_challenges).iter_mut() {
+            for side in [&mut pending.model.from, &mut pending.model.to] {
+                if side.id == player {
+                    side.avatar = avatar.map(str::to_owned);
+                    told.extend([pending.from.id, pending.to.id]);
+                }
+            }
+        }
+        told.sort_unstable();
+        told.dedup();
+        for other in told {
+            self.send_battle_challenges(other);
+        }
     }
 
     /// Battle invitations between the two, either way, withdrawn; both hear.

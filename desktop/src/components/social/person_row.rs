@@ -13,6 +13,8 @@ const AVATAR: Pixels = px(40.);
 #[derive(IntoElement)]
 pub struct PersonRow {
     name: SharedString,
+    /// Their picture's asset path; none shows their initial.
+    picture: Option<String>,
     detail: Option<SharedString>,
     actions: Vec<AnyElement>,
 }
@@ -21,9 +23,15 @@ impl PersonRow {
     pub fn new(name: impl Into<SharedString>) -> Self {
         Self {
             name: name.into(),
+            picture: None,
             detail: None,
             actions: Vec::new(),
         }
+    }
+
+    pub fn picture(mut self, picture: Option<String>) -> Self {
+        self.picture = picture;
+        self
     }
 
     pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
@@ -53,7 +61,7 @@ impl RenderOnce for PersonRow {
                 h_flex()
                     .min_w_0()
                     .gap_3()
-                    .child(avatar(&self.name, AVATAR, cx))
+                    .child(avatar(&self.name, self.picture.as_deref(), AVATAR, cx))
                     .child(
                         v_flex()
                             .min_w_0()

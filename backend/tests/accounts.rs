@@ -353,3 +353,111 @@ async fn closing_an_account_passes_its_groups_on(db: Db) {
         .json();
     assert_eq!(groups[0]["owner_id"], bob_id.as_str(), "Bob owns it now");
 }
+
+/// A noisy picture the size of a phone photo: over the API's usual 64 KB and axum's own 2 MB.
+fn big_png() -> Vec<u8> {
+    let picture = image::RgbImage::from_fn(1100, 1100, |x, y| {
+        let noise = (x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503)) as u8;
+        image::Rgb([noise, noise.wrapping_mul(3), noise.wrapping_add(x as u8)])
+    });
+    let mut bytes = Vec::new();
+    picture
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .expect("a png");
+    bytes
+}
+
+#[sqlx::test]
+async fn a_picture_is_kept_as_a_small_square_everyone_can_load(db: Db) {
+    let server = server(db);
+    sign_up(&server, "ann@example.com", "ann").await;
+    let ann = sign_in(&server, "ann").await;
+    let png = big_png();
+    assert!(png.len() > 2 * 1024 * 1024, "larger than axum's own limit");
+    assert!(png.len() < 5 * 1024 * 1024, "within the picture limit");
+
+    let set: Value = server
+        .put("/api/users/me/avatar")
+        .authorization_bearer(&ann)
+        .bytes(png.into())
+        .await
+        .json();
+    let hash = set["avatar"].as_str().expect("a hash").to_owned();
+    let me: Value = server
+        .get("/api/users/me")
+        .authorization_bearer(&ann)
+        .await
+        .json();
+    assert_eq!(me["avatar"], hash.as_str());
+
+    let id = me["id"].as_str().expect("an id");
+    let picture = server.get(&format!("/api/avatars/{id}/{hash}")).await;
+    picture.assert_status_ok();
+    assert_eq!(picture.header("content-type"), "image/jpeg");
+    assert!(
+        picture
+            .header("cache-control")
+            .to_str()
+            .expect("text")
+            .contains("immutable")
+    );
+    let jpeg = image::load_from_memory(picture.as_bytes()).expect("a picture");
+    assert_eq!((jpeg.width(), jpeg.height()), (256, 256));
+
+    server
+        .delete("/api/users/me/avatar")
+        .authorization_bearer(&ann)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    let me: Value = server
+        .get("/api/users/me")
+        .authorization_bearer(&ann)
+        .await
+        .json();
+    assert_eq!(me["avatar"], Value::Null);
+    server
+        .get(&format!("/api/avatars/{id}/{hash}"))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn what_is_not_a_picture_and_a_guest_are_refused(db: Db) {
+    let server = server(db);
+    sign_up(&server, "ann@example.com", "ann").await;
+    let ann = sign_in(&server, "ann").await;
+    server
+        .put("/api/users/me/avatar")
+        .authorization_bearer(&ann)
+        .bytes(b"not a picture".to_vec().into())
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    let mut wide = Vec::new();
+    image::RgbImage::from_pixel(9000, 2, image::Rgb([0, 0, 0]))
+        .write_to(
+            &mut std::io::Cursor::new(&mut wide),
+            image::ImageFormat::Png,
+        )
+        .expect("a png");
+    let refused = server
+        .put("/api/users/me/avatar")
+        .authorization_bearer(&ann)
+        .bytes(wide.into())
+        .await;
+    refused.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    let problem: Value = refused.json();
+    assert_eq!(
+        problem["type"], "/problems/avatar-too-large",
+        "said plainly, not unreadable"
+    );
+    let guest: Value = server.post("/api/sessions/guest").await.json();
+    server
+        .put("/api/users/me/avatar")
+        .authorization_bearer(guest["token"].as_str().expect("a token"))
+        .bytes(big_png().into())
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+}

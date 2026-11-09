@@ -8,6 +8,8 @@ pub struct Player {
     pub username: String,
     /// A shared guest account: it plays unrated only.
     pub guest: bool,
+    /// Their picture's hash, as their friends and chats see it.
+    pub avatar: Option<String>,
 }
 
 /// A player at the board, with their rating in the game's category; none for a guest.

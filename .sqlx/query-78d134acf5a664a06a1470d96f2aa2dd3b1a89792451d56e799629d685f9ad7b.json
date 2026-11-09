@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1's picture, if $2 is still the hash their account hands out and the account is open.\nSELECT avatars.image\nFROM account.avatars\nINNER JOIN account.users ON users.id = avatars.user_id\nWHERE\n    avatars.user_id = $1\n    AND avatars.hash = $2\n    AND users.avatar_hash = $2\n    AND users.deleted_at IS NULL\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "image",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "account.avatars",
+            "name": "image"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "78d134acf5a664a06a1470d96f2aa2dd3b1a89792451d56e799629d685f9ad7b"
+}

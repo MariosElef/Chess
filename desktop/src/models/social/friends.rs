@@ -9,6 +9,9 @@ use crate::enums::social::Relation;
 pub struct UserRef {
     pub id: String,
     pub username: String,
+    /// Their picture's hash; none while they show their initial.
+    #[serde(default)]
+    pub avatar: Option<String>,
 }
 
 /// A player found by search, and where the searcher stands with them.
@@ -16,6 +19,8 @@ pub struct UserRef {
 pub struct FoundUser {
     pub id: String,
     pub username: String,
+    #[serde(default)]
+    pub avatar: Option<String>,
     pub relation: Relation,
 }
 
@@ -24,6 +29,8 @@ pub struct FoundUser {
 pub struct Friend {
     pub id: String,
     pub username: String,
+    #[serde(default)]
+    pub avatar: Option<String>,
     pub online: bool,
     /// Seconds since they last had the app open or used a session; `None` if neither is known.
     #[serde(default)]

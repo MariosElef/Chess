@@ -257,6 +257,7 @@ mod tests {
         let person = |name: &str| UserRef {
             id: name.to_owned(),
             username: name.to_owned(),
+            avatar: None,
         };
         let challenge = Challenge {
             id: "c".to_owned(),

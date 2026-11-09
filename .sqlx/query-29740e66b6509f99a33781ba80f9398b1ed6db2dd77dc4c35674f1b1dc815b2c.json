@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The last message of each of the conversations $1.\nSELECT DISTINCT ON (messages.conversation_id)\n    messages.id,\n    messages.conversation_id,\n    messages.sender_id,\n    users.username AS sender_name,\n    messages.body,\n    messages.sent_at\nFROM social.messages\nINNER JOIN account.users ON users.id = messages.sender_id\nWHERE messages.conversation_id = ANY($1)\nORDER BY messages.conversation_id, messages.id DESC\n",
+  "query": "-- The last message of each of the conversations $1.\nSELECT DISTINCT ON (messages.conversation_id)\n    messages.id,\n    messages.conversation_id,\n    messages.sender_id,\n    users.username AS sender_name,\n    users.avatar_hash AS sender_avatar,\n    messages.body,\n    messages.sent_at\nFROM social.messages\nINNER JOIN account.users ON users.id = messages.sender_id\nWHERE messages.conversation_id = ANY($1)\nORDER BY messages.conversation_id, messages.id DESC\n",
   "describe": {
     "columns": [
       {
@@ -49,6 +49,17 @@
       },
       {
         "ordinal": 4,
+        "name": "sender_avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "body",
         "type_info": "Text",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "sent_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -80,9 +91,10 @@
       false,
       false,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "109933df7c9b33e43677b58c82412a795a53bb2c0f41db020da8c6de4bc35a9c"
+  "hash": "29740e66b6509f99a33781ba80f9398b1ed6db2dd77dc4c35674f1b1dc815b2c"
 }

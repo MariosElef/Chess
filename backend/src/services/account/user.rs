@@ -11,7 +11,7 @@ use crate::{
         play::messages::ServerMessage,
     },
     repositories::{
-        account::{closure, session, user},
+        account::{avatar, closure, session, user},
         chat::conversation,
         database::Db,
         social::friendship,
@@ -84,6 +84,8 @@ impl UserService {
         closure::lock_user(&mut tx, user_id).await?;
         closure::forget_friendships(&mut tx, user_id).await?;
         closure::forget_blocks(&mut tx, user_id).await?;
+        avatar::delete(&mut *tx, user_id).await?;
+        avatar::set_hash(&mut *tx, user_id, None).await?;
         closure::forget_challenges(&mut tx, user_id).await?;
         closure::forget_direct_chats(&mut tx, user_id).await?;
         closure::forget_messages(&mut tx, user_id).await?;

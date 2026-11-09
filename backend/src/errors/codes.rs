@@ -25,6 +25,10 @@ pub enum ChessCode {
     MessageLength,
     GroupTitle,
     GuestCannotClose,
+    GuestCannotHaveAvatar,
+    AvatarUnreadable,
+    AvatarTooLarge,
+    AvatarNotFound,
     InternalError,
 }
 
@@ -43,7 +47,9 @@ impl ChessCode {
             Self::NotAGroup => StatusCode::CONFLICT,
             Self::NotGroupOwner | Self::CannotJoinGroup => StatusCode::FORBIDDEN,
             Self::MessageLength | Self::GroupTitle => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::GuestCannotClose => StatusCode::FORBIDDEN,
+            Self::GuestCannotClose | Self::GuestCannotHaveAvatar => StatusCode::FORBIDDEN,
+            Self::AvatarUnreadable | Self::AvatarTooLarge => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::AvatarNotFound => StatusCode::NOT_FOUND,
             Self::SignInRequired | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::UsernameTaken | Self::AllGuestsBusy => StatusCode::CONFLICT,
             Self::LichessUnavailable => StatusCode::SERVICE_UNAVAILABLE,
@@ -75,6 +81,10 @@ impl ChessCode {
             Self::MessageLength => "A message is 1 to 2000 characters",
             Self::GroupTitle => "A group needs a name of up to 60 characters",
             Self::GuestCannotClose => "A guest account is shared and cannot be deleted",
+            Self::GuestCannotHaveAvatar => "A guest account is shared and cannot have a picture",
+            Self::AvatarUnreadable => "That file is not a picture this server can read",
+            Self::AvatarTooLarge => "That picture is too large: pick a smaller one",
+            Self::AvatarNotFound => "No such picture",
             Self::InternalError => "Something went wrong",
         }
     }
@@ -108,6 +118,10 @@ impl ChessCode {
             Self::MessageLength => "message-length",
             Self::GroupTitle => "group-title",
             Self::GuestCannotClose => "guest-cannot-close",
+            Self::GuestCannotHaveAvatar => "guest-cannot-have-avatar",
+            Self::AvatarUnreadable => "avatar-unreadable",
+            Self::AvatarTooLarge => "avatar-too-large",
+            Self::AvatarNotFound => "avatar-not-found",
             Self::InternalError => "internal-error",
         }
     }

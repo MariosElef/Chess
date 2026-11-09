@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1 has no picture any more.\nDELETE FROM account.avatars\nWHERE avatars.user_id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70d911e892e5ede62f24fd0c3a8b990d7e4c773da29de264879f179570124e7f"
+}

@@ -49,6 +49,7 @@ impl FriendService {
         let response = rows
             .into_iter()
             .map(|row| FoundUserModel {
+                avatar: row.avatar,
                 relation: if row.blocked {
                     Relation::Blocked
                 } else {
@@ -86,6 +87,7 @@ impl FriendService {
             let person = UserRef {
                 id: row.user_id,
                 username: row.username,
+                avatar: row.avatar,
             };
             match relation {
                 Relation::Friends => response.friends.push(FriendModel {
@@ -94,6 +96,7 @@ impl FriendService {
                     ratings: ratings.remove(&person.id).unwrap_or_default(),
                     id: person.id,
                     username: person.username,
+                    avatar: person.avatar,
                 }),
                 Relation::RequestReceived => response.incoming.push(person),
                 Relation::RequestSent => response.outgoing.push(person),

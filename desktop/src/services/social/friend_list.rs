@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     enums::social::{FriendSort, LeaderBoard},
     models::social::Friend,
-    services::account::category_of,
+    services::{account::category_of, social::avatar_path},
 };
 
 /// How many places each board of the leaderboard shows before the player's own.
@@ -14,6 +14,8 @@ pub const PODIUM: usize = 3;
 pub struct LeaderRow {
     pub place: usize,
     pub name: String,
+    /// Their picture's asset path; none shows their initial.
+    pub picture: Option<String>,
     pub rating: i32,
     /// The signed-in player themselves.
     pub me: bool,
@@ -52,27 +54,29 @@ pub fn sorted_friends(friends: &[Friend], sort: FriendSort) -> Vec<&Friend> {
 /// The best three on `board` among friends and the player, then the player's place if lower.
 pub fn leaderboard(
     friends: &[Friend],
-    (my_name, my_ratings): (&str, &BTreeMap<String, i32>),
+    (me, my_ratings): ((&str, Option<String>), &BTreeMap<String, i32>),
     board: LeaderBoard,
 ) -> Vec<LeaderRow> {
-    let mut rated: Vec<(String, i32, bool)> = friends
+    let mut rated: Vec<(String, Option<String>, i32, bool)> = friends
         .iter()
         .filter_map(|friend| {
             let rating = rating_on(&friend.ratings, board)?;
-            Some((friend.username.clone(), rating, false))
+            let picture = avatar_path(&friend.id, friend.avatar.as_deref());
+            Some((friend.username.clone(), picture, rating, false))
         })
         .collect();
     if let Some(mine) = rating_on(my_ratings, board) {
-        rated.push((my_name.to_owned(), mine, true));
+        rated.push((me.0.to_owned(), me.1, mine, true));
     }
-    rated.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    rated.sort_by(|left, right| right.2.cmp(&left.2).then_with(|| left.0.cmp(&right.0)));
     rated
         .into_iter()
         .enumerate()
-        .filter(|(index, (_, _, me))| *index < PODIUM || *me)
-        .map(|(index, (name, rating, me))| LeaderRow {
+        .filter(|(index, (_, _, _, me))| *index < PODIUM || *me)
+        .map(|(index, (name, picture, rating, me))| LeaderRow {
             place: index + 1,
             name,
+            picture,
             rating,
             me,
         })
@@ -97,6 +101,7 @@ mod tests {
         Friend {
             id: name.to_owned(),
             username: name.to_owned(),
+            avatar: None,
             online,
             away_s,
             ratings: blitz
@@ -135,7 +140,7 @@ mod tests {
             friend("dan", true, None, Some(1200)),
         ];
         let mine = BTreeMap::from([("blitz".to_owned(), 1600)]);
-        let board = leaderboard(&friends, ("me", &mine), BLITZ);
+        let board = leaderboard(&friends, (("me", None), &mine), BLITZ);
         let shown: Vec<(usize, &str, i32, bool)> = board
             .iter()
             .map(|row| (row.place, row.name.as_str(), row.rating, row.me))
@@ -151,13 +156,13 @@ mod tests {
         assert!(
             leaderboard(
                 &friends,
-                ("me", &mine),
+                (("me", None), &mine),
                 LeaderBoard::Speed(Category::Bullet)
             )
             .is_empty()
         );
         let low = BTreeMap::from([("blitz".to_owned(), 1000)]);
-        let places: Vec<(usize, bool)> = leaderboard(&friends, ("me", &low), BLITZ)
+        let places: Vec<(usize, bool)> = leaderboard(&friends, (("me", None), &low), BLITZ)
             .iter()
             .map(|row| (row.place, row.me))
             .collect();

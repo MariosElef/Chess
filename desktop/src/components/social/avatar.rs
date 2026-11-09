@@ -1,13 +1,33 @@
-use gpui_kit::{component::ActiveTheme as _, *};
+use gpui_kit::{component::ActiveTheme as _, prelude::FluentBuilder as _, *};
 
-/// A circle with the person's initial, tinted with the theme's primary colour.
-pub fn avatar(name: &str, size: Pixels, cx: &App) -> Div {
-    initial_tile(name, size, cx).rounded_full()
+/// A circle with the person's picture, or their initial on the primary colour's tint.
+pub fn avatar(name: &str, picture: Option<&str>, size: Pixels, cx: &App) -> Div {
+    pictured(initial_tile(name, size, cx), picture, (size, size / 2.))
 }
 
-/// A square with the person's initial, tinted as `avatar`: a friend's picture, as chess.com's.
-pub fn square_avatar(name: &str, size: Pixels, cx: &App) -> Div {
-    initial_tile(name, size, cx).rounded(px(4.))
+/// A square with the person's picture or initial, as `avatar`: a friend's, as chess.com's.
+pub fn square_avatar(name: &str, picture: Option<&str>, size: Pixels, cx: &App) -> Div {
+    pictured(initial_tile(name, size, cx), picture, (size, SQUARE_CORNER))
+}
+
+/// A square avatar's corners, as chess.com rounds a friend's picture.
+const SQUARE_CORNER: Pixels = px(4.);
+
+/// The picture over the initial, each rounded by `corner`, as GPUI clips only to rectangles.
+fn pictured(tile: Div, picture: Option<&str>, (size, corner): (Pixels, Pixels)) -> Div {
+    tile.relative()
+        .rounded(corner)
+        .when_some(picture, |this, path| {
+            this.child(
+                img(SharedString::from(path.to_owned()))
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size(size)
+                    .rounded(corner)
+                    .object_fit(ObjectFit::Cover),
+            )
+        })
 }
 
 /// The initial on the primary colour's tint, at the size given, before its corners are set.

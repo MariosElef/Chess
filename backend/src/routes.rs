@@ -25,7 +25,7 @@ use crate::{
 
 /// A request that takes longer is answered 408, which also lets shutdown finish.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// No request this server takes needs more.
+/// No request this server takes needs more, but a picture, which has its own limit.
 const BODY_LIMIT_BYTES: usize = 64 * 1024;
 
 /// Every route under `/api` behind the middleware; the health probes after it, so they log nothing.
@@ -35,7 +35,13 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/puzzles", puzzles::router())
         .merge(play::router())
         .nest("/social", social::router())
-        .nest("/chat", chat::router());
+        .nest("/chat", chat::router())
+        .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        .merge(account::avatar_router());
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(
@@ -44,12 +50,7 @@ pub fn build_router(state: AppState) -> Router {
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
         .layer(PropagateRequestIdLayer::x_request_id())
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            REQUEST_TIMEOUT,
-        ))
-        .layer(CatchPanicLayer::new())
-        .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES));
+        .layer(CatchPanicLayer::new());
     Router::new()
         .nest("/api", api)
         .fallback(not_found)

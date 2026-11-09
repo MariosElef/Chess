@@ -9,4 +9,7 @@ pub struct User {
     /// One of the ten shared guest accounts, Guest to Guest10.
     #[serde(default)]
     pub guest: bool,
+    /// Their picture's hash; none while they show their initial.
+    #[serde(default)]
+    pub avatar: Option<String>,
 }

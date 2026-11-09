@@ -24,7 +24,8 @@ a commercial one. See [License](#license).
 - **Social**: friends with who is online and when they last were, a friends' leaderboard,
   challenges, and chats with friends and groups.
 - **Account**: your rating in every mode, each with its graph, your history of games (to look at
-  again or review), battles and puzzles, the devices signed in, and account deletion.
+  again or review), battles and puzzles, your profile picture, the devices signed in, and
+  account deletion.
 - **Settings**: light or dark, four board themes, four piece sets (Classic, Modern, Staunty and
   California), two sound sets (Standard and Lisp), and how hard Stockfish works.
 
@@ -190,6 +191,15 @@ or battle it was playing is resigned, and its friends, chats, ratings and puzzle
 deleted. Its games and battles stay for the other players, under a removed name (`deleted_…`),
 and its email and username are free to sign up with again. A guest account is shared, so it
 cannot be deleted.
+
+Change picture on the Account card picks a JPEG, PNG, WebP or GIF of up to 5 MB, and Remove goes
+back to your initial. The server cuts the middle square out of it, scales it to 256 by 256, lays
+any see-through parts on white and keeps only that, as a JPEG of about 20 KB; the original is
+never stored. Your picture shows in the header's menu, your friends' lists, search, the
+leaderboard, chats and groups, everywhere your initial did. Each picture's address carries a
+hash of its bytes, so the app loads it once per run and a new picture always has a new address.
+Guests cannot set one, since their accounts are shared, and closing an account deletes its
+picture.
 
 Under the stats, History has three tabs, each newest first, ten at a time with Load more. Games
 lists your finished online games: the speed, your opponent, the time control and length, whether

@@ -156,28 +156,54 @@ impl RenderOnce for GuestCard {
     }
 }
 
-/// Who is signed in, across the page: their letter, name and email, Sign out and Delete.
+/// Who is signed in, across the page: their picture, name and email, Sign out and Delete.
 #[derive(IntoElement)]
 pub struct SignedInCard {
     username: String,
     email: String,
+    /// Their picture's asset path; none shows their initial.
+    picture: Option<String>,
+    /// A new picture is on its way up.
+    uploading: bool,
+    /// Why the last picture was not taken.
+    picture_problem: Option<String>,
     on_sign_out: OnClick,
     on_delete: OnClick,
+    on_change_picture: OnClick,
+    on_remove_picture: OnClick,
 }
 
 impl SignedInCard {
     pub fn new(
-        username: String,
-        email: String,
+        (username, email, picture): (String, String, Option<String>),
         on_sign_out: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             username,
             email,
+            picture,
+            uploading: false,
+            picture_problem: None,
             on_sign_out: Rc::new(on_sign_out),
             on_delete: Rc::new(on_delete),
+            on_change_picture: Rc::new(|_, _| {}),
+            on_remove_picture: Rc::new(|_, _| {}),
         }
+    }
+
+    /// Change picture picks a file to upload; Remove goes back to the initial.
+    pub fn picture_actions(
+        mut self,
+        (uploading, problem): (bool, Option<String>),
+        on_change: impl Fn(&mut Window, &mut App) + 'static,
+        on_remove: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.uploading = uploading;
+        self.picture_problem = problem;
+        self.on_change_picture = Rc::new(on_change);
+        self.on_remove_picture = Rc::new(on_remove);
+        self
     }
 }
 
@@ -224,10 +250,59 @@ impl RenderOnce for SignedInCard {
             .p_5()
             .rounded(px(8.))
             .bg(theme.group_box)
-            .child(avatar(&self.username, px(72.), cx))
+            .child(picture_column(
+                (&self.username, self.picture.as_deref(), self.uploading),
+                self.picture_problem,
+                (self.on_change_picture, self.on_remove_picture),
+                cx,
+            ))
             .child(who)
             .child(actions)
     }
+}
+
+/// The player's picture with Change picture under it, and Remove once there is one.
+fn picture_column(
+    (name, picture, uploading): (&str, Option<&str>, bool),
+    problem: Option<String>,
+    (on_change, on_remove): (OnClick, OnClick),
+    cx: &App,
+) -> Div {
+    let has_picture = picture.is_some();
+    let danger = cx.theme().danger;
+    v_flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap_1()
+        .child(avatar(name, picture, px(72.), cx))
+        .child(
+            Button::new("change-picture")
+                .ghost()
+                .xsmall()
+                .label("Change picture")
+                .loading(uploading)
+                .on_click(move |_, window, cx| on_change(window, cx)),
+        )
+        .when(has_picture && !uploading, |this| {
+            this.child(
+                Button::new("remove-picture")
+                    .ghost()
+                    .xsmall()
+                    .text_color(cx.theme().muted_foreground)
+                    .label("Remove")
+                    .on_click(move |_, window, cx| on_remove(window, cx)),
+            )
+        })
+        .when_some(problem, |this, problem| {
+            this.child(
+                div()
+                    .max_w(px(140.))
+                    .text_xs()
+                    .text_center()
+                    .text_color(danger)
+                    .child(problem),
+            )
+        })
 }
 
 /// Deleting the account once the password is typed again: what goes, what stays, the red button.

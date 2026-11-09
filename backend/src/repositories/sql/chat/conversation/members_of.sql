@@ -3,6 +3,7 @@ SELECT
     conversation_members.conversation_id,
     users.id AS user_id,
     users.username,
+    users.avatar_hash AS avatar,
     conversation_members.role = 'owner' AS "owner!"
 FROM social.conversation_members
 INNER JOIN account.users ON users.id = conversation_members.user_id

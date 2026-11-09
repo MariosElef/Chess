@@ -94,7 +94,12 @@ fn place_row(row: LeaderRow, cx: &App) -> Div {
                 .text_color(muted)
                 .child(format!("#{}", row.place)),
         )
-        .child(square_avatar(&row.name, px(24.), cx))
+        .child(square_avatar(
+            &row.name,
+            row.picture.as_deref(),
+            px(24.),
+            cx,
+        ))
         .child(div().flex_1().min_w_0().child(row.name))
         .child(
             div()

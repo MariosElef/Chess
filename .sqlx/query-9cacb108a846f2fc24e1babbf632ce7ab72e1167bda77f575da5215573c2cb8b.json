@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone $1 has blocked whose account is open, by name.\nSELECT\n    users.id,\n    users.username,\n    users.avatar_hash AS avatar\nFROM social.blocks\nINNER JOIN account.users ON users.id = blocks.blocked_id\nWHERE blocks.blocker_id = $1 AND users.deleted_at IS NULL\nORDER BY lower(users.username)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9cacb108a846f2fc24e1babbf632ce7ab72e1167bda77f575da5215573c2cb8b"
+}

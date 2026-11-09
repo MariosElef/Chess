@@ -3,6 +3,7 @@
 SELECT
     users.id AS user_id,
     users.username,
+    users.avatar_hash AS avatar,
     floor(extract(EPOCH FROM now() - coalesce(
         users.last_online_at,
         (

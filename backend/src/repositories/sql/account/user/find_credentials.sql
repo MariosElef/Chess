@@ -6,6 +6,7 @@ SELECT
     users.username,
     users.created_at,
     users.guest_number IS NOT NULL AS "guest!",
+    users.avatar_hash AS avatar,
     users.password_hash
 FROM account.users
 WHERE

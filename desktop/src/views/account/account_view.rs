@@ -11,7 +11,11 @@ use gpui_kit::{
 
 use super::{devices_view::DevicesView, history_view::HistoryView};
 use crate::{
-    clients::{server::ServerClient, settings::SessionTokenFile},
+    clients::{
+        files::{PictureFileError, read_picture},
+        server::ServerClient,
+        settings::SessionTokenFile,
+    },
     components::{
         account::{
             AccountCard, CloseAccountCard, FormField, GuestCard, SignedInCard, StatsPanel,
@@ -25,7 +29,11 @@ use crate::{
         play::AnalyzeGame,
         server::ServerError,
     },
-    services::{account::form_problems, server::error_message},
+    services::{
+        account::{form_problems, picture_file_problem},
+        server::error_message,
+        social::avatar_path,
+    },
 };
 
 /// Signing in, creating an account, and signing out; it keeps the session for the whole app.
@@ -57,6 +65,11 @@ pub struct AccountView {
     devices: Entity<DevicesView>,
     /// A game picked there is passed on, to open on the analysis board.
     _history_events: Subscription,
+    /// A new picture is being picked or sent; signing out drops it.
+    _picture: Option<Task<()>>,
+    uploading: bool,
+    /// Why the last picture was not taken.
+    picture_problem: Option<String>,
 }
 
 impl EventEmitter<AccountChanged> for AccountView {}
@@ -101,6 +114,9 @@ impl AccountView {
             history,
             devices,
             _history_events,
+            _picture: None,
+            uploading: false,
+            picture_problem: None,
         };
         view.restore(window, cx);
         view
@@ -124,6 +140,115 @@ impl AccountView {
     /// Signed in as one of the shared guests, whose games are not theirs alone.
     fn is_guest(&self) -> bool {
         self.user().is_some_and(|user| user.guest)
+    }
+
+    /// Asks for a picture file, then sends it to become the player's picture.
+    fn change_picture(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = self.session.as_ref().map(|session| session.token.clone()) else {
+            return;
+        };
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Use as picture".into()),
+        });
+        let client = self.client.clone();
+        self.picture_problem = None;
+        self._picture = Some(cx.spawn(async move |view, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            // Read off the UI thread: the file may sit on a slow or network drive.
+            let read = cx.background_spawn(async move { read_picture(&path) });
+            let picture = match read.await {
+                Ok(picture) => picture,
+                Err(error) => {
+                    // The view outlives the request unless the window is closing.
+                    let _ = view.update(cx, |view, cx| view.picture_refused(&error, cx));
+                    return;
+                }
+            };
+            let request = client.set_avatar(&token, picture);
+            // The view outlives the request unless the window is closing.
+            let _ = view.update(cx, |view, cx| {
+                view.uploading = true;
+                cx.notify();
+            });
+            let result = request.await.map(Some);
+            // The view outlives the request unless the window is closing.
+            let _ = view.update(cx, |view, cx| view.picture_set(result, cx));
+        }));
+    }
+
+    /// The player goes back to their initial.
+    fn remove_picture(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = self.session.as_ref().map(|session| session.token.clone()) else {
+            return;
+        };
+        let request = self.client.remove_avatar(&token);
+        self.picture_problem = None;
+        self._picture = Some(cx.spawn(async move |view, cx| {
+            let result = request.await.map(|()| None);
+            // The view outlives the request unless the window is closing.
+            let _ = view.update(cx, |view, cx| view.picture_set(result, cx));
+        }));
+    }
+
+    /// The server took the new picture, or none: the account shows it from now on.
+    fn picture_set(&mut self, result: Result<Option<String>, ServerError>, cx: &mut Context<Self>) {
+        self.uploading = false;
+        match result {
+            Ok(avatar) => {
+                if let Some(session) = &mut self.session {
+                    session.user.avatar = avatar;
+                }
+            }
+            Err(error) => self.picture_problem = Some(error_message(&error)),
+        }
+        cx.notify();
+    }
+
+    fn picture_refused(&mut self, error: &PictureFileError, cx: &mut Context<Self>) {
+        self.picture_problem = Some(picture_file_problem(error).to_owned());
+        cx.notify();
+    }
+
+    /// The account changed on another device: it is fetched again, picture and all.
+    pub fn reload_user(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = self.session.as_ref().map(|session| session.token.clone()) else {
+            return;
+        };
+        let request = self.client.me(&token);
+        cx.spawn(async move |view, cx| {
+            let result = request.await;
+            // The view outlives the request unless the window is closing.
+            let _ = view.update(cx, |view, cx| view.user_reloaded(&token, result, cx));
+        })
+        .detach();
+    }
+
+    /// The account as the server now has it, unless someone else signed in meanwhile.
+    fn user_reloaded(
+        &mut self,
+        token: &str,
+        result: Result<User, ServerError>,
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(user) = result else {
+            return;
+        };
+        if let Some(session) = self
+            .session
+            .as_mut()
+            .filter(|session| session.token == token)
+        {
+            session.user = user;
+            cx.notify();
+        }
     }
 
     /// The account signed in on this app, if any.
@@ -291,6 +416,9 @@ impl AccountView {
         self.session = None;
         self.stats = None;
         self._stats = None;
+        self._picture = None;
+        self.uploading = false;
+        self.picture_problem = None;
         self.closing = None;
         self.history.update(cx, |history, _| history.clear());
         self.devices.update(cx, |devices, _| devices.clear());
@@ -360,14 +488,32 @@ impl AccountView {
         match &self.session {
             Some(session) => {
                 let open = view.clone();
+                let (change, remove) = (view.clone(), view.clone());
+                let user = &session.user;
                 SignedInCard::new(
-                    session.user.username.clone(),
-                    session.user.email.clone(),
+                    (
+                        user.username.clone(),
+                        user.email.clone(),
+                        avatar_path(&user.id, user.avatar.as_deref()),
+                    ),
                     move |_, cx| {
+                        // The view outlives its buttons unless the window is closing.
                         let _ = view.update(cx, |view, cx| view.sign_out(cx));
                     },
                     move |window, cx| {
+                        // The view outlives its buttons unless the window is closing.
                         let _ = open.update(cx, |view, cx| view.open_closing(window, cx));
+                    },
+                )
+                .picture_actions(
+                    (self.uploading, self.picture_problem.clone()),
+                    move |_, cx| {
+                        // The view outlives its buttons unless the window is closing.
+                        let _ = change.update(cx, |view, cx| view.change_picture(cx));
+                    },
+                    move |_, cx| {
+                        // The view outlives its buttons unless the window is closing.
+                        let _ = remove.update(cx, |view, cx| view.remove_picture(cx));
                     },
                 )
                 .into_any_element()
@@ -614,7 +760,10 @@ mod tests {
         json!({
             "token": token,
             "expires_at": "2026-12-08T00:00:00Z",
-            "user": { "id": "1", "email": "m@example.com", "username": username, "guest": guest }
+            "user": {
+                "id": "1", "email": "m@example.com", "username": username, "guest": guest,
+                "avatar": "abc123"
+            }
         })
     }
 
@@ -654,6 +803,10 @@ mod tests {
                             }
                         }))
                     }),
+                )
+                .route(
+                    "/api/users/me/avatar",
+                    delete(|| async { StatusCode::NO_CONTENT }),
                 )
                 .route(
                     "/api/users/me",
@@ -819,5 +972,26 @@ mod tests {
             view.update(cx, |view, _| view.closing.is_none()),
             "the next player does not land on it"
         );
+    }
+
+    #[gpui_kit::test]
+    fn removing_the_picture_goes_back_to_the_initial(cx: &mut TestAppContext) {
+        let (view, _, cx) = opened(cx, "account-picture");
+        view.update_in(cx, |view, window, cx| {
+            view.login
+                .update(cx, |input, cx| input.set_value("mario", window, cx));
+            view.password
+                .update(cx, |input, cx| input.set_value("correct horse", window, cx));
+            view.submit(window, cx);
+        });
+        wait_for(&view, cx, AccountView::is_admitted);
+        let picture = |view: &AccountView| view.user().and_then(|user| user.avatar.clone());
+        assert_eq!(
+            view.update(cx, |view, _| picture(view)).as_deref(),
+            Some("abc123")
+        );
+        view.update(cx, |view, cx| view.remove_picture(cx));
+        wait_for(&view, cx, |view| picture(view).is_none());
+        assert!(view.update(cx, |view, _| view.picture_problem.is_none()));
     }
 }

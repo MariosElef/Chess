@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The members of each of the conversations $1, by name, and which of them owns it.\nSELECT\n    conversation_members.conversation_id,\n    users.id AS user_id,\n    users.username,\n    conversation_members.role = 'owner' AS \"owner!\"\nFROM social.conversation_members\nINNER JOIN account.users ON users.id = conversation_members.user_id\nWHERE conversation_members.conversation_id = ANY($1)\nORDER BY lower(users.username)\n",
+  "query": "-- The members of each of the conversations $1, by name, and which of them owns it.\nSELECT\n    conversation_members.conversation_id,\n    users.id AS user_id,\n    users.username,\n    users.avatar_hash AS avatar,\n    conversation_members.role = 'owner' AS \"owner!\"\nFROM social.conversation_members\nINNER JOIN account.users ON users.id = conversation_members.user_id\nWHERE conversation_members.conversation_id = ANY($1)\nORDER BY lower(users.username)\n",
   "describe": {
     "columns": [
       {
@@ -38,6 +38,17 @@
       },
       {
         "ordinal": 3,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "owner!",
         "type_info": "Bool",
         "origin": "Expression"
@@ -52,8 +63,9 @@
       false,
       false,
       false,
+      true,
       null
     ]
   },
-  "hash": "b001f1a7c2ed5cf1f63c5116e182827ca3a561c877d763b8353fe7bf33c57970"
+  "hash": "cb8789ed0d6454d3928bd41e14bf56a8148d399ac6745d398ab717fcd6c1c33f"
 }

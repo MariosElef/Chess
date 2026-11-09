@@ -38,6 +38,7 @@ async fn connect(
         id: user.id,
         username: user.username,
         guest: user.guest,
+        avatar: user.avatar,
     };
     let session = signed_in.session_id;
     Ok(upgrade.on_upgrade(move |socket| serve(socket, state, (player, session))))

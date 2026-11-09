@@ -25,7 +25,7 @@ use crate::{
         server::ServerError,
         social::Friend,
     },
-    services::server::error_message,
+    services::{server::error_message, social::avatar_path},
     views::{
         live::{LiveConnection, SessionSource},
         sound::play_sound,
@@ -307,7 +307,8 @@ impl ChatsView {
                 | ServerMessage::BattleSeeking
                 | ServerMessage::BattleSeekCancelled
                 | ServerMessage::Battle { .. }
-                | ServerMessage::BattleChallenges { .. } => {}
+                | ServerMessage::BattleChallenges { .. }
+                | ServerMessage::ProfileChanged => {}
             },
         }
     }
@@ -378,6 +379,16 @@ impl ChatsView {
         .detach();
     }
 
+    /// A direct chat shows the other player's picture; a group shows its initial.
+    fn chat_picture(&self, conversation: &Conversation, cx: &App) -> Option<String> {
+        if conversation.kind != ConversationKind::Direct {
+            return None;
+        }
+        let me = (self.session)(cx).map(|session| session.user.id)?;
+        let other = conversation.members.iter().find(|member| member.id != me)?;
+        avatar_path(&other.id, other.avatar.as_deref())
+    }
+
     fn conversation_row(
         &self,
         conversation: &Conversation,
@@ -393,6 +404,7 @@ impl ChatsView {
         );
         let unread = conversation.unread;
         let row = PersonRow::new(conversation.title.clone())
+            .picture(self.chat_picture(conversation, cx))
             .detail(shortened(&preview))
             .when(unread > 0 && !opened, |row| {
                 row.action(unread_pill(unread, cx))
@@ -744,6 +756,7 @@ mod tests {
                 email: "ann@example.com".to_owned(),
                 username: "ann".to_owned(),
                 guest: false,
+                avatar: None,
             },
         };
         let session: crate::views::live::SessionSource = Rc::new(move |_| Some(session.clone()));

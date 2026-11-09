@@ -6,6 +6,7 @@ use gpui_kit::{
 };
 
 use crate::{
+    assets::{load_pictures_from, retry_missed_pictures},
     clients::{
         engine::device_cores,
         http::HttpRuntime,
@@ -32,6 +33,7 @@ use crate::{
         engine::EngineSettings,
         play::{AnalyzeGame, LiveEvent, ServerMessage},
     },
+    services::social::avatar_path,
     views::{
         account::AccountView,
         analysis::AnalysisPage,
@@ -72,6 +74,7 @@ pub struct AppShell {
     _account_changes: Subscription,
     /// A game picked in the Account page's history opens on the analysis board.
     _account_games: Subscription,
+    _account_redraws: Subscription,
     /// Puzzles from the server, fetched the first time the page opens.
     puzzles: Entity<PuzzlesView>,
     /// The live connection Play's online games, Puzzle Battle and Social share.
@@ -101,7 +104,10 @@ pub struct AppShell {
 
 impl AppShell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self::with(ShellSetup::from_system(), window, cx)
+        let setup = ShellSetup::from_system();
+        // Players' pictures come from the same server as everything else.
+        load_pictures_from(setup.client.clone());
+        Self::with(setup, window, cx)
     }
 
     pub fn with(setup: ShellSetup, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -122,6 +128,8 @@ impl AppShell {
         let account = cx.new(|cx| AccountView::new(client.clone(), tokens, window, cx));
         let _account_changes = cx.subscribe_in(&account, window, account_changed);
         let _account_games = cx.subscribe_in(&account, window, analyze_history_game);
+        // A new picture shows in the header's menu at once.
+        let _account_redraws = cx.observe(&account, |_, _, cx| cx.notify());
         let pages = Pages::new(&client, &account, engine_settings, window, cx);
         Self {
             page: Page::Play,
@@ -131,6 +139,7 @@ impl AppShell {
             account,
             _account_changes,
             _account_games,
+            _account_redraws,
             puzzles: pages.puzzles,
             live: pages.live,
             social: pages.social,
@@ -269,6 +278,7 @@ impl Render for AppShell {
         }
         let person = account.user().map(|user| MenuPerson {
             name: user.username.clone(),
+            picture: avatar_path(&user.id, user.avatar.as_deref()),
             email: (!user.guest).then(|| user.email.clone()),
             guest: user.guest,
         });
@@ -474,7 +484,7 @@ impl Pages {
     ) -> Self {
         let session = session_of(account);
         let live = cx.new(|_| LiveConnection::new(client.clone(), Rc::clone(&session)));
-        let live_events = cx.subscribe_in(&live, window, open_page_for_new_game);
+        let live_events = cx.subscribe_in(&live, window, follow_live);
         let play = new_play_page(&live, Rc::clone(&session), window, cx);
         let play_events = cx.subscribe_in(&play, window, analyze_game);
         let puzzles = new_puzzles_view(
@@ -570,17 +580,46 @@ fn session_of(account: &Entity<AccountView>) -> SessionSource {
     })
 }
 
-/// A game just starting, as from a challenge, opens Play; a Puzzle Battle opens Puzzles.
-fn open_page_for_new_game(
+/// The live connection's word for the shell: new games, missed pictures and account changes.
+fn follow_live(
     shell: &mut AppShell,
     _: &Entity<LiveConnection>,
     event: &LiveEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
+    if let LiveEvent::Connected = event {
+        // Back in touch with the server: pictures that failed while it was away come now, and
+        // the account is fetched again, as it may have changed on another device meanwhile.
+        retry_missed_pictures(cx);
+        shell
+            .account
+            .update(cx, |account, cx| account.reload_user(cx));
+    }
     let LiveEvent::Message(message) = event else {
         return;
     };
+    match message.as_ref() {
+        ServerMessage::ProfileChanged => {
+            shell
+                .account
+                .update(cx, |account, cx| account.reload_user(cx));
+        }
+        // The lists are fetched again with fresh pictures: missed ones get another try too.
+        ServerMessage::FriendsChanged | ServerMessage::ConversationsChanged => {
+            retry_missed_pictures(cx);
+        }
+        ServerMessage::Seeking { .. }
+        | ServerMessage::SeekCancelled
+        | ServerMessage::Game { .. }
+        | ServerMessage::Error { .. }
+        | ServerMessage::Challenges { .. }
+        | ServerMessage::ChatMessage { .. }
+        | ServerMessage::BattleSeeking
+        | ServerMessage::BattleSeekCancelled
+        | ServerMessage::Battle { .. }
+        | ServerMessage::BattleChallenges { .. } => {}
+    }
     if let ServerMessage::Game { game } = message.as_ref()
         && game.status == LiveStatus::Ongoing
         && game.moves.is_empty()

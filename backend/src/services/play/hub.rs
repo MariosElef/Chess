@@ -32,6 +32,7 @@ use crate::{
             messages::{ClientMessage, ServerMessage},
             player::{Player, PlayerModel},
         },
+        social::friend::UserRef,
     },
     repositories::{account::user, chat, database::Db, play::game, rating},
     services::rating::{from_row, whole},
@@ -63,6 +64,8 @@ struct HubInner {
     battles_starting: Mutex<HashSet<Uuid>>,
     /// Closed accounts: anything still on its way from one of their sockets is ignored.
     closed: Mutex<HashSet<Uuid>>,
+    /// Pictures changed since their players' sockets opened, which carry the old ones.
+    pictures: Mutex<HashMap<Uuid, Option<String>>>,
 }
 
 /// One open socket's queue of messages to send, and the session that opened it.
@@ -99,6 +102,7 @@ impl PlayHub {
                 battles: Mutex::new(HashMap::new()),
                 battles_starting: Mutex::new(HashSet::new()),
                 closed: Mutex::new(HashSet::new()),
+                pictures: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -457,6 +461,23 @@ impl PlayHub {
                 let _ = commands.send(command).await;
             }
             None => self.refuse(player.id, "That game is not being played"),
+        }
+    }
+
+    /// The player's picture changed: challenges and invitations they send carry the new one.
+    pub fn picture_changed(&self, player: Uuid, avatar: Option<String>) {
+        lock(&self.inner.pictures).insert(player, avatar.clone());
+        self.repicture_challenges(player, avatar.as_deref());
+        self.repicture_battle_challenges(player, avatar.as_deref());
+    }
+
+    /// The player as a challenge or invitation names them, with their picture as it is now.
+    fn user_ref(&self, player: &Player) -> UserRef {
+        let changed = lock(&self.inner.pictures).get(&player.id).cloned();
+        UserRef {
+            id: player.id,
+            username: player.username.clone(),
+            avatar: changed.unwrap_or_else(|| player.avatar.clone()),
         }
     }
 

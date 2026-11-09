@@ -32,6 +32,7 @@ pub struct MessageRow {
     pub conversation_id: Uuid,
     pub sender_id: Uuid,
     pub sender_name: String,
+    pub sender_avatar: Option<String>,
     pub body: String,
     pub sent_at: DateTime<Utc>,
 }

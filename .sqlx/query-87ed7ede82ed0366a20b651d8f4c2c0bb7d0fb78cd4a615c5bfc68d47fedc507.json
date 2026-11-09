@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The hash of $1's picture, which every list of players hands out; none without one.\nUPDATE account.users\nSET avatar_hash = $2, updated_at = now()\nWHERE users.id = $1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "87ed7ede82ed0366a20b651d8f4c2c0bb7d0fb78cd4a615c5bfc68d47fedc507"
+}

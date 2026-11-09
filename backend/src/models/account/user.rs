@@ -19,6 +19,8 @@ pub struct GetUserModel {
     pub created_at: DateTime<Utc>,
     /// One of the ten shared guest accounts, Guest to Guest10.
     pub guest: bool,
+    /// Their picture's hash, which names it at `/api/avatars/{id}/{hash}`; none without one.
+    pub avatar: Option<String>,
 }
 
 /// A checked sign-up with its password hashed, ready to store. No `Debug`: the hash.
@@ -36,6 +38,7 @@ pub struct UserCredentials {
     pub username: String,
     pub created_at: DateTime<Utc>,
     pub guest: bool,
+    pub avatar: Option<String>,
     pub password_hash: String,
 }
 
@@ -48,6 +51,13 @@ impl UserCredentials {
             username: self.username,
             created_at: self.created_at,
             guest: self.guest,
+            avatar: self.avatar,
         }
     }
+}
+
+/// A picture just set: the hash that names it at `/api/avatars/{id}/{hash}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GetAvatarModel {
+    pub avatar: String,
 }

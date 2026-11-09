@@ -16,7 +16,11 @@ use gpui_kit::{
 use crate::{
     components::{panel::PanelHeader, shell::MESSAGES_PICTURE, social::avatar},
     enums::chat::GroupChange,
-    models::{chat::Conversation, social::Friend},
+    models::{
+        chat::Conversation,
+        social::{Friend, UserRef},
+    },
+    services::social::avatar_path,
 };
 
 type OnChange = Rc<dyn Fn(GroupChange, &mut Window, &mut App)>;
@@ -141,7 +145,8 @@ impl GroupForm {
     }
 
     /// A member: their picture and name, Owner or You beside it, and Remove for the owner.
-    fn member_row(&self, (id, name): (&str, &str), cx: &mut Context<Self>) -> Div {
+    fn member_row(&self, member: &UserRef, cx: &mut Context<Self>) -> Div {
+        let (id, name) = (member.id.as_str(), member.username.as_str());
         let muted = cx.theme().muted_foreground;
         let tag = if self.group.owner_id.as_deref() == Some(id) {
             Some("Owner")
@@ -152,7 +157,7 @@ impl GroupForm {
         };
         let removable = self.owner() && id != self.me;
         let to_remove = id.to_owned();
-        person_line(name, cx)
+        person_line((name, avatar_path(id, member.avatar.as_deref())), cx)
             .when_some(tag, |this, tag| {
                 this.child(div().text_xs().text_color(muted).child(tag))
             })
@@ -173,7 +178,8 @@ impl GroupForm {
     /// A friend not in the group yet, with Add.
     fn friend_row(&self, friend: &Friend, cx: &mut Context<Self>) -> Div {
         let id = friend.id.clone();
-        person_line(&friend.username, cx).child(
+        let picture = avatar_path(&friend.id, friend.avatar.as_deref());
+        person_line((&friend.username, picture), cx).child(
             Button::new(SharedString::from(format!("group-add-{id}")))
                 .outline()
                 .small()
@@ -219,7 +225,7 @@ impl Render for GroupForm {
             .group
             .members
             .iter()
-            .map(|member| self.member_row((&member.id, &member.username), cx))
+            .map(|member| self.member_row(member, cx))
             .collect();
         let addable: Vec<Div> = self
             .friends
@@ -313,12 +319,12 @@ fn close_button() -> Button {
 }
 
 /// A person's picture and name, filling the row, before what goes at its end.
-fn person_line(name: &str, cx: &App) -> Div {
+fn person_line((name, picture): (&str, Option<String>), cx: &App) -> Div {
     h_flex()
         .gap_3()
         .px_2()
         .py_1p5()
-        .child(avatar(name, px(32.), cx))
+        .child(avatar(name, picture.as_deref(), px(32.), cx))
         .child(
             div()
                 .flex_1()
@@ -347,6 +353,7 @@ mod tests {
         UserRef {
             id: name.to_owned(),
             username: name.to_owned(),
+            avatar: None,
         }
     }
 
@@ -376,6 +383,7 @@ mod tests {
         let cat = Friend {
             id: "cat".to_owned(),
             username: "cat".to_owned(),
+            avatar: None,
             online: false,
             away_s: None,
             ratings: BTreeMap::new(),

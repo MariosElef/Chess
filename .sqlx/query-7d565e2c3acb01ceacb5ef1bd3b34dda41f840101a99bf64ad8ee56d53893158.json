@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- Up to $3 of the conversation $1's messages before the message $2 (all, without it), the\n-- latest first; ids are uuid v7, so they sort by when they were sent.\nSELECT\n    messages.id,\n    messages.conversation_id,\n    messages.sender_id,\n    users.username AS sender_name,\n    messages.body,\n    messages.sent_at\nFROM social.messages\nINNER JOIN account.users ON users.id = messages.sender_id\nWHERE messages.conversation_id = $1 AND ($2::uuid IS NULL OR messages.id < $2)\nORDER BY messages.id DESC\nLIMIT $3\n",
+  "query": "-- Up to $3 of the conversation $1's messages before the message $2 (all, without it), the\n-- latest first; ids are uuid v7, so they sort by when they were sent.\nSELECT\n    messages.id,\n    messages.conversation_id,\n    messages.sender_id,\n    users.username AS sender_name,\n    users.avatar_hash AS sender_avatar,\n    messages.body,\n    messages.sent_at\nFROM social.messages\nINNER JOIN account.users ON users.id = messages.sender_id\nWHERE messages.conversation_id = $1 AND ($2::uuid IS NULL OR messages.id < $2)\nORDER BY messages.id DESC\nLIMIT $3\n",
   "describe": {
     "columns": [
       {
@@ -49,6 +49,17 @@
       },
       {
         "ordinal": 4,
+        "name": "sender_avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "body",
         "type_info": "Text",
         "origin": {
@@ -59,7 +70,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "sent_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -82,9 +93,10 @@
       false,
       false,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "9d91927ee01b49fc36d8ced07184b74be5228c6a911731f269ebd38c1ddfdb90"
+  "hash": "7d565e2c3acb01ceacb5ef1bd3b34dda41f840101a99bf64ad8ee56d53893158"
 }

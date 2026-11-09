@@ -4,6 +4,7 @@ SELECT DISTINCT ON (messages.conversation_id)
     messages.conversation_id,
     messages.sender_id,
     users.username AS sender_name,
+    users.avatar_hash AS sender_avatar,
     messages.body,
     messages.sent_at
 FROM social.messages

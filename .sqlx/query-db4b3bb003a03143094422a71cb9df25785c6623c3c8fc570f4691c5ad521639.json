@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Holds $1's account until the transaction ends, if it is still open: a picture never lands\n-- on a closed account, and two changes to one picture take turns.\nSELECT users.id\nFROM account.users\nWHERE users.id = $1 AND users.deleted_at IS NULL\nFOR UPDATE\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db4b3bb003a03143094422a71cb9df25785c6623c3c8fc570f4691c5ad521639"
+}

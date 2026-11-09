@@ -47,6 +47,7 @@ mod tests {
                 id: Uuid::from_u128(name.bytes().map(u128::from).sum()),
                 username: name.to_owned(),
                 guest: false,
+                avatar: None,
             },
             control,
             rated,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- Emails are stored lowercased; usernames keep their case but are unique without it. Guests\n-- have no password, so they are never found here.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\",\n    users.password_hash\nFROM account.users\nWHERE\n    (users.email = lower($1) OR lower(users.username) = lower($1))\n    AND users.deleted_at IS NULL\n    AND users.guest_number IS NULL\n",
+  "query": "SELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\",\n    users.avatar_hash AS avatar\nFROM account.users\nWHERE users.id = $1 AND users.deleted_at IS NULL\n",
   "describe": {
     "columns": [
       {
@@ -55,19 +55,19 @@
       },
       {
         "ordinal": 5,
-        "name": "password_hash",
+        "name": "avatar",
         "type_info": "Text",
         "origin": {
           "Table": {
             "table": "account.users",
-            "name": "password_hash"
+            "name": "avatar_hash"
           }
         }
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -76,8 +76,8 @@
       false,
       false,
       null,
-      false
+      true
     ]
   },
-  "hash": "41b400a72e45c570c2cec23f98081d1596501b22a10df0509848a1c2edb1891a"
+  "hash": "36d5e626609864aa8adce8fa3f1ded27f9c994537752080a0994d4f1ad994a6e"
 }

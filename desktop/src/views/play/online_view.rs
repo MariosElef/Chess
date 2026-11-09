@@ -243,6 +243,7 @@ impl OnlineView {
             | ServerMessage::Challenges { .. }
             | ServerMessage::ChatMessage { .. }
             | ServerMessage::ConversationsChanged
+            | ServerMessage::ProfileChanged
             | ServerMessage::BattleSeeking
             | ServerMessage::BattleSeekCancelled
             | ServerMessage::Battle { .. }
@@ -926,6 +927,7 @@ mod tests {
                 email: "ann@example.com".to_owned(),
                 username: "Ann".to_owned(),
                 guest: false,
+                avatar: None,
             },
         };
         cx.add_window_view(|_, cx| {

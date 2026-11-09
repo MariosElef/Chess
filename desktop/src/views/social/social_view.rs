@@ -35,7 +35,7 @@ use crate::{
     services::{
         play::{DEFAULT_TIME_CONTROL, challenge_terms},
         server::error_message,
-        social::{last_online_text, leaderboard, sorted_friends},
+        social::{avatar_path, last_online_text, leaderboard, sorted_friends},
     },
     views::{
         chat::ChatsView,
@@ -302,6 +302,7 @@ impl SocialView {
             | ServerMessage::SeekCancelled
             | ServerMessage::ChatMessage { .. }
             | ServerMessage::ConversationsChanged
+            | ServerMessage::ProfileChanged
             | ServerMessage::BattleSeeking
             | ServerMessage::BattleSeekCancelled
             | ServerMessage::Battle { .. }
@@ -396,6 +397,7 @@ impl SocialView {
         for challenge in &self.received {
             let (accept, decline) = (challenge.id.clone(), challenge.id.clone());
             let row = PersonRow::new(challenge.from.username.clone())
+                .picture(picture_of(&challenge.from))
                 .detail(format!("Challenges you · {}", challenge_terms(challenge)))
                 .action(
                     Button::new(SharedString::from(format!("accept-challenge-{accept}")))
@@ -424,6 +426,7 @@ impl SocialView {
         for challenge in &self.sent {
             let id = challenge.id.clone();
             let row = PersonRow::new(challenge.to.username.clone())
+                .picture(picture_of(&challenge.to))
                 .detail(format!(
                     "Waiting for an answer · {}",
                     challenge_terms(challenge)
@@ -527,7 +530,8 @@ impl SocialView {
                     let _ = block.update(cx, |view, cx| view.block(&to_block, cx));
                 },
             ),
-        );
+        )
+        .picture(avatar_path(&friend.id, friend.avatar.as_deref()));
         v_flex().child(row).when(picking, |this| {
             this.child(
                 div()
@@ -599,6 +603,7 @@ impl SocialView {
             .iter()
             .map(|person| {
                 PersonRow::new(person.username.clone())
+                    .picture(picture_of(person))
                     .detail("Wants to be friends")
                     .action(self.accept_button("accept-friend", person, cx))
                     .action(self.remove_button(
@@ -612,6 +617,7 @@ impl SocialView {
             .iter()
             .map(|person| {
                 PersonRow::new(person.username.clone())
+                    .picture(picture_of(person))
                     .detail("Request sent")
                     .action(self.remove_button(
                         ("withdraw-friend", IconName::Close, "Cancel request"),
@@ -624,6 +630,7 @@ impl SocialView {
             .iter()
             .map(|person| {
                 PersonRow::new(person.username.clone())
+                    .picture(picture_of(person))
                     .detail("Blocked")
                     .action(self.unblock_button(person, cx))
             })
@@ -671,8 +678,9 @@ impl SocialView {
         let person = UserRef {
             id: found.id.clone(),
             username: found.username.clone(),
+            avatar: found.avatar.clone(),
         };
-        let row = PersonRow::new(found.username.clone());
+        let row = PersonRow::new(found.username.clone()).picture(picture_of(&person));
         match found.relation {
             Relation::None => row
                 .action(self.add_button(&person, cx))
@@ -745,12 +753,14 @@ impl SocialView {
     /// The friends' leaderboard: each board's best three among them and the player.
     fn leaderboard(&self, cx: &App) -> Leaderboard {
         let name = self.my_name(cx);
+        let mine = (self.session)(cx)
+            .and_then(|session| avatar_path(&session.user.id, session.user.avatar.as_deref()));
         let boards = LeaderBoard::ALL
             .into_iter()
             .map(|board| {
                 let rows = leaderboard(
                     &self.friends.friends,
-                    (&name, &self.friends.my_ratings),
+                    ((&name, mine.clone()), &self.friends.my_ratings),
                     board,
                 );
                 (board, rows)
@@ -841,6 +851,11 @@ fn muted_line(text: &'static str, cx: &App) -> Div {
 
 fn seconds(duration: Duration) -> u32 {
     u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+}
+
+/// The person's picture, as an asset path; none shows their initial.
+fn picture_of(person: &UserRef) -> Option<String> {
+    avatar_path(&person.id, person.avatar.as_deref())
 }
 
 #[cfg(test)]
@@ -964,6 +979,7 @@ mod tests {
                 email: "ann@example.com".to_owned(),
                 username: "ann".to_owned(),
                 guest,
+                avatar: None,
             },
         };
         Rc::new(move |_| Some(session.clone()))

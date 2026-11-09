@@ -7,7 +7,7 @@ use crate::{
         puzzles::battle,
     },
     services::{
-        account::{SessionService, StatsService, UserService},
+        account::{AvatarService, SessionService, StatsService, UserService},
         chat::ChatService,
         health::HealthService,
         play::{GameHistoryService, PlayHub},
@@ -23,6 +23,7 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub users: UserService,
+    pub avatars: AvatarService,
     pub stats: StatsService,
     pub sessions: SessionService,
     pub health: HealthService,
@@ -61,6 +62,7 @@ impl AppState {
         let play = PlayHub::new(db.clone());
         Self {
             users: UserService::new(db.clone(), play.clone()),
+            avatars: AvatarService::new(db.clone(), play.clone()),
             stats: StatsService::new(db.clone()),
             sessions: SessionService::new(db.clone(), play.clone()),
             friends: FriendService::new(db.clone(), play.clone()),

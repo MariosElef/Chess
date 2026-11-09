@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1's picture is now the JPEG $3, named by its hash $2; any earlier one is replaced.\nINSERT INTO account.avatars (user_id, hash, image)\nVALUES ($1, $2, $3)\nON CONFLICT (user_id) DO UPDATE\nSET hash = excluded.hash, image = excluded.image, updated_at = now()\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b6d807af18f1093c1232f6ec10c340b2de69af5b74683a845d308a735764e554"
+}

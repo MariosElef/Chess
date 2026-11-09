@@ -116,6 +116,8 @@ pub enum ServerMessage {
     },
     /// A conversation was started, or someone joined or left one: fetch the list again.
     ConversationsChanged,
+    /// The player's own account changed on another device, as its picture: fetch it again.
+    ProfileChanged,
     /// Waiting for a Puzzle Battle opponent.
     BattleSeeking,
     BattleSeekCancelled,

@@ -1,16 +1,23 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    sync::{Mutex, MutexGuard, OnceLock},
+};
 
 use gpui_kit::{
-    AssetSource, Result, SharedString,
+    App, AssetSource, ImageSource, Resource, Result, SharedString,
     assets::{Assets, icon_assets},
 };
 
-use crate::components::{
-    analysis::{review_icon, review_icon_paths},
-    board::{PIECE_IMAGES, end_picture, end_picture_paths},
-    play::{bot_picture, bot_picture_paths, speed_picture_bytes, speed_picture_paths},
-    puzzles::{puzzle_picture, puzzle_picture_paths},
-    shell::{nav_picture, nav_picture_paths},
+use crate::{
+    clients::server::ServerClient,
+    components::{
+        analysis::{review_icon, review_icon_paths},
+        board::{PIECE_IMAGES, end_picture, end_picture_paths},
+        play::{bot_picture, bot_picture_paths, speed_picture_bytes, speed_picture_paths},
+        puzzles::{puzzle_picture, puzzle_picture_paths},
+        shell::{nav_picture, nav_picture_paths},
+    },
+    services::social::avatar_of_path,
 };
 
 icon_assets!(
@@ -45,11 +52,25 @@ icon_assets!(
     ]
 );
 
+/// Where players' pictures come from, once the app knows its server.
+static PICTURES: OnceLock<ServerClient> = OnceLock::new();
+/// Pictures that could not be had: GPUI keeps a failed load for good, so they are asked again.
+static MISSED_PICTURES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Players' pictures are fetched from `client` from now on, by the asset paths their hashes make.
+pub fn load_pictures_from(client: ServerClient) {
+    // Set once, by the first window; a second would be the same server.
+    let _ = PICTURES.set(client);
+}
+
 /// The kit's icons, this app's Lucide icons, the piece images and the app's own pictures.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        if let Some((user_id, hash)) = avatar_of_path(path) {
+            return Ok(player_picture(user_id, hash).map(Cow::Owned));
+        }
         if let Some(piece) = PIECE_IMAGES.iter().find(|image| image.path == path) {
             return Ok(Some(Cow::Borrowed(piece.bytes)));
         }
@@ -88,6 +109,31 @@ impl AssetSource for AppAssets {
         paths.extend(Assets.list(path)?);
         Ok(paths)
     }
+}
+
+/// A player's picture from the server; none while it cannot be had, and the initial shows.
+fn player_picture(user_id: &str, hash: &str) -> Option<Vec<u8>> {
+    let picture = PICTURES.get()?.avatar_now(user_id, hash).ok();
+    if picture.is_none() {
+        missed_pictures().push(format!("avatars/{user_id}/{hash}"));
+    }
+    picture
+}
+
+/// The server is back: every picture that could not be had is asked for again.
+pub fn retry_missed_pictures(cx: &mut App) {
+    let missed = std::mem::take(&mut *missed_pictures());
+    for path in missed {
+        ImageSource::Resource(Resource::Embedded(path.into())).remove_asset(cx);
+    }
+    cx.refresh_windows();
+}
+
+/// The pictures missed so far; a panic elsewhere while holding them only loses a retry.
+fn missed_pictures() -> MutexGuard<'static, Vec<String>> {
+    MISSED_PICTURES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[cfg(test)]
@@ -144,5 +190,13 @@ mod tests {
                 "{class:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_picture_path_is_not_served_before_the_app_knows_its_server() {
+        let served = AppAssets
+            .load("avatars/u1/abc")
+            .expect("loading never fails");
+        assert_eq!(served, None, "the initial shows instead");
     }
 }

@@ -251,12 +251,13 @@ impl ChatService {
         let sent_at = message::insert(&self.db, &new).await?;
         // The sender has read their own message, and all before it.
         conversation::mark_read(&self.db, conversation_id, user_id).await?;
-        let sender_name = self
+        let sender = self
             .member_rows(&[conversation_id])
             .await?
             .into_iter()
-            .find(|member| member.user_id == user_id)
-            .map(|member| member.username)
+            .find(|member| member.user_id == user_id);
+        let (sender_name, sender_avatar) = sender
+            .map(|member| (member.username, member.avatar))
             .unwrap_or_default();
         let sent = ChatMessageModel {
             id: new.id,
@@ -264,6 +265,7 @@ impl ChatService {
             sender: UserRef {
                 id: user_id,
                 username: sender_name,
+                avatar: sender_avatar,
             },
             body: new.body,
             sent_at,
@@ -313,6 +315,7 @@ impl ChatService {
                 .push(UserRef {
                     id: member.user_id,
                     username: member.username,
+                    avatar: member.avatar,
                 });
         }
         let mut last: HashMap<Uuid, ChatMessageModel> = message::last_of(&self.db, &ids)
@@ -478,6 +481,7 @@ fn message_model(row: MessageRow) -> ChatMessageModel {
         sender: UserRef {
             id: row.sender_id,
             username: row.sender_name,
+            avatar: row.sender_avatar,
         },
         body: row.body,
         sent_at: row.sent_at,
@@ -504,10 +508,12 @@ mod tests {
             UserRef {
                 id: me,
                 username: "ann".to_owned(),
+                avatar: None,
             },
             UserRef {
                 id: them,
                 username: "bob".to_owned(),
+                avatar: None,
             },
         ];
         assert_eq!(

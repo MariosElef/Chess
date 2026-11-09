@@ -3,6 +3,7 @@
 SELECT
     users.id AS user_id,
     users.username,
+    users.avatar_hash AS avatar,
     friendships.status AS "status?",
     friendships.requester_id AS "requester_id?",
     EXISTS (

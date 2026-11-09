@@ -25,6 +25,8 @@ type OnLeaveGuest = Rc<dyn Fn(AccountForm, &mut Window, &mut App)>;
 /// Who is signed in, as the menu shows them.
 pub struct MenuPerson {
     pub name: String,
+    /// Their picture's asset path; none shows their initial.
+    pub picture: Option<String>,
     /// `None` for a guest, who has no email.
     pub email: Option<String>,
     pub guest: bool,
@@ -61,7 +63,12 @@ impl RenderOnce for AccountMenu {
             .ghost()
             .rounded(ButtonRounded::Size(px(16.)))
             .p_0()
-            .child(avatar(&self.person.name, px(32.), cx));
+            .child(avatar(
+                &self.person.name,
+                self.person.picture.as_deref(),
+                px(32.),
+                cx,
+            ));
         let Self {
             person,
             on_page,
@@ -128,7 +135,7 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
     h_flex()
         .gap_3()
         .p_3()
-        .child(avatar(&person.name, px(48.), cx))
+        .child(avatar(&person.name, person.picture.as_deref(), px(48.), cx))
         .child(
             v_flex()
                 .min_w_0()

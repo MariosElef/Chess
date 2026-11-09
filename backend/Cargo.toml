@@ -13,6 +13,7 @@ base64 = "0.23.1"
 chess-domain = { version = "0.1.0", path = "../crates/chess-domain" }
 chrono = { version = "0.4.45", default-features = false, features = ["now", "serde"] }
 csv = "1.4.0"
+image = { version = "0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 rand = "0.10.3"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }

@@ -56,8 +56,7 @@ impl HttpRuntime {
         self.runtime.spawn(work);
     }
 
-    /// Waits for `work` on this thread; for tests, which have no app to await in.
-    #[cfg(test)]
+    /// Waits for `work` on this thread: for the asset loader's threads and tests, never the UI's.
     pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {
         self.runtime.block_on(work)
     }

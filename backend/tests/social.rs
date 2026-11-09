@@ -519,3 +519,21 @@ async fn a_guest_has_no_history_from_the_last_holder(db: Db) {
         assert_eq!(listed, json!([]), "{path}");
     }
 }
+
+#[sqlx::test]
+async fn a_friends_picture_comes_with_them(db: Db) {
+    let server = server(db);
+    let ((ann_token, _), (bob_token, _)) = friends_ann_and_bob(&server).await;
+    let mut png = Vec::new();
+    image::RgbImage::from_pixel(40, 40, image::Rgb([10, 120, 200]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("a png");
+    let set: Value = server
+        .put("/api/users/me/avatar")
+        .authorization_bearer(&bob_token)
+        .bytes(png.into())
+        .await
+        .json();
+    let listed = friends(&server, &ann_token).await;
+    assert_eq!(listed["friends"][0]["avatar"], set["avatar"]);
+}

@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The first guest nobody is using: not among the players the live server has ($1: connected\n-- or at a board), and not signed in within the last minute, which covers an app that has\n-- signed in but not yet connected. Locked until the transaction ends, so a sign-in running at\n-- the same moment skips it and takes the next one.\nSELECT\n    users.id,\n    users.email,\n    users.username,\n    users.created_at,\n    users.guest_number IS NOT NULL AS \"guest!\",\n    users.avatar_hash AS avatar\nFROM account.users\nWHERE\n    users.guest_number IS NOT NULL\n    AND NOT (users.id = ANY($1::uuid[]))\n    AND NOT EXISTS (\n        SELECT 1\n        FROM account.sessions\n        WHERE\n            sessions.user_id = users.id\n            AND sessions.revoked_at IS NULL\n            AND sessions.expires_at > now()\n            AND sessions.created_at > now() - interval '1 minute'\n    )\nORDER BY users.guest_number\nLIMIT 1\nFOR UPDATE SKIP LOCKED\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "guest!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      true
+    ]
+  },
+  "hash": "08ed5f99b9a09d3d15a8ffd14bd1cd1cd80ddb2f7c7df07a02bd917d8f1e96d3"
+}

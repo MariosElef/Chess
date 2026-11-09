@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Everyone who has blocked $1: they still see them in their Blocked list.\nSELECT blocks.blocker_id\nFROM social.blocks\nWHERE blocks.blocked_id = $1\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocker_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.blocks",
+            "name": "blocker_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1117bd03da2de79fa838cf47d693af27af9e0da0ac43c473dac8962ca050ae39"
+}
