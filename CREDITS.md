@@ -36,6 +36,8 @@ desktop/assets/end/*.png (the end-of-game badges) | [chess.com](https://www.ches
 desktop/assets/nav/leaderboard.svg and nav/settings.svg (the Leaderboard and Settings pictures) | [chess.com](https://www.chess.com) | chess.com's own pictures, not licensed for reuse
 desktop/assets/shell/logo.svg and shell/app_icon.png (the header's pawn and the Dock icon made from it) | [chess.com](https://www.chess.com) | chess.com's logo, not licensed for reuse
 desktop/assets/nav/account.svg (the Account picture) | unknown, via [SVG Repo](https://www.svgrepo.com) | licence not recorded
+desktop/assets/play/dice.svg (the bot menu's Random colour) | unknown, via [SVG Repo](https://www.svgrepo.com) | licence not recorded
+desktop/assets/play/dice.svg (the bot menu's Random colour) | unknown, via [SVG Repo](https://www.svgrepo.com) | licence not recorded
 desktop/assets/bots | unknown | source and licence not recorded
 docs/screenshots | the project, showing the app | they show chess.com's pictures above, and so carry the same caveat
 

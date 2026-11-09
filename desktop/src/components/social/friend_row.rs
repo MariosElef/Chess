@@ -118,8 +118,22 @@ impl RenderOnce for FriendRow {
                     .child(
                         Button::new(SharedString::from(format!("challenge-{}", self.id)))
                             .ghost()
-                            .child(img(CHALLENGE_PICTURE).size_5())
-                            .tooltip("Challenge")
+                            .debug_selector({
+                                let selector = format!("challenge-{}", self.id);
+                                move || selector.clone()
+                            })
+                            // A picture does not fade by itself as an icon does: an offline
+                            // friend's is faded here, so it does not look like it can be pressed.
+                            .child(
+                                img(CHALLENGE_PICTURE)
+                                    .size_5()
+                                    .when(!self.online, |this| this.opacity(0.35)),
+                            )
+                            .tooltip(if self.online {
+                                "Challenge"
+                            } else {
+                                "Offline: a friend can be challenged once they are online"
+                            })
                             .disabled(!self.online)
                             .on_click(move |_, window, cx| challenge(window, cx)),
                     )
@@ -182,4 +196,56 @@ fn menu_item(
             // Gone already only if the window is closing.
             let _ = menu.update(cx, |menu, cx| menu.dismiss(window, cx));
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, rc::Rc};
+
+    use gpui_kit::{
+        Context, IntoElement, ParentElement as _, Render, Styled as _, TestAppContext, Window, div,
+    };
+
+    use super::FriendRow;
+    use crate::testing::click;
+
+    /// A window with one friend's row; `pressed` counts presses of Challenge.
+    struct Row {
+        online: bool,
+        pressed: Rc<Cell<u32>>,
+    }
+
+    impl Render for Row {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let pressed = Rc::clone(&self.pressed);
+            div().size_full().child(FriendRow::new(
+                ("bob", "bob"),
+                (self.online, "Online now"),
+                move |_, _| pressed.set(pressed.get() + 1),
+                (|_, _| {}, |_, _| {}, |_, _| {}),
+            ))
+        }
+    }
+
+    fn presses(cx: &mut TestAppContext, online: bool) -> u32 {
+        cx.update(gpui_kit::init);
+        let pressed = Rc::new(Cell::new(0));
+        let counted = Rc::clone(&pressed);
+        let (_, cx) = cx.add_window_view(move |_, _| Row {
+            online,
+            pressed: counted,
+        });
+        click(cx, "challenge-bob");
+        pressed.get()
+    }
+
+    #[gpui_kit::test]
+    fn an_online_friends_challenge_button_takes_the_click(cx: &mut TestAppContext) {
+        assert_eq!(presses(cx, true), 1);
+    }
+
+    #[gpui_kit::test]
+    fn an_offline_friends_challenge_button_does_not(cx: &mut TestAppContext) {
+        assert_eq!(presses(cx, false), 0);
+    }
 }

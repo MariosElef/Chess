@@ -62,6 +62,14 @@ impl UserService {
         Ok(response)
     }
 
+    /// Another player's account, open; a closed or unknown one is not found.
+    pub async fn player(&self, user_id: Uuid) -> Result<GetUserModel, AppError> {
+        let found = user::get(&self.db, user_id)
+            .await?
+            .ok_or(ChessCode::UserNotFound)?;
+        Ok(found)
+    }
+
     /// Closes the account once its password is typed again; its games stay for the others.
     pub async fn close(&self, user_id: Uuid, password: String) -> Result<(), AppError> {
         let check = closure::password_hash(&self.db, user_id)

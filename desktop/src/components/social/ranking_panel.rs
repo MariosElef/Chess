@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{
     assets::IconName,
     component::{
-        ActiveTheme as _,
+        ActiveTheme as _, Sizable as _,
         button::{Button, ButtonVariants},
         h_flex, v_flex,
     },
@@ -20,6 +20,7 @@ use crate::{
 
 type OnBoard = Rc<dyn Fn(RankingBoard, &mut Window, &mut App)>;
 type OnMore = Rc<dyn Fn(&mut Window, &mut App)>;
+type OnProfile = Rc<dyn Fn((String, Face), &mut Window, &mut App)>;
 
 /// The gold, silver and bronze of the first three places.
 const PODIUM_COLOURS: [u32; 3] = [0x00e3_aa24, 0x00b3_aca8, 0x00b3_7314];
@@ -37,6 +38,7 @@ pub struct RankingPanel {
     problem: Option<String>,
     on_board: OnBoard,
     on_more: OnMore,
+    on_profile: OnProfile,
 }
 
 impl RankingPanel {
@@ -54,7 +56,17 @@ impl RankingPanel {
             problem: None,
             on_board: Rc::new(on_board),
             on_more: Rc::new(on_more),
+            on_profile: Rc::new(|_, _, _| {}),
         }
+    }
+
+    /// View profile on a place opens that player's profile.
+    pub fn on_profile(
+        mut self,
+        on_profile: impl Fn((String, Face), &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_profile = Rc::new(on_profile);
+        self
     }
 
     /// The places shown, each with how its player looks.
@@ -101,7 +113,12 @@ impl RenderOnce for RankingPanel {
             .iter()
             .map(|(player, face)| {
                 let mine = my_id.as_deref() == Some(player.id.as_str());
-                place_row((player, face), (mine, noun), cx)
+                place_row(
+                    (player, face),
+                    (mine, noun),
+                    Rc::clone(&self.on_profile),
+                    cx,
+                )
             })
             .collect();
         let on_more = Rc::clone(&self.on_more);
@@ -125,7 +142,12 @@ impl RenderOnce for RankingPanel {
                                 .text_color(theme.muted_foreground)
                                 .child("Your place"),
                         )
-                        .child(place_row((me, face), (true, noun), cx)),
+                        .child(place_row(
+                            (me, face),
+                            (true, noun),
+                            Rc::clone(&self.on_profile),
+                            cx,
+                        )),
                 )
             })
             .child(
@@ -198,12 +220,14 @@ fn board_tab(board: RankingBoard, (chosen, on_board): (bool, OnBoard), cx: &App)
         .on_click(move |_, window, cx| on_board(board, window, cx))
 }
 
-/// One place: its number, the player's picture and name, their rating and how much they played.
+/// One place: its number, picture, name, how much they played, rating, and View profile.
 fn place_row(
     (player, face): (&RankedPlayer, &Face),
     (mine, noun): (bool, &'static str),
+    on_profile: OnProfile,
     cx: &App,
 ) -> Div {
+    let opened = (player.id.clone(), face.clone());
     let theme = cx.theme();
     h_flex()
         .w_full()
@@ -243,6 +267,13 @@ fn place_row(
                 .text_right()
                 .font_weight(FontWeight::BOLD)
                 .child(rating_text(Some(player.rating), player.provisional)),
+        )
+        .child(
+            Button::new(SharedString::from(format!("profile-{}", player.id)))
+                .ghost()
+                .small()
+                .label("View profile")
+                .on_click(move |_, window, cx| on_profile(opened.clone(), window, cx)),
         )
 }
 

@@ -5,6 +5,7 @@ mod clock_face;
 mod game_over_card;
 mod game_setup;
 mod play_panel;
+mod play_pictures;
 mod speed_label;
 mod waiting_bar;
 
@@ -15,6 +16,7 @@ pub use clock_face::{ClockFace, format_clock};
 pub use game_over_card::{GameOverActions, GameOverCard, with_card};
 pub use game_setup::{BotOptions, GameSetup, OnlineOptions};
 pub use play_panel::PlayPanel;
+pub use play_pictures::{play_picture, play_picture_paths};
 pub use speed_label::{
     BULLET_PICTURE, speed_label, speed_picture, speed_picture_bytes, speed_picture_paths,
 };

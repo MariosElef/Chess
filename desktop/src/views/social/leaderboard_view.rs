@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gpui_kit::{
     component::{h_flex, v_flex},
     *,
@@ -13,7 +15,7 @@ use crate::{
         social::{RankedPlayer, RankingPage},
     },
     services::{server::error_message, social::face_of},
-    views::live::SessionSource,
+    views::{live::SessionSource, social::profile_view::ProfileView},
 };
 
 /// Everyone's ratings, a board per category: the Leaderboard page under Social.
@@ -131,6 +133,12 @@ impl Render for LeaderboardView {
                 let _ = more.update(cx, |view, cx| view.load_more(cx));
             },
         )
+        .on_profile({
+            let (client, session) = (self.client.clone(), Rc::clone(&self.session));
+            move |player, window, cx| {
+                ProfileView::open((client.clone(), Rc::clone(&session)), player, window, cx);
+            }
+        })
         .rows(self.rows.iter().map(with_face).collect())
         .me(self.me.as_ref().map(with_face))
         .more(self.more)

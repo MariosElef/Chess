@@ -16,7 +16,7 @@ use crate::{
             PuzzleText, RatingRange, RushRecord,
         },
         server::{Problem, ServerError},
-        social::{FoundUser, Friends, RankingPage},
+        social::{FoundUser, Friends, Profile, RankingPage},
     },
 };
 
@@ -211,6 +211,21 @@ impl ServerClient {
             })?;
             read_json(send(request).await?).await
         })
+    }
+
+    /// Another player's profile: their name, picture, ratings and record.
+    pub fn profile(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Profile, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url(&format!("/api/users/{user_id}/profile")))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
     }
 
     /// The leaderboard `board` from place `offset` on, with the player's own place.

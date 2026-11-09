@@ -62,6 +62,21 @@ impl FriendService {
         Ok(response)
     }
 
+    /// Where `user_id` stands with `other`: friends, a request either way, blocked, or nothing.
+    pub async fn relation_with(&self, user_id: Uuid, other: Uuid) -> Result<Relation, AppError> {
+        let blockers = block::blockers_between(&self.db, user_id, other).await?;
+        if blockers.contains(&user_id) {
+            return Ok(Relation::Blocked);
+        }
+        let pair = (user_id.min(other), user_id.max(other));
+        let row = friendship::between(&self.db, pair).await?;
+        let status = row.as_ref().map(|row| row.status.as_str());
+        Ok(relation(
+            user_id,
+            (status, row.as_ref().map(|row| row.requester_id)),
+        ))
+    }
+
     /// Friends, online first, and the requests each way.
     pub async fn list(&self, user_id: Uuid) -> Result<GetFriendsModel, AppError> {
         let rows = friendship::of_user(&self.db, user_id).await?;

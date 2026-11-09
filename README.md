@@ -193,7 +193,10 @@ Load more for the next fifty, in the middle of the page. Players with the same r
 share a place. Each place shows the player's picture, name, rating and how many rated games,
 puzzles or battles they have played there; a rating still provisional carries a "?", and the
 first three places are in gold, silver and bronze. Your own place is pinned above the list. Only
-accounts with a rated result on a board are on it: guests and closed accounts never are.
+accounts with a rated result on a board are on it: guests and closed accounts never are. View
+profile on any place opens that player's profile: their picture, name and when they joined,
+their ratings with their graphs and record in every mode and in puzzles, and Add friend, Accept
+request, or where you already stand with them. Their email stays private.
 
 ## Puzzle Battle
 

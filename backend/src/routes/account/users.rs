@@ -1,15 +1,18 @@
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
 };
 
+use uuid::Uuid;
+
 use crate::{
+    enums::social::Relation,
     errors::AppError,
     extract::{Body, SignedIn},
     models::{
-        account::{CloseAccountModel, CreateUserModel, GetStatsModel, GetUserModel},
+        account::{CloseAccountModel, CreateUserModel, GetStatsModel, GetUserModel, ProfileModel},
         message::CreatedModel,
     },
     state::AppState,
@@ -20,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/", post(create))
         .route("/me", get(me).delete(close))
         .route("/me/stats", get(stats))
+        .route("/{id}/profile", get(profile))
 }
 
 /// Signs up; signing in is a separate request.
@@ -49,6 +53,30 @@ async fn stats(
     signed_in: SignedIn,
 ) -> Result<Json<GetStatsModel>, AppError> {
     Ok(Json(state.stats.of(signed_in.user_id).await?))
+}
+
+/// Another player's profile: name, picture, when they joined, where the asker stands, and stats.
+async fn profile(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ProfileModel>, AppError> {
+    let player = state.users.player(id).await?;
+    let mine = id == signed_in.user_id;
+    let relation = if mine {
+        Relation::None
+    } else {
+        state.friends.relation_with(signed_in.user_id, id).await?
+    };
+    Ok(Json(ProfileModel {
+        id,
+        username: player.username,
+        avatar: player.avatar,
+        joined: player.created_at.date_naive().to_string(),
+        relation,
+        mine,
+        stats: state.stats.of(id).await?,
+    }))
 }
 
 /// Closes the signed-in account, once its password is typed again.

@@ -11,6 +11,10 @@ const PLAIN_WHITE: u32 = 0x00ec_ecec;
 const PLAIN_WHITE_HOVER: u32 = 0x00ff_ffff;
 const PLAIN_WHITE_EDGE: u32 = 0x00a8_a8a8;
 const PLAIN_TEXT: u32 = 0x0020_2020;
+/// The near-black of a dark button, as Black in the bot menu, with its hover and its edge.
+const DARK: u32 = 0x002b_2a28;
+const DARK_HOVER: u32 = 0x003a_3936;
+const DARK_EDGE: u32 = 0x0010_100f;
 /// The red of a button that ends something, with its hover and its darker edge.
 const STOP_RED: u32 = 0x00d6_4b40;
 const STOP_RED_HOVER: u32 = 0x00e2_5f54;
@@ -19,7 +23,7 @@ const WHITE: u32 = 0x00ff_ffff;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The app's 3D button, green, red or white in three sizes; dimmed and deaf to clicks while busy.
+/// The app's 3D button: green, red, white or dark, in three sizes; deaf to clicks while busy.
 #[derive(IntoElement)]
 pub struct StartButton {
     id: SharedString,
@@ -29,6 +33,8 @@ pub struct StartButton {
     busy: bool,
     disabled: bool,
     size: Size,
+    /// One of a row of choices that is not picked: faded.
+    dimmed: bool,
     /// Green to start something, red to end it, white for anything else.
     tone: Tone,
     on_click: OnClick,
@@ -48,6 +54,7 @@ impl StartButton {
             busy: false,
             disabled: false,
             size: Size::Full,
+            dimmed: false,
             tone: Tone::Start,
             on_click: Rc::new(on_click),
         }
@@ -80,6 +87,18 @@ impl StartButton {
     /// White instead of green, for a button that neither starts nor ends anything.
     pub fn plain(mut self) -> Self {
         self.tone = Tone::Plain;
+        self
+    }
+
+    /// Near-black with white text, as White's opposite.
+    pub fn dark(mut self) -> Self {
+        self.tone = Tone::Dark;
+        self
+    }
+
+    /// Faded but still taking clicks, as the choices not picked in a row of them.
+    pub fn dimmed(mut self, dimmed: bool) -> Self {
+        self.dimmed = dimmed;
         self
     }
 
@@ -141,12 +160,14 @@ impl RenderOnce for StartButton {
             .text_color(rgb(text))
             .font_weight(FontWeight::EXTRA_BOLD)
             .when(inert, |this| this.opacity(0.7))
+            .when(self.dimmed && !inert, |this| this.opacity(0.45))
             .when(!inert, |this| {
                 this.cursor_pointer().hover(move |this| this.bg(rgb(hover)))
             })
             .when_some(self.picture, |this, path| this.child(img(path).size_6()))
             .when_some(self.icon, |this, icon| this.child(Icon::new(icon).size_4()))
-            .child(self.label)
+            // An icon-only button, as the dice, has no label to leave room for.
+            .when(!self.label.is_empty(), |this| this.child(self.label))
             .when(!inert, |this| {
                 this.on_click(move |_, window, cx| on_click(window, cx))
             })
@@ -167,6 +188,7 @@ enum Tone {
     Start,
     Stop,
     Plain,
+    Dark,
 }
 
 /// The button's colour, its hover, its darker bottom edge and its label's colour.
@@ -175,5 +197,6 @@ fn colours(tone: Tone) -> (u32, u32, u32, u32) {
         Tone::Start => (START_GREEN, START_GREEN_HOVER, START_GREEN_EDGE, WHITE),
         Tone::Stop => (STOP_RED, STOP_RED_HOVER, STOP_RED_EDGE, WHITE),
         Tone::Plain => (PLAIN_WHITE, PLAIN_WHITE_HOVER, PLAIN_WHITE_EDGE, PLAIN_TEXT),
+        Tone::Dark => (DARK, DARK_HOVER, DARK_EDGE, WHITE),
     }
 }

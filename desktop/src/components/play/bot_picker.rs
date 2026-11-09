@@ -3,9 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{
     assets::IconName,
     component::{
-        ActiveTheme as _, Icon, Sizable as _,
-        button::{Button, ButtonVariants},
-        h_flex,
+        ActiveTheme as _, Icon, h_flex,
         label::Label,
         slider::{Slider, SliderState},
         v_flex,
@@ -14,7 +12,8 @@ use gpui_kit::{
     *,
 };
 
-use crate::{enums::play::ColourChoice, models::play::Bot};
+use super::play_pictures::DICE_PICTURE;
+use crate::{components::panel::StartButton, enums::play::ColourChoice, models::play::Bot};
 
 type OnPick = Rc<dyn Fn(Option<usize>, &mut Window, &mut App)>;
 type OnColour = Rc<dyn Fn(ColourChoice, &mut Window, &mut App)>;
@@ -140,29 +139,53 @@ impl BotPicker {
             )
     }
 
+    /// "Play as" over White, the dice for Random, and Black, down the middle.
     fn colour_row(&self) -> Div {
-        h_flex()
-            .justify_between()
+        v_flex()
+            .items_center()
+            .gap_2()
             .child(Label::new("Play as").text_sm())
             .child(
                 h_flex()
-                    .gap_2()
+                    .items_center()
+                    .gap_3()
                     .children(ColourChoice::ALL.map(|colour| self.colour_button(colour))),
             )
     }
 
-    fn colour_button(&self, colour: ColourChoice) -> Button {
+    /// White and Black as 3D buttons in their colours, Random as the dice; unpicked ones fade.
+    fn colour_button(&self, colour: ColourChoice) -> AnyElement {
         let on_colour = Rc::clone(&self.on_colour);
-        let button = Button::new(SharedString::from(format!("colour-{}", colour.label())))
-            .small()
-            .label(colour.label())
-            .on_click(move |_, window, cx| on_colour(colour, window, cx));
-        if colour == self.colour {
-            button.primary()
-        } else {
-            button.outline()
+        let id = format!("colour-{}", colour.label());
+        let dimmed = colour != self.colour;
+        let pick = move |window: &mut Window, cx: &mut App| on_colour(colour, window, cx);
+        match colour {
+            ColourChoice::White => StartButton::new(id, colour.label(), pick)
+                .small()
+                .plain()
+                .dimmed(dimmed)
+                .into_any_element(),
+            ColourChoice::Black => StartButton::new(id, colour.label(), pick)
+                .small()
+                .dark()
+                .dimmed(dimmed)
+                .into_any_element(),
+            ColourChoice::Random => dice(id, dimmed, pick).into_any_element(),
         }
     }
+}
+
+/// Random's dice, pressed to pick it; faded while another colour is picked.
+fn dice(id: String, dimmed: bool, pick: impl Fn(&mut Window, &mut App) + 'static) -> Stateful<Div> {
+    let selector = id.clone();
+    div()
+        .id(SharedString::from(id))
+        .debug_selector(move || selector.clone())
+        .cursor_pointer()
+        .when(dimmed, |this| this.opacity(0.45))
+        .hover(|this| this.opacity(1.))
+        .child(img(DICE_PICTURE).size_8())
+        .on_click(move |_, window, cx| pick(window, cx))
 }
 
 /// The bot's photo in a circle, or a robot-less placeholder for the custom bot.

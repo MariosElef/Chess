@@ -590,3 +590,34 @@ async fn a_friends_picture_comes_with_them(db: Db) {
     let listed = friends(&server, &ann_token).await;
     assert_eq!(listed["friends"][0]["avatar"], set["avatar"]);
 }
+
+#[sqlx::test]
+async fn a_profile_shows_a_player_but_not_their_email(db: Db) {
+    let server = server(db.clone());
+    let ((ann, ann_id), (_, bob_id)) = friends_ann_and_bob(&server).await;
+    let bob: Value = server
+        .get(&format!("/api/users/{bob_id}/profile"))
+        .authorization_bearer(&ann)
+        .await
+        .json();
+    assert_eq!(bob["username"], "bob");
+    assert_eq!(bob["relation"], "friends");
+    assert_eq!(bob["mine"], false);
+    assert!(bob["stats"]["modes"].is_array(), "their ratings and record");
+    assert!(bob.get("email").is_none(), "an email stays private");
+    let mine: Value = server
+        .get(&format!("/api/users/{ann_id}/profile"))
+        .authorization_bearer(&ann)
+        .await
+        .json();
+    assert_eq!(mine["mine"], true);
+    sqlx::query("UPDATE account.users SET deleted_at = now() WHERE username = 'bob'")
+        .execute(&db)
+        .await
+        .expect("closed");
+    server
+        .get(&format!("/api/users/{bob_id}/profile"))
+        .authorization_bearer(&ann)
+        .await
+        .assert_status_not_found();
+}
