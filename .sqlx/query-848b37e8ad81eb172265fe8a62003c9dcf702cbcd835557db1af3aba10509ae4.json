@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Ends every live session of $1 but $2, the one asking.\nUPDATE account.sessions\nSET revoked_at = now()\nWHERE sessions.user_id = $1 AND sessions.id <> $2 AND sessions.revoked_at IS NULL\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "848b37e8ad81eb172265fe8a62003c9dcf702cbcd835557db1af3aba10509ae4"
+}

@@ -23,7 +23,8 @@ a commercial one. See [License](#license).
   every move the way chess.com does, with accuracy and an evaluation graph.
 - **Social**: friends with who is online and when they last were, a friends' leaderboard,
   challenges, and chats with friends and groups.
-- **Account**: your rating in every mode, each with its graph, and account deletion.
+- **Account**: your rating in every mode, each with its graph, your history of games (to look at
+  again or review), battles and puzzles, the devices signed in, and account deletion.
 - **Settings**: light or dark, four board themes, four piece sets (Classic, Modern, Staunty and
   California), two sound sets (Standard and Lisp), and how hard Stockfish works.
 
@@ -155,6 +156,14 @@ and accepting it opens the game on Play for both. Challenges and requests waitin
 as a count on Social in the rail. Guests have friends too; a guest's friends stay with that
 guest account, so the next person to get it has them.
 
+Block a player from a friend's "…" menu or from the search: the friendship, any request and any
+challenge or battle invitation between you end, and they can no longer ask to be friends (their
+request is quietly dropped rather than refused) or message you directly. No one can put the two
+of you in a new group, though a group you already share keeps going. The people you blocked are
+listed under Friend Requests, where Unblock lifts your block; a block they made on you stays
+theirs. Random pairing does not look at blocks, so a blocked player can still be paired with you
+in a seek.
+
 ## Puzzle Battle
 
 Puzzles → Puzzle Battle races another player through the same puzzles for three minutes,
@@ -182,14 +191,28 @@ deleted. Its games and battles stay for the other players, under a removed name 
 and its email and username are free to sign up with again. A guest account is shared, so it
 cannot be deleted.
 
+Under the stats, History has three tabs, each newest first, ten at a time with Load more. Games
+lists your finished online games: the speed, your opponent, the time control and length, whether
+you won, lost or drew, the rating change, and when; click one to open it on the analysis board
+at its final position, or Review to open it straight into Game Review. Battles lists your Puzzle
+Battles with both scores, and Puzzles your puzzle attempts with the puzzle's rating, how long
+you took, and the rating change. Guests have no history, since their accounts are shared.
+
+Under History, Devices lists what is signed in to your account: this device first, then the
+others with when each signed in and was last used (the app names itself to the server as "Chess
+<version> (<system>)", shown as "Chess app on macOS"). Sign out everywhere else ends every other
+session at once and closes their live connections.
+
 ## Chat
 
 Your chats have a page of their own, Messages: hover Social in the rail and pick Friends or
 Messages. Messages has the chats on the left and the one open on the right. A friend's Message
-button opens theirs, or make a group of friends with a name; anyone in a group can add their own
-friends to it, and leave it. Messages arrive at once while you are online, and unread ones count
-on Social in the rail and on Messages in its menu. During an online game the two players have a
-chat of their own beside the moves.
+button opens theirs, or make a group of friends with a name; a group's members button opens it:
+whoever made the group owns it and can rename it and remove members, anyone in it can add their
+own friends and leave, and when the owner leaves, or closes their account, the longest-standing
+member owns it. A direct chat only takes messages while the two are friends. Messages arrive at
+once while you are online, and unread ones count on Social in the rail and on Messages in its
+menu. During an online game the two players have a chat of their own beside the moves.
 
 ## Known limits
 
@@ -198,6 +221,11 @@ Puzzle Battle all report the result rather than each move, so a modified app cou
 puzzles it never solved and move its puzzle or battle rating. Online games are different: the
 server checks every move. Fine among friends; checking puzzle answers on the server would mean
 sending each move and judging it against the solution there.
+
+Some of what the server stores is written but not read back yet: the live mirror of each game
+(its position, clocks, last move time and any draw offer), the clock after each move, and the
+record of every challenge. Nothing in the app shows them today, and a game still going when the
+server restarts is aborted rather than resumed.
 
 ## Contributing
 

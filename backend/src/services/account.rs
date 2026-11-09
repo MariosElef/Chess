@@ -1,4 +1,5 @@
 mod credentials;
+mod device;
 mod password;
 mod session;
 mod stats;

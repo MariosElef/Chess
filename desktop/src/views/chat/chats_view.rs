@@ -11,11 +11,14 @@ use gpui_kit::{
     *,
 };
 
-use super::{chat_view::ChatView, new_group_form::NewGroupForm};
+use super::{chat_view::ChatView, group_form::GroupForm, new_group_form::NewGroupForm};
 use crate::{
     clients::server::ServerClient,
     components::social::PersonRow,
-    enums::{chat::ConversationKind, sound::Sound},
+    enums::{
+        chat::{ConversationKind, GroupChange},
+        sound::Sound,
+    },
     models::{
         chat::Conversation,
         play::{LiveEvent, ServerMessage},
@@ -42,6 +45,16 @@ pub struct ChatsView {
     /// The Messages page is on screen, so the open chat is being read.
     shown: bool,
     problem: Option<String>,
+    /// Lists asked for so far, and the newest shown: an older answer landing late is ignored.
+    lists_asked: u64,
+    list_shown: u64,
+    /// Lists asked for before the open chat and the Group modal opened: they may not have them.
+    asked_before_open: u64,
+    asked_before_form: u64,
+    /// Lists asked for before the Group modal's last change: they cannot show it yet.
+    asked_before_change: u64,
+    /// The Group modal while it is open, kept in step with the group.
+    group_form: Option<WeakEntity<GroupForm>>,
 }
 
 impl ChatsView {
@@ -63,6 +76,12 @@ impl ChatsView {
             open: None,
             shown: false,
             problem: None,
+            lists_asked: 0,
+            list_shown: 0,
+            asked_before_open: 0,
+            asked_before_form: 0,
+            asked_before_change: 0,
+            group_form: None,
         }
     }
 
@@ -130,21 +149,89 @@ impl ChatsView {
             return;
         };
         let request = self.client.conversations(&token);
+        self.lists_asked += 1;
+        let number = self.lists_asked;
         cx.spawn(async move |view, cx| {
             let result = request.await;
             // The view outlives the request unless the window is closing.
-            let _ = view.update(cx, |view, cx| {
-                match result {
-                    Ok(conversations) => {
-                        view.conversations = conversations;
-                        view.clear_read_chat();
-                    }
-                    Err(error) => view.problem = Some(error_message(&error)),
-                }
-                cx.notify();
-            });
+            let _ = view.update(cx, |view, cx| view.list_arrived(number, result, cx));
         })
         .detach();
+    }
+
+    /// The list asked for as `number`, unless a newer one was shown already.
+    fn list_arrived(
+        &mut self,
+        number: u64,
+        result: Result<Vec<Conversation>, ServerError>,
+        cx: &mut Context<Self>,
+    ) {
+        if number < self.list_shown {
+            return;
+        }
+        self.list_shown = number;
+        match result {
+            Ok(conversations) => {
+                self.conversations = conversations;
+                self.follow_open(number, cx);
+                self.follow_group_form(number, cx);
+                self.clear_read_chat();
+            }
+            Err(error) => {
+                let problem = error_message(&error);
+                // The Group modal waits for this list: it stops waiting and says why.
+                if let Some(form) = self.group_form.as_ref().and_then(WeakEntity::upgrade) {
+                    let shown = problem.clone();
+                    form.update(cx, |form, cx| form.failed(shown, cx));
+                }
+                self.problem = Some(problem);
+            }
+        }
+        cx.notify();
+    }
+
+    /// The Group modal's group as the list now has it; none once the player is out of it.
+    fn follow_group_form(&self, number: u64, cx: &mut Context<Self>) {
+        let Some(form) = self.group_form.as_ref().and_then(WeakEntity::upgrade) else {
+            return;
+        };
+        // A list asked for before the last change cannot show it: the modal waits on.
+        if number <= self.asked_before_change {
+            return;
+        }
+        let id = form.read(cx).group_id().to_owned();
+        let listed = self
+            .conversations
+            .iter()
+            .find(|listed| listed.id == id)
+            .cloned();
+        // A list asked for before the modal opened may simply not have the group yet.
+        if listed.is_none() && number <= self.asked_before_form {
+            return;
+        }
+        form.update(cx, |form, cx| form.follow(listed, cx));
+    }
+
+    /// The open chat as the list now has it; closed once the player is not in it.
+    fn follow_open(&mut self, number: u64, cx: &mut Context<Self>) {
+        let Some((open, chat)) = self.open.clone() else {
+            return;
+        };
+        let listed = self
+            .conversations
+            .iter()
+            .find(|listed| listed.id == open.id)
+            .cloned();
+        match listed {
+            Some(listed) => {
+                let title = SharedString::from(listed.title.clone());
+                chat.update(cx, |chat, cx| chat.set_title(title, cx));
+                self.open = Some((listed, chat));
+            }
+            // A list asked for before the chat opened may simply not have it yet.
+            None if number <= self.asked_before_open => {}
+            None => self.open = None,
+        }
     }
 
     /// Opens the conversation with a friend, started the first time.
@@ -191,6 +278,7 @@ impl ChatsView {
         chat.update(cx, |chat, cx| chat.set_reading(self.shown, cx));
         self.problem = None;
         self.open = Some((conversation, chat));
+        self.asked_before_open = self.lists_asked;
         self.clear_read_chat();
         cx.notify();
     }
@@ -244,6 +332,7 @@ impl ChatsView {
         NewGroupForm::open(
             self.friends.clone(),
             move |name, members, window, cx| {
+                // The view outlives its buttons unless the window is closing.
                 let _ = chats.update(cx, |chats, cx| {
                     chats.create_group((name, members), window, cx)
                 });
@@ -253,22 +342,35 @@ impl ChatsView {
         );
     }
 
-    /// Adds a friend to the open group, or leaves it.
+    /// Sends a change to the open group; a refusal shows in the Group modal too.
     fn change_group(
         &mut self,
-        request: impl Future<Output = Result<(), ServerError>> + 'static,
+        (group, request): (
+            &str,
+            impl Future<Output = Result<(), ServerError>> + 'static,
+        ),
         leaving: bool,
         cx: &mut Context<Self>,
     ) {
+        let group = group.to_owned();
         if leaving {
             self.open = None;
         }
         cx.spawn(async move |view, cx| {
             let result = request.await;
+            // The view outlives the request unless the window is closing.
             let _ = view.update(cx, |view, cx| {
                 if let Err(error) = result {
-                    view.problem = Some(error_message(&error));
+                    let problem = error_message(&error);
+                    let form = view.group_form.as_ref().and_then(WeakEntity::upgrade);
+                    if let Some(form) = form.filter(|form| form.read(cx).group_id() == group) {
+                        let shown = problem.clone();
+                        form.update(cx, |form, cx| form.failed(shown, cx));
+                    }
+                    view.problem = Some(problem);
                 }
+                // Lists asked until now may have reached the server before the change did.
+                view.asked_before_change = view.lists_asked;
                 view.refresh(cx);
                 cx.notify();
             });
@@ -310,49 +412,61 @@ impl ChatsView {
             .child(row)
     }
 
-    /// For an open group: a button for each friend not in it yet, and Leave.
-    fn group_actions(&self, conversation: &Conversation, cx: &mut Context<Self>) -> Div {
-        let missing: Vec<Button> = self
-            .friends
-            .iter()
-            .filter(|friend| {
-                !conversation
-                    .members
-                    .iter()
-                    .any(|member| member.id == friend.id)
-            })
-            .map(|friend| {
-                let (group, friend_id) = (conversation.id.clone(), friend.id.clone());
-                Button::new(SharedString::from(format!("add-to-group-{friend_id}")))
-                    .outline()
-                    .small()
-                    .label(format!("+ {}", friend.username))
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.add_to_group(&group, &friend_id, cx);
-                    }))
-            })
-            .collect();
-        let group = conversation.id.clone();
-        h_flex().flex_wrap().gap_2().children(missing).child(
-            Button::new("leave-group")
-                .ghost()
-                .small()
-                .label("Leave group")
-                .on_click(cx.listener(move |view, _, _, cx| view.leave_group(&group, cx))),
-        )
+    /// Opens the Group modal for the open group.
+    fn open_group(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some((group, _)), Some(session)) = (self.open.clone(), (self.session)(cx)) else {
+            return;
+        };
+        let chats = cx.entity().downgrade();
+        let id = group.id.clone();
+        let form = GroupForm::open(
+            (group, session.user.id, self.friends.clone()),
+            move |change, _, cx| {
+                // The view outlives its buttons unless the window is closing.
+                let _ = chats.update(cx, |chats, cx| chats.change_group_by(&id, change, cx));
+            },
+            window,
+            cx,
+        );
+        self.group_form = Some(form.downgrade());
+        self.asked_before_form = self.lists_asked;
+    }
+
+    /// Sends what was changed in the Group modal.
+    fn change_group_by(&mut self, group: &str, change: GroupChange, cx: &mut Context<Self>) {
+        match change {
+            GroupChange::Rename(title) => self.rename_group(group, &title, cx),
+            GroupChange::Add(friend) => self.add_to_group(group, &friend, cx),
+            GroupChange::Remove(member) => self.remove_from_group(group, &member, cx),
+            GroupChange::Leave => self.leave_group(group, cx),
+        }
+    }
+
+    fn rename_group(&mut self, group: &str, title: &str, cx: &mut Context<Self>) {
+        if let Some(token) = self.token(cx) {
+            let request = self.client.rename_group(&token, group, title);
+            self.change_group((group, request), false, cx);
+        }
+    }
+
+    fn remove_from_group(&mut self, group: &str, member: &str, cx: &mut Context<Self>) {
+        if let Some(token) = self.token(cx) {
+            let request = self.client.remove_from_group(&token, group, member);
+            self.change_group((group, request), false, cx);
+        }
     }
 
     fn add_to_group(&mut self, group: &str, friend_id: &str, cx: &mut Context<Self>) {
         if let Some(token) = self.token(cx) {
             let request = self.client.add_to_group(&token, group, friend_id);
-            self.change_group(request, false, cx);
+            self.change_group((group, request), false, cx);
         }
     }
 
     fn leave_group(&mut self, group: &str, cx: &mut Context<Self>) {
         if let Some(token) = self.token(cx) {
             let request = self.client.leave_group(&token, group);
-            self.change_group(request, true, cx);
+            self.change_group((group, request), true, cx);
         }
     }
 }
@@ -443,17 +557,41 @@ impl ChatsView {
                     .child("Pick a chat to read it"),
             );
         };
+        let group = conversation.kind == ConversationKind::Group;
         card.child(
-            div()
-                .text_lg()
-                .font_weight(FontWeight::BOLD)
-                .child(conversation.title.clone()),
+            h_flex()
+                .justify_between()
+                .gap_3()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_lg()
+                        .font_weight(FontWeight::BOLD)
+                        .child(conversation.title.clone()),
+                )
+                .when(group, |this| {
+                    this.child(
+                        Button::new("group-details")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Users)
+                            .flex_shrink_0()
+                            .label(members_label(conversation.members.len()))
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.open_group(window, cx);
+                            })),
+                    )
+                }),
         )
-        .when(conversation.kind == ConversationKind::Group, |this| {
-            this.child(self.group_actions(&conversation, cx))
-        })
         .child(div().flex_1().min_h_0().child(chat))
     }
+}
+
+/// "1 member" or "3 members".
+fn members_label(count: usize) -> String {
+    let noun = if count == 1 { "member" } else { "members" };
+    format!("{count} {noun}")
 }
 
 /// A red count of unread messages.

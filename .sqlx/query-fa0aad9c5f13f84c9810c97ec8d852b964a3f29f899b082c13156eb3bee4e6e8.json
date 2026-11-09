@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Holds the conversation $1 until the transaction ends, so its members change one at a time;\n-- messages still go in meanwhile.\nSELECT conversations.id\nFROM social.conversations\nWHERE conversations.id = $1\nFOR NO KEY UPDATE\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.conversations",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fa0aad9c5f13f84c9810c97ec8d852b964a3f29f899b082c13156eb3bee4e6e8"
+}

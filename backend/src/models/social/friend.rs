@@ -42,6 +42,8 @@ pub struct GetFriendsModel {
     pub incoming: Vec<UserRef>,
     /// Asked by the signed-in player, waiting for the others.
     pub outgoing: Vec<UserRef>,
+    /// Those the signed-in player has blocked.
+    pub blocked: Vec<UserRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -74,6 +76,8 @@ pub struct FriendshipRow {
     pub username: String,
     pub status: Option<String>,
     pub requester_id: Option<Uuid>,
+    /// The searcher has blocked them.
+    pub blocked: bool,
 }
 
 /// A friend or someone with a request each way, the friendship, and when they were last online.

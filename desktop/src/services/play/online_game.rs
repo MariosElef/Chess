@@ -11,8 +11,13 @@ use crate::{
 
 /// The game the snapshot's moves make from the start; `None` if a move is unreadable or illegal.
 pub fn replay(snapshot: &GameSnapshot) -> Option<Game> {
+    game_from_uci(&snapshot.moves)
+}
+
+/// The game `moves` make from the start; `None` if a move is unreadable or illegal.
+pub fn game_from_uci(moves: &[String]) -> Option<Game> {
     let mut game = Game::new();
-    for uci in &snapshot.moves {
+    for uci in moves {
         let mv: Move = uci.parse().ok()?;
         game.play(mv).ok()?;
     }
@@ -76,8 +81,12 @@ pub fn outcome_of(snapshot: &GameSnapshot) -> Option<Outcome> {
     if snapshot.status != LiveStatus::Finished {
         return None;
     }
-    let winner = snapshot.winner.map(Side::from);
-    let outcome = match (snapshot.result?, winner) {
+    outcome_from(snapshot.result?, snapshot.winner.map(Side::from))
+}
+
+/// The ending a result and its winner describe; `None` for a win with no winner given.
+pub fn outcome_from(result: GameResult, winner: Option<Side>) -> Option<Outcome> {
+    let outcome = match (result, winner) {
         (GameResult::Checkmate, Some(winner)) => Outcome::Checkmate { winner },
         (GameResult::Resignation, Some(winner)) => Outcome::Resignation { winner },
         (GameResult::Timeout, Some(winner)) => Outcome::Timeout { winner },

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The game's moves in UCI, in the order they were played.\nSELECT game_moves.uci\nFROM play.game_moves\nWHERE game_moves.game_id = $1\nORDER BY game_moves.ply\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uci",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "play.game_moves",
+            "name": "uci"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5affc6f665396a3b136ea6fb4fa3bfc27e0ba8c745e87a1875420b50c36f1bdd"
+}

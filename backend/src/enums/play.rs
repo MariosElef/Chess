@@ -10,6 +10,12 @@ pub enum Color {
 }
 
 impl Color {
+    pub const ALL: [Self; 2] = [Self::White, Self::Black];
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|color| color.key() == key)
+    }
+
     pub fn key(self) -> &'static str {
         match self {
             Self::White => "white",
@@ -34,6 +40,15 @@ impl From<Color> for Side {
             Color::Black => Self::Black,
         }
     }
+}
+
+/// How a finished game went for one player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayerResult {
+    Won,
+    Lost,
+    Drawn,
 }
 
 /// Whether a live game is still being played.
@@ -61,6 +76,21 @@ pub enum GameResult {
 }
 
 impl GameResult {
+    pub const ALL: [Self; 8] = [
+        Self::Checkmate,
+        Self::Resignation,
+        Self::Timeout,
+        Self::Stalemate,
+        Self::DrawAgreement,
+        Self::InsufficientMaterial,
+        Self::Repetition,
+        Self::FiftyMove,
+    ];
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|result| result.key() == key)
+    }
+
     pub fn key(self) -> &'static str {
         match self {
             Self::Checkmate => "checkmate",

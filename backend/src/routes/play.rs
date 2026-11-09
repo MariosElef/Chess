@@ -1,3 +1,5 @@
+mod games;
+
 use axum::{
     Router,
     extract::{
@@ -7,6 +9,7 @@ use axum::{
     response::Response,
     routing::get,
 };
+use uuid::Uuid;
 
 use crate::{
     errors::AppError,
@@ -15,12 +18,13 @@ use crate::{
         messages::{ClientMessage, ServerMessage},
         player::Player,
     },
-    services::play::PlayHub,
     state::AppState,
 };
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/ws", get(connect))
+    Router::new()
+        .route("/ws", get(connect))
+        .merge(games::router())
 }
 
 /// The live socket: seeks, moves, resignations and draws go in; games come out.
@@ -35,13 +39,19 @@ async fn connect(
         username: user.username,
         guest: user.guest,
     };
-    let hub = state.play.clone();
-    Ok(upgrade.on_upgrade(move |socket| serve(socket, hub, player)))
+    let session = signed_in.session_id;
+    Ok(upgrade.on_upgrade(move |socket| serve(socket, state, (player, session))))
 }
 
 /// Passes the player's messages to the hub and the hub's to the player until either side goes.
-async fn serve(mut socket: WebSocket, hub: PlayHub, player: Player) {
-    let mut connection = hub.connect(&player);
+async fn serve(mut socket: WebSocket, state: AppState, (player, session): (Player, Uuid)) {
+    let hub = state.play.clone();
+    let mut connection = hub.connect(&player, session);
+    // Signed out elsewhere as this socket opened: closing the others missed it, so it goes now.
+    if !state.sessions.is_live(session).await.unwrap_or(false) {
+        hub.disconnect(&player, connection.id);
+        return;
+    }
     loop {
         tokio::select! {
             incoming = socket.recv() => match incoming {

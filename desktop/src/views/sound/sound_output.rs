@@ -46,6 +46,16 @@ pub fn play_sound(sound: Sound, cx: &App) {
     }
 }
 
+/// Plays every sound of the set in order, as Settings does once a set is picked.
+pub fn play_sound_tour(cx: &App) {
+    match cx.try_global::<SoundOutput>() {
+        Some(SoundOutput::Speaker(speaker)) => speaker.play_tour(&Sound::ALL),
+        #[cfg(test)]
+        Some(SoundOutput::Recorder(played)) => played.borrow_mut().extend_from_slice(&Sound::ALL),
+        None => {}
+    }
+}
+
 /// Plays `sounds` one after another.
 fn play_in_turn(sounds: &[Sound], cx: &App) {
     match cx.try_global::<SoundOutput>() {

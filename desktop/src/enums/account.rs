@@ -31,3 +31,24 @@ impl AccountForm {
         }
     }
 }
+
+/// The Account page's history tabs: online games, puzzle battles, puzzle attempts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum HistoryTab {
+    #[default]
+    Games,
+    Battles,
+    Puzzles,
+}
+
+impl HistoryTab {
+    pub const ALL: [Self; 3] = [Self::Games, Self::Battles, Self::Puzzles];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Games => "Games",
+            Self::Battles => "Battles",
+            Self::Puzzles => "Puzzles",
+        }
+    }
+}

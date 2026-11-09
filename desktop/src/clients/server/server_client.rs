@@ -1,18 +1,19 @@
 use std::{future::Future, sync::Arc};
 
 use reqwest::{RequestBuilder, Response};
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 
 use super::live_socket::LiveSocket;
 use crate::{
     clients::http::{HttpRuntime, no_answer, read_json},
     enums::puzzles::RushKind,
     models::{
-        account::{Session, SignIn, SignUp, Stats, User},
+        account::{Device, Session, SignIn, SignUp, Stats, User},
         chat::{ChatMessage, Conversation},
-        play::LiveEvent,
+        play::{GameRecord, LiveEvent, PlayedGame},
         puzzles::{
-            AttemptReport, Puzzle, PuzzleRating, PuzzleSummary, PuzzleText, RatingRange, RushRecord,
+            AttemptReport, PlayedAttempt, PlayedBattle, Puzzle, PuzzleRating, PuzzleSummary,
+            PuzzleText, RatingRange, RushRecord,
         },
         server::{Problem, ServerError},
         social::{FoundUser, Friends},
@@ -77,6 +78,94 @@ impl ServerClient {
             .http
             .client()
             .get(self.url("/api/users/me/stats"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// The devices signed in to the account, this one marked.
+    pub fn devices(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<Vec<Device>, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url("/api/sessions"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { read_json(send(request).await?).await })
+    }
+
+    /// Signs out every device but this one.
+    pub fn sign_out_others(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .delete(self.url("/api/sessions/others"))
+            .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// A page of the player's finished games, the latest first: the newest, or before `before`.
+    pub fn games(
+        &self,
+        token: &str,
+        before: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<PlayedGame>, ServerError>> + use<> {
+        self.history_page("/api/games", token, before)
+    }
+
+    /// A page of the player's finished puzzle battles, the latest first.
+    pub fn battles(
+        &self,
+        token: &str,
+        before: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<PlayedBattle>, ServerError>> + use<> {
+        self.history_page("/api/puzzles/battles", token, before)
+    }
+
+    /// A page of the player's puzzle attempts, the latest first.
+    pub fn attempts(
+        &self,
+        token: &str,
+        before: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<PlayedAttempt>, ServerError>> + use<> {
+        self.history_page("/api/puzzles/attempts", token, before)
+    }
+
+    /// A page of the history at `path`: the newest, or what came before `before`.
+    fn history_page<T: DeserializeOwned + Send + 'static>(
+        &self,
+        path: &str,
+        token: &str,
+        before: Option<&str>,
+    ) -> impl Future<Output = Result<Vec<T>, ServerError>> + use<T> {
+        let params: Vec<(&str, &str)> = before.map(|id| ("before", id)).into_iter().collect();
+        let url = reqwest::Url::parse_with_params(&self.url(path), params);
+        let request = url.map(|url| self.http.client().get(url).bearer_auth(token));
+        self.http.run(async move {
+            let request = request.map_err(|_| {
+                ServerError::Unexpected("the history could not be asked".to_owned())
+            })?;
+            read_json(send(request).await?).await
+        })
+    }
+
+    /// One of the player's finished games, with its moves.
+    pub fn game(
+        &self,
+        token: &str,
+        id: &str,
+    ) -> impl Future<Output = Result<GameRecord, ServerError>> + use<> {
+        let request = self
+            .http
+            .client()
+            .get(self.url(&format!("/api/games/{id}")))
             .bearer_auth(token);
         self.http
             .run(async move { read_json(send(request).await?).await })
@@ -207,6 +296,34 @@ impl ServerClient {
             .run(async move { send(request).await.map(|_| ()) })
     }
 
+    /// Blocks the player: no friendship, request or message stays between the two.
+    pub fn block(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/social/blocks/{user_id}");
+        let request = self.http.client().post(self.url(&path)).bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// Lifts the player's block.
+    pub fn unblock(
+        &self,
+        token: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/social/blocks/{user_id}");
+        let request = self
+            .http
+            .client()
+            .delete(self.url(&path))
+            .bearer_auth(token);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
     /// Unfriends the player, declines their request, or withdraws one sent to them.
     pub fn remove_friend(
         &self,
@@ -287,6 +404,42 @@ impl ServerClient {
             .post(self.url(&path))
             .bearer_auth(token)
             .json(&body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// The owner names their group anew.
+    pub fn rename_group(
+        &self,
+        token: &str,
+        conversation_id: &str,
+        title: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let body = serde_json::json!({ "title": title });
+        let path = format!("/api/chat/groups/{conversation_id}");
+        let request = self
+            .http
+            .client()
+            .patch(self.url(&path))
+            .bearer_auth(token)
+            .json(&body);
+        self.http
+            .run(async move { send(request).await.map(|_| ()) })
+    }
+
+    /// The owner takes a member out of their group.
+    pub fn remove_from_group(
+        &self,
+        token: &str,
+        conversation_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), ServerError>> + use<> {
+        let path = format!("/api/chat/groups/{conversation_id}/members/{user_id}");
+        let request = self
+            .http
+            .client()
+            .delete(self.url(&path))
+            .bearer_auth(token);
         self.http
             .run(async move { send(request).await.map(|_| ()) })
     }

@@ -29,6 +29,15 @@ pub enum LiveStatus {
     Aborted,
 }
 
+/// How a finished game went for one player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayerResult {
+    Won,
+    Lost,
+    Drawn,
+}
+
 /// How an online game ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]

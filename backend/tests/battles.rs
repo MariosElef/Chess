@@ -208,6 +208,24 @@ async fn resigning_ends_the_battle_and_the_other_player_wins(db: Db) {
     })
     .await;
     assert_eq!(over["battle"]["result"], "won");
+    let history = |token: &str| {
+        server
+            .get("/api/puzzles/battles")
+            .authorization_bearer(token)
+    };
+    let bobs: Value = history(&bob).await.json();
+    assert_eq!(bobs[0]["result"], "won");
+    assert_eq!(bobs[0]["opponent"], "ann");
+    assert_eq!(bobs[0]["their_score"], 1, "Ann solved one before resigning");
+    assert_eq!(bobs[0]["rated"], false);
+    assert_eq!(
+        bobs[0]["rating_change"],
+        Value::Null,
+        "a casual battle moves nothing"
+    );
+    let anns: Value = history(&ann).await.json();
+    assert_eq!(anns[0]["result"], "lost");
+    assert_eq!(anns[0]["my_score"], 1);
 }
 
 #[sqlx::test]

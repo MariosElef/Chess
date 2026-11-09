@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1 blocks $2; blocking again changes nothing.\nINSERT INTO social.blocks (blocker_id, blocked_id)\nVALUES ($1, $2)\nON CONFLICT (blocker_id, blocked_id) DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f432608529385c715caf1eab41b93692e277eb51c84b4d73bc5ce526a82b81b4"
+}

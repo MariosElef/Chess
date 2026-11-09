@@ -321,3 +321,47 @@ async fn once_both_have_moved_abort_is_refused(db: Db) {
         "Both sides have moved; resign instead"
     );
 }
+
+#[sqlx::test]
+async fn a_finished_game_is_in_both_histories_with_its_moves(db: Db) {
+    let server = server(db);
+    let (a, b) = (account(&server, "ann").await, account(&server, "bob").await);
+    let (mut white, mut black, id, (white_token, black_token)) =
+        paired(&server, (&a, &b), 180, true).await;
+    for (mover, uci) in [(0, "f2f3"), (1, "e7e5"), (0, "g2g4"), (1, "d8h4")] {
+        let socket = if mover == 0 { &mut white } else { &mut black };
+        play(socket, &id, uci).await;
+        next(&mut white, "game").await;
+    }
+    let game = next(&mut black, "game").await["game"].clone();
+    let game = loop_until_finished(&mut black, game).await;
+    let history = |token: &str| server.get("/api/games").authorization_bearer(token);
+    let lost: Value = history(white_token).await.json();
+    assert_eq!(lost[0]["id"], id.as_str());
+    assert_eq!(lost[0]["result"], "lost");
+    assert_eq!(lost[0]["outcome"], "checkmate");
+    assert_eq!(lost[0]["color"], "white");
+    assert_eq!(lost[0]["plies"], 4);
+    assert_eq!(lost[0]["rating_change"], game["rating_changes"]["white"]);
+    let won: Value = history(black_token).await.json();
+    assert_eq!(won[0]["result"], "won");
+    assert_eq!(won[0]["opponent"], whoami(&server, white_token).await);
+    let record: Value = server
+        .get(&format!("/api/games/{id}"))
+        .authorization_bearer(black_token)
+        .await
+        .json();
+    assert_eq!(record["moves"], json!(["f2f3", "e7e5", "g2g4", "d8h4"]));
+    let older: Value = server
+        .get(&format!("/api/games?before={id}"))
+        .authorization_bearer(black_token)
+        .await
+        .json();
+    assert_eq!(older, json!([]), "nothing before the only game");
+    let stranger = account(&server, "cat").await;
+    server
+        .get(&format!("/api/games/{id}"))
+        .authorization_bearer(&stranger)
+        .await
+        .assert_status_not_found();
+}

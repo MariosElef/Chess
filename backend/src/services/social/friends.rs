@@ -10,7 +10,12 @@ use crate::{
         rating::UserRatingRow,
         social::friend::{FoundUserModel, FriendModel, GetFriendsModel, UserRef},
     },
-    repositories::{account::user, database::Db, rating, social::friendship},
+    repositories::{
+        account::user,
+        database::Db,
+        rating,
+        social::{block, friendship},
+    },
     services::{play::PlayHub, rating::whole},
 };
 
@@ -44,7 +49,11 @@ impl FriendService {
         let response = rows
             .into_iter()
             .map(|row| FoundUserModel {
-                relation: relation(user_id, (row.status.as_deref(), row.requester_id)),
+                relation: if row.blocked {
+                    Relation::Blocked
+                } else {
+                    relation(user_id, (row.status.as_deref(), row.requester_id))
+                },
                 id: row.user_id,
                 username: row.username,
             })
@@ -70,6 +79,7 @@ impl FriendService {
             my_ratings: ratings.remove(&user_id).unwrap_or_default(),
             incoming: Vec::new(),
             outgoing: Vec::new(),
+            blocked: block::of_blocker(&self.db, user_id).await?,
         };
         for row in rows {
             let relation = relation(user_id, (row.status.as_deref(), row.requester_id));
@@ -87,7 +97,7 @@ impl FriendService {
                 }),
                 Relation::RequestReceived => response.incoming.push(person),
                 Relation::RequestSent => response.outgoing.push(person),
-                Relation::None => {}
+                Relation::Blocked | Relation::None => {}
             }
         }
         // Stable, so names stay in order within each group.
@@ -104,7 +114,18 @@ impl FriendService {
             return Err(ChessCode::UserNotFound.into());
         }
         let pair = pair(user_id, other);
-        let current = friendship::between(&self.db, pair).await?;
+        let mut tx = self.db.begin().await?;
+        friendship::lock_pair(&mut *tx, pair).await?;
+        let blockers = block::blockers_between(&mut *tx, user_id, other).await?;
+        if blockers.contains(&user_id) {
+            // The blocker must unblock first.
+            return Ok(Relation::Blocked);
+        }
+        if !blockers.is_empty() {
+            // The blocked one is never told: their request seems to go nowhere.
+            return Ok(Relation::RequestSent);
+        }
+        let current = friendship::between(&mut *tx, pair).await?;
         let status = current
             .as_ref()
             .and_then(|row| FriendshipStatus::from_key(&row.status));
@@ -114,26 +135,29 @@ impl FriendService {
         let relation = match status {
             Some(FriendshipStatus::Accepted) => Relation::Friends,
             Some(FriendshipStatus::Pending) if asked_by_them => {
-                friendship::accept(&self.db, pair, other).await?;
+                friendship::accept(&mut *tx, pair, other).await?;
                 Relation::Friends
             }
             Some(FriendshipStatus::Pending) => Relation::RequestSent,
-            // A block is never said: it looks like a request that goes unanswered.
-            Some(FriendshipStatus::Blocked) => Relation::RequestSent,
             Some(FriendshipStatus::Declined) | None => {
-                friendship::request(&self.db, pair, user_id).await?;
+                friendship::request(&mut *tx, pair, user_id).await?;
                 Relation::RequestSent
             }
         };
+        tx.commit().await?;
         self.tell_both(user_id, other);
         Ok(relation)
     }
 
     /// Accepts the request `other` sent.
     pub async fn accept(&self, user_id: Uuid, other: Uuid) -> Result<(), AppError> {
-        if !friendship::accept(&self.db, pair(user_id, other), other).await? {
+        let pair = pair(user_id, other);
+        let mut tx = self.db.begin().await?;
+        friendship::lock_pair(&mut *tx, pair).await?;
+        if !friendship::accept(&mut *tx, pair, other).await? {
             return Err(ChessCode::NoFriendRequest.into());
         }
+        tx.commit().await?;
         self.tell_both(user_id, other);
         Ok(())
     }
@@ -142,6 +166,36 @@ impl FriendService {
     pub async fn remove(&self, user_id: Uuid, other: Uuid) -> Result<(), AppError> {
         if friendship::remove(&self.db, pair(user_id, other)).await? {
             self.play.drop_challenges_between(user_id, other);
+            self.play.drop_battle_invitations_between(user_id, other);
+            self.tell_both(user_id, other);
+        }
+        Ok(())
+    }
+
+    /// Blocks `other`: nothing stays between the two, and `other` cannot ask or message again.
+    pub async fn block(&self, user_id: Uuid, other: Uuid) -> Result<(), AppError> {
+        if other == user_id {
+            return Err(ChessCode::CannotBefriendYourself.into());
+        }
+        if user::get(&self.db, other).await?.is_none() {
+            return Err(ChessCode::UserNotFound.into());
+        }
+        let mut tx = self.db.begin().await?;
+        friendship::lock_pair(&mut *tx, pair(user_id, other)).await?;
+        // The block first: it takes the users' key locks before any friendship row's lock, the
+        // order closing an account takes them in too.
+        block::insert(&mut *tx, user_id, other).await?;
+        friendship::remove(&mut *tx, pair(user_id, other)).await?;
+        tx.commit().await?;
+        self.play.drop_challenges_between(user_id, other);
+        self.play.drop_battle_invitations_between(user_id, other);
+        self.tell_both(user_id, other);
+        Ok(())
+    }
+
+    /// Lifts the player's block on `other`: the two are strangers again.
+    pub async fn unblock(&self, user_id: Uuid, other: Uuid) -> Result<(), AppError> {
+        if block::delete(&self.db, user_id, other).await? {
             self.tell_both(user_id, other);
         }
         Ok(())
@@ -165,7 +219,7 @@ fn relation(user_id: Uuid, (status, requester_id): (Option<&str>, Option<Uuid>))
         Some(FriendshipStatus::Accepted) => Relation::Friends,
         Some(FriendshipStatus::Pending) if requester_id == Some(user_id) => Relation::RequestSent,
         Some(FriendshipStatus::Pending) => Relation::RequestReceived,
-        Some(FriendshipStatus::Declined | FriendshipStatus::Blocked) | None => Relation::None,
+        Some(FriendshipStatus::Declined) | None => Relation::None,
     }
 }
 
@@ -211,7 +265,6 @@ mod tests {
             relation(me, (Some("accepted"), Some(them))),
             Relation::Friends
         );
-        assert_eq!(relation(me, (Some("blocked"), Some(them))), Relation::None);
         assert_eq!(relation(me, (None, None)), Relation::None);
     }
 

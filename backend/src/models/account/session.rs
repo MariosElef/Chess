@@ -35,3 +35,25 @@ pub struct SessionUser {
     /// One of the shared guest accounts.
     pub guest: bool,
 }
+
+/// A live session as stored, with how long ago it began and was last used.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRow {
+    pub id: Uuid,
+    pub user_agent: Option<String>,
+    pub signed_in_s: i64,
+    pub seen_s: i64,
+}
+
+/// A device signed in to the account, as the Devices card lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeviceModel {
+    pub id: Uuid,
+    /// What signed in, as a person reads it: "Chess app on macOS".
+    pub device: String,
+    /// The session asking.
+    pub current: bool,
+    /// Seconds since it signed in, and since it was last used.
+    pub signed_in_s: i64,
+    pub seen_s: i64,
+}

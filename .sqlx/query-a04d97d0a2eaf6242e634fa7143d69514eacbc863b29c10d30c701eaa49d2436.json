@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Accepts the pending request $3 made; nothing if there is none or either blocked the other.\nUPDATE social.friendships\nSET status = 'accepted', updated_at = now()\nWHERE\n    friendships.user_a_id = $1\n    AND friendships.user_b_id = $2\n    AND friendships.status = 'pending'\n    AND friendships.requester_id = $3\n    AND NOT EXISTS (\n        SELECT 1\n        FROM social.blocks\n        WHERE\n            (blocks.blocker_id = $1 AND blocks.blocked_id = $2)\n            OR (blocks.blocker_id = $2 AND blocks.blocked_id = $1)\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a04d97d0a2eaf6242e634fa7143d69514eacbc863b29c10d30c701eaa49d2436"
+}

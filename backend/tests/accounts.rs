@@ -303,3 +303,53 @@ async fn a_guest_cannot_close_the_shared_account(db: Db) {
         .await
         .assert_status(StatusCode::FORBIDDEN);
 }
+
+#[sqlx::test]
+async fn closing_an_account_passes_its_groups_on(db: Db) {
+    let server = server(db);
+    for name in ["ann", "bob"] {
+        sign_up(&server, &format!("{name}@example.com"), name).await;
+    }
+    let (ann, bob) = (sign_in(&server, "ann").await, sign_in(&server, "bob").await);
+    let bob_id: Value = server
+        .get("/api/users/me")
+        .authorization_bearer(&bob)
+        .await
+        .json();
+    let bob_id = bob_id["id"].as_str().expect("an id").to_owned();
+    server
+        .post("/api/social/friends/requests")
+        .authorization_bearer(&ann)
+        .json(&json!({ "user_id": bob_id }))
+        .await;
+    let ann_id: Value = server
+        .get("/api/users/me")
+        .authorization_bearer(&ann)
+        .await
+        .json();
+    server
+        .post(&format!(
+            "/api/social/friends/requests/{}/accept",
+            ann_id["id"].as_str().expect("an id")
+        ))
+        .authorization_bearer(&bob)
+        .await;
+    server
+        .post("/api/chat/groups")
+        .authorization_bearer(&ann)
+        .json(&json!({ "title": "club", "member_ids": [bob_id] }))
+        .await
+        .assert_status(StatusCode::CREATED);
+    server
+        .delete("/api/users/me")
+        .authorization_bearer(&ann)
+        .json(&json!({ "password": "correct horse" }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    let groups: Value = server
+        .get("/api/chat/conversations")
+        .authorization_bearer(&bob)
+        .await
+        .json();
+    assert_eq!(groups[0]["owner_id"], bob_id.as_str(), "Bob owns it now");
+}

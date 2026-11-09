@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Whether anyone among the players $1 has blocked another of them.\nSELECT EXISTS (\n    SELECT 1\n    FROM social.blocks\n    WHERE blocks.blocker_id = ANY($1) AND blocks.blocked_id = ANY($1)\n) AS \"blocked!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocked!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aed52a4b0cde15ecb86cea1cea63f5a434f63a4bde495bf232025e22eeb403f3"
+}

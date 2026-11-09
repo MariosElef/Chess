@@ -8,11 +8,15 @@ use axum::{
 use crate::{
     errors::AppError,
     extract::{Body, SignedIn},
-    models::puzzles::{
-        attempt::{CreateAttemptModel, GetAttemptModel},
-        puzzle::{GetPuzzleModel, PuzzleQuery},
-        rush::{CreateRushModel, GetRushModel},
-        summary::GetPuzzleSummaryModel,
+    models::{
+        play::history::HistoryQuery,
+        puzzles::{
+            attempt::{CreateAttemptModel, GetAttemptModel},
+            history::{PlayedAttemptModel, PlayedBattleModel},
+            puzzle::{GetPuzzleModel, PuzzleQuery},
+            rush::{CreateRushModel, GetRushModel},
+            summary::GetPuzzleSummaryModel,
+        },
     },
     state::AppState,
 };
@@ -23,6 +27,8 @@ pub fn router() -> Router<AppState> {
         .route("/summary", get(summary))
         .route("/{id}/attempts", post(create_attempt))
         .route("/rush", post(create_rush))
+        .route("/battles", get(battles))
+        .route("/attempts", get(attempts))
 }
 
 /// A puzzle the player has not attempted, rated within `min_rating..=max_rating` when given.
@@ -72,4 +78,36 @@ async fn create_rush(
         .record(signed_in.user_id, signed_in.guest, body)
         .await?;
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// A page of the player's finished battles, the latest first; none for a shared guest account.
+async fn battles(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<PlayedBattleModel>>, AppError> {
+    if signed_in.guest {
+        return Ok(Json(Vec::new()));
+    }
+    let page = state
+        .puzzle_history
+        .battles(signed_in.user_id, query.before)
+        .await?;
+    Ok(Json(page))
+}
+
+/// A page of the player's puzzle attempts, the latest first; none for a shared guest account.
+async fn attempts(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<PlayedAttemptModel>>, AppError> {
+    if signed_in.guest {
+        return Ok(Json(Vec::new()));
+    }
+    let page = state
+        .puzzle_history
+        .attempts(signed_in.user_id, query.before)
+        .await?;
+    Ok(Json(page))
 }

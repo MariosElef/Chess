@@ -10,6 +10,9 @@ pub struct Conversation {
     pub kind: ConversationKind,
     pub title: String,
     pub members: Vec<UserRef>,
+    /// Who can rename the group and remove others; none for a direct chat.
+    #[serde(default)]
+    pub owner_id: Option<String>,
     pub last_message: Option<ChatMessage>,
     pub unread: u32,
 }

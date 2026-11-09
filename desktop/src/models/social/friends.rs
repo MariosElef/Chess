@@ -44,4 +44,7 @@ pub struct Friends {
     pub incoming: Vec<UserRef>,
     /// Asked by the signed-in player, waiting for the others.
     pub outgoing: Vec<UserRef>,
+    /// Those the signed-in player has blocked.
+    #[serde(default)]
+    pub blocked: Vec<UserRef>,
 }

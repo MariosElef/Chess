@@ -49,16 +49,21 @@ fn mode_card(mode: ModeStats) -> RatingCard {
         |category| category.name().to_owned(),
     );
     let picture = category.and_then(speed_picture);
+    let games = format!(
+        "{} {}",
+        mode.games,
+        if mode.games == 1 { "game" } else { "games" }
+    );
     let record = format!(
-        "{} games · {} won · {} lost · {} drawn",
-        mode.games, mode.wins, mode.losses, mode.draws
+        "{} won · {} lost · {} drawn",
+        mode.wins, mode.losses, mode.draws
     );
     let card = RatingCard::new(
         (picture, name),
         rating_text(mode.rating, mode.provisional),
         mode.history,
     );
-    best_line(card, mode.best).line(record)
+    best_line(card, mode.best).line(games).line(record)
 }
 
 fn puzzle_card(puzzles: PuzzleStats) -> RatingCard {

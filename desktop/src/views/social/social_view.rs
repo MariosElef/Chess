@@ -250,6 +250,20 @@ impl SocialView {
         }
     }
 
+    fn block(&mut self, user_id: &str, cx: &mut Context<Self>) {
+        if let Some(token) = self.account_token(cx) {
+            let request = self.client.block(&token, user_id);
+            self.change_friendship(request, cx);
+        }
+    }
+
+    fn unblock(&mut self, user_id: &str, cx: &mut Context<Self>) {
+        if let Some(token) = self.account_token(cx) {
+            let request = self.client.unblock(&token, user_id);
+            self.change_friendship(request, cx);
+        }
+    }
+
     fn on_event(&mut self, event: &LiveEvent, cx: &mut Context<Self>) {
         match event {
             LiveEvent::Connected => self.refresh(cx),
@@ -483,9 +497,13 @@ impl SocialView {
     fn friend_row(&self, friend: &Friend, cx: &mut Context<Self>) -> Div {
         let picking = self.picking_for.as_deref() == Some(friend.id.as_str());
         let view = cx.entity().downgrade();
-        let (challenge, message, remove) = (view.clone(), view.clone(), view);
-        let (to_challenge, to_message, to_remove) =
-            (friend.id.clone(), friend.id.clone(), friend.id.clone());
+        let (challenge, message, remove, block) = (view.clone(), view.clone(), view.clone(), view);
+        let (to_challenge, to_message, to_remove, to_block) = (
+            friend.id.clone(),
+            friend.id.clone(),
+            friend.id.clone(),
+            friend.id.clone(),
+        );
         let row = FriendRow::new(
             (friend.id.clone(), friend.username.clone()),
             (
@@ -504,6 +522,9 @@ impl SocialView {
                 },
                 move |_, cx| {
                     let _ = remove.update(cx, |view, cx| view.remove_friend(&to_remove, cx));
+                },
+                move |_, cx| {
+                    let _ = block.update(cx, |view, cx| view.block(&to_block, cx));
                 },
             ),
         );
@@ -562,9 +583,12 @@ impl SocialView {
                 .child("Friend Requests"),
         );
         let Friends {
-            incoming, outgoing, ..
+            incoming,
+            outgoing,
+            blocked,
+            ..
         } = &self.friends;
-        if incoming.is_empty() && outgoing.is_empty() {
+        if incoming.is_empty() && outgoing.is_empty() && blocked.is_empty() {
             return v_flex().gap_2().child(heading).child(EmptyState::new(
                 IconName::UserPlus,
                 "No requests",
@@ -596,6 +620,14 @@ impl SocialView {
                     ))
             })
             .collect();
+        let blocked: Vec<PersonRow> = blocked
+            .iter()
+            .map(|person| {
+                PersonRow::new(person.username.clone())
+                    .detail("Blocked")
+                    .action(self.unblock_button(person, cx))
+            })
+            .collect();
         v_flex()
             .gap_4()
             .child(heading)
@@ -604,6 +636,9 @@ impl SocialView {
             })
             .when(!sent.is_empty(), |this| {
                 this.child(PeopleList::new().heading("Sent").children(sent))
+            })
+            .when(!blocked.is_empty(), |this| {
+                this.child(PeopleList::new().heading("Blocked").children(blocked))
             })
     }
 
@@ -639,12 +674,20 @@ impl SocialView {
         };
         let row = PersonRow::new(found.username.clone());
         match found.relation {
-            Relation::None => row.action(self.add_button(&person, cx)),
+            Relation::None => row
+                .action(self.add_button(&person, cx))
+                .action(self.block_button(&person, cx)),
             Relation::RequestReceived => row
                 .detail("Wants to be friends")
-                .action(self.accept_button("accept-found", &person, cx)),
-            Relation::RequestSent => row.detail("Request sent"),
+                .action(self.accept_button("accept-found", &person, cx))
+                .action(self.block_button(&person, cx)),
+            Relation::RequestSent => row
+                .detail("Request sent")
+                .action(self.block_button(&person, cx)),
             Relation::Friends => row.detail("Friends"),
+            Relation::Blocked => row
+                .detail("Blocked")
+                .action(self.unblock_button(&person, cx)),
         }
     }
 
@@ -657,6 +700,23 @@ impl SocialView {
             .icon(IconName::UserPlus)
             .label("Add friend")
             .on_click(cx.listener(move |view, _, _, cx| view.add_friend(&user_id, cx)))
+    }
+
+    /// Blocks them: no request, challenge or message from them reaches the player.
+    fn block_button(&self, person: &UserRef, cx: &mut Context<Self>) -> Button {
+        let user_id = person.id.clone();
+        icon_button(("block-found", &user_id), IconName::Ban, "Block")
+            .on_click(cx.listener(move |view, _, _, cx| view.block(&user_id, cx)))
+    }
+
+    /// Lifts the player's block.
+    fn unblock_button(&self, person: &UserRef, cx: &mut Context<Self>) -> Button {
+        let user_id = person.id.clone();
+        Button::new(SharedString::from(format!("unblock-{user_id}")))
+            .ghost()
+            .small()
+            .label("Unblock")
+            .on_click(cx.listener(move |view, _, _, cx| view.unblock(&user_id, cx)))
     }
 
     /// Accepts a request they sent.
@@ -821,6 +881,8 @@ mod tests {
     /// Ann has Bob online and a request from Cat; Bob challenges her, and accepting is recorded.
     fn server(asked: Asked) -> ServerClient {
         let accepted = Arc::clone(&asked);
+        let blocked = Arc::clone(&asked);
+        let unblocked = Arc::clone(&asked);
         let socket_asked = Arc::clone(&asked);
         ServerClient::serving(
             Router::new()
@@ -830,8 +892,26 @@ mod tests {
                         Json(json!({
                             "friends": [{ "id": "bob", "username": "bob", "online": true }],
                             "incoming": [{ "id": "cat", "username": "cat" }],
-                            "outgoing": []
+                            "outgoing": [],
+                            "blocked": [{ "id": "dan", "username": "dan" }]
                         }))
+                    }),
+                )
+                .route(
+                    "/api/social/blocks/{user_id}",
+                    post(move |Path(user_id): Path<String>| async move {
+                        blocked
+                            .lock()
+                            .expect("the list")
+                            .push(format!("block {user_id}"));
+                        StatusCode::NO_CONTENT
+                    })
+                    .delete(move |Path(user_id): Path<String>| async move {
+                        unblocked
+                            .lock()
+                            .expect("the list")
+                            .push(format!("unblock {user_id}"));
+                        StatusCode::NO_CONTENT
                     }),
                 )
                 .route(
@@ -991,5 +1071,20 @@ mod tests {
             cx.update(|_, cx| cx.subscribe(&view, move |_, _: &OpenMessages, _| heard.set(true)));
         view.update_in(cx, |view, window, cx| view.message("bob", window, cx));
         assert!(asked.get(), "the shell is asked to open Messages");
+    }
+
+    #[gpui_kit::test]
+    fn blocking_and_unblocking_are_sent_and_the_blocked_are_listed(cx: &mut TestAppContext) {
+        let (view, asked, cx) = social(cx, false);
+        view.update(cx, |view, cx| view.opened(cx));
+        wait_until(cx, |cx| view.read_with(cx, |view, _| view.loaded));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.friends.blocked[0].username.clone()),
+            "dan"
+        );
+        view.update(cx, |view, cx| view.block("bob", cx));
+        wait_until(cx, |_| asked_for(&asked, "block bob"));
+        view.update(cx, |view, cx| view.unblock("dan", cx));
+        wait_until(cx, |_| asked_for(&asked, "unblock dan"));
     }
 }

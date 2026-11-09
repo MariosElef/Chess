@@ -11,6 +11,8 @@ pub enum Relation {
     RequestSent,
     /// The other player asked; the signed-in one can accept.
     RequestReceived,
+    /// The signed-in player blocked them.
+    Blocked,
 }
 
 /// What the Friends page shows: the friends, or the requests each way.

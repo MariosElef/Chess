@@ -1,4 +1,7 @@
-use std::{cell::Cell, io::Cursor};
+use std::{
+    cell::{Cell, RefCell},
+    io::Cursor,
+};
 
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
 
@@ -10,6 +13,8 @@ pub struct Speaker {
     output: MixerDeviceSink,
     /// The set the sounds are played from, as Settings picks it.
     set: Cell<SoundSet>,
+    /// The set's sounds being played through after it was picked; a new pick stops it.
+    tour: RefCell<Option<Player>>,
 }
 
 impl Speaker {
@@ -20,6 +25,7 @@ impl Speaker {
         Some(Self {
             output,
             set: Cell::new(SoundSet::default()),
+            tour: RefCell::new(None),
         })
     }
 
@@ -32,6 +38,18 @@ impl Speaker {
     pub fn play(&self, sound: Sound) {
         if let Some(decoded) = decode(sound, self.set.get()) {
             self.output.mixer().add(decoded);
+        }
+    }
+
+    /// Plays every sound of the set one after another, stopping a tour already playing.
+    pub fn play_tour(&self, sounds: &[Sound]) {
+        let player = Player::connect_new(self.output.mixer());
+        let set = self.set.get();
+        for decoded in sounds.iter().filter_map(|&sound| decode(sound, set)) {
+            player.append(decoded);
+        }
+        if let Some(previous) = self.tour.replace(Some(player)) {
+            previous.stop();
         }
     }
 

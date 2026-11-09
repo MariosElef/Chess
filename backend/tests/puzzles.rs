@@ -275,3 +275,23 @@ async fn the_best_rush_of_each_kind_is_kept(db: Db) {
     assert_eq!(shown["best_rush"]["five_minutes"], Value::Null);
     assert_eq!(shown["best_today"]["three_minutes"], 5, "played today");
 }
+
+#[sqlx::test]
+async fn attempts_are_listed_newest_first_with_their_rating_change(db: Db) {
+    import_three(&db, "history").await;
+    let server = server(db, &fake_lichess().await);
+    let token = account_token(&server).await;
+    let first = attempt(&server, &token, "0000D", true).await;
+    let second = attempt(&server, &token, "0000H", false).await;
+    let listed: Value = server
+        .get("/api/puzzles/attempts")
+        .authorization_bearer(&token)
+        .await
+        .json();
+    assert_eq!(listed[0]["puzzle_id"], "0000H", "the latest first");
+    assert_eq!(listed[0]["solved"], false);
+    assert_eq!(listed[0]["puzzle_rating"], 1032);
+    assert_eq!(listed[0]["duration_ms"], 12000);
+    assert_eq!(listed[0]["rating_change"], second["rating"]["change"]);
+    assert_eq!(listed[1]["rating_change"], first["rating"]["change"]);
+}

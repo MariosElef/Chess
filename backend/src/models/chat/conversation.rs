@@ -12,6 +12,8 @@ pub struct ConversationModel {
     /// A group's name; for a direct chat, the other player's.
     pub title: String,
     pub members: Vec<UserRef>,
+    /// The member who can rename the group and remove others; none for a direct chat.
+    pub owner_id: Option<Uuid>,
     pub last_message: Option<ChatMessageModel>,
     pub unread: i64,
 }
@@ -19,6 +21,11 @@ pub struct ConversationModel {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CreateDirectModel {
     pub user_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct RenameGroupModel {
+    pub title: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -47,6 +54,7 @@ pub struct MemberRow {
     pub conversation_id: Uuid,
     pub user_id: Uuid,
     pub username: String,
+    pub owner: bool,
 }
 
 /// A conversation to store as it starts.

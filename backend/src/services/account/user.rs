@@ -12,6 +12,7 @@ use crate::{
     },
     repositories::{
         account::{closure, session, user},
+        chat::conversation,
         database::Db,
         social::friendship,
     },
@@ -78,12 +79,19 @@ impl UserService {
         told.sort_unstable();
         told.dedup();
         let mut tx = self.db.begin().await?;
+        // Their conversations first, then their user row: the order adding a member takes them in.
+        let held = closure::held_conversations(&mut tx, user_id).await?;
         closure::lock_user(&mut tx, user_id).await?;
         closure::forget_friendships(&mut tx, user_id).await?;
+        closure::forget_blocks(&mut tx, user_id).await?;
         closure::forget_challenges(&mut tx, user_id).await?;
         closure::forget_direct_chats(&mut tx, user_id).await?;
         closure::forget_messages(&mut tx, user_id).await?;
         closure::forget_memberships(&mut tx, user_id).await?;
+        for conversation_id in held {
+            // A group they owned keeps an owner: its longest-standing member left.
+            conversation::pass_ownership(&mut *tx, conversation_id).await?;
+        }
         closure::forget_empty_groups(&mut tx).await?;
         closure::forget_conversations_started(&mut tx, user_id).await?;
         closure::forget_ratings(&mut tx, user_id).await?;

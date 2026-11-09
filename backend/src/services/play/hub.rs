@@ -65,9 +65,10 @@ struct HubInner {
     closed: Mutex<HashSet<Uuid>>,
 }
 
-/// One open socket's queue of messages to send.
+/// One open socket's queue of messages to send, and the session that opened it.
 struct Outbox {
     id: u64,
+    session: Uuid,
     sender: mpsc::Sender<ServerMessage>,
 }
 
@@ -102,8 +103,8 @@ impl PlayHub {
         }
     }
 
-    /// A new socket for `player`, sent their games, battle, challenges and invitations at once.
-    pub fn connect(&self, player: &Player) -> Connection {
+    /// A socket for `player` on `session`, sent their games, battle, challenges and invitations.
+    pub fn connect(&self, player: &Player, session: Uuid) -> Connection {
         let (sender, messages) = mpsc::channel(OUTBOX_SIZE);
         let id = self.inner.next_connection.fetch_add(1, Ordering::Relaxed);
         let first = {
@@ -114,7 +115,11 @@ impl PlayHub {
                 return Connection { id, messages };
             }
             let outboxes = connections.entry(player.id).or_default();
-            outboxes.push(Outbox { id, sender });
+            outboxes.push(Outbox {
+                id,
+                session,
+                sender,
+            });
             outboxes.len() == 1
         };
         for commands in self.games_of(player.id) {
@@ -148,11 +153,22 @@ impl PlayHub {
         present
     }
 
+    /// Closes the player's sockets opened by any session but `keep`: their sessions have ended.
+    pub fn close_sockets_except(&self, player: Uuid, keep: Uuid) {
+        // Dropping an outbox ends its socket, which then says it is gone through `disconnect`.
+        if let Some(outboxes) = lock(&self.inner.connections).get_mut(&player) {
+            outboxes.retain(|outbox| outbox.session == keep);
+        }
+    }
+
     /// A socket closed; with the player's last one gone, their seeks and invitations go too.
     pub fn disconnect(&self, player: &Player, connection_id: u64) {
         let gone = {
             let mut connections = lock(&self.inner.connections);
-            let outboxes = connections.entry(player.id).or_default();
+            // Already gone with the player's other sockets: their leaving was handled then.
+            let Some(outboxes) = connections.get_mut(&player.id) else {
+                return;
+            };
             outboxes.retain(|outbox| outbox.id != connection_id);
             let gone = outboxes.is_empty();
             if gone {

@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1's live sessions, the most recently used first, with how long ago each began and was used.\nSELECT\n    sessions.id,\n    sessions.user_agent,\n    floor(extract(EPOCH FROM now() - sessions.created_at))::bigint AS \"signed_in_s!\",\n    floor(extract(EPOCH FROM now() - sessions.last_seen_at))::bigint AS \"seen_s!\"\nFROM account.sessions\nWHERE\n    sessions.user_id = $1\n    AND sessions.revoked_at IS NULL\n    AND sessions.expires_at > now()\nORDER BY sessions.last_seen_at DESC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "account.sessions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_agent",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.sessions",
+            "name": "user_agent"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "signed_in_s!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "seen_s!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "914f6970f67b511853354ff1ac90766a186939c61278aa42d296bab9da951d61"
+}

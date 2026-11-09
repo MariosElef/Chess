@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The player $1's rating after each of the results $2 (games, puzzle attempts or battles) and\n-- the one just before it in its category, 1500 for the first; ids are uuid v7, minted in order.\nWITH results AS (\n    SELECT\n        rating_history.id,\n        rating_history.category_id,\n        rating_history.rating,\n        coalesce(\n            rating_history.game_id, rating_history.puzzle_attempt_id, rating_history.battle_id\n        ) AS source_id\n    FROM play.rating_history\n    WHERE\n        rating_history.user_id = $1\n        AND coalesce(\n            rating_history.game_id, rating_history.puzzle_attempt_id, rating_history.battle_id\n        ) = ANY($2)\n)\n\nSELECT\n    results.source_id AS \"source_id!\",\n    results.rating AS \"rating!\",\n    coalesce(\n        (\n            SELECT rating_history.rating\n            FROM play.rating_history\n            WHERE\n                rating_history.user_id = $1\n                AND rating_history.category_id = results.category_id\n                AND rating_history.id < results.id\n            ORDER BY rating_history.id DESC\n            LIMIT 1\n        ),\n        1500\n    ) AS \"before!\"\nFROM results\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id!",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "rating!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "play.rating_history",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "before!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "7eb0c5c407a44abcac1d43ed1efaaefe3dafcf22e3b4b139ee908fc02165a789"
+}

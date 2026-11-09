@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A group $1 left without an owner is owned by its longest-standing member, if any is left;\n-- other conversations have no owner.\nUPDATE social.conversation_members\nSET role = 'owner'\nWHERE\n    conversation_members.conversation_id = $1\n    AND conversation_members.user_id = (\n        SELECT conversation_members.user_id\n        FROM social.conversation_members\n        WHERE conversation_members.conversation_id = $1\n        ORDER BY conversation_members.joined_at, conversation_members.user_id\n        LIMIT 1\n    )\n    AND NOT EXISTS (\n        SELECT 1\n        FROM social.conversation_members\n        WHERE conversation_members.conversation_id = $1 AND conversation_members.role = 'owner'\n    )\n    AND EXISTS (\n        SELECT 1\n        FROM social.conversations\n        WHERE conversations.id = $1 AND conversations.kind = 'group'\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4116423f22981a464e13cb97418bcce655f7c7f42102b2584390037cae37eda"
+}

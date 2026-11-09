@@ -14,7 +14,8 @@ use crate::{
 const GRAPH_HEIGHT: Pixels = px(64.);
 const LINE: u32 = 0x0090_d0f8;
 const RISE: u32 = START_GREEN;
-const FALL: u32 = 0x00e0_4f3c;
+/// The red of a fall, shared with the history's losses.
+pub(super) const FALL: u32 = 0x00e0_4f3c;
 
 /// A rating as chess.com's stats show it: the mode's picture, its name and rating, how the
 /// last result moved it, the rating over time under them, and a few lines about it.
@@ -85,13 +86,22 @@ impl RenderOnce for RatingCard {
                     ),
             )
             .children(change_badge(rating_change(&self.history)));
+        // Bright and a little bold, so they read on the dark card; long ones wrap.
+        let bright = theme.foreground.opacity(0.85);
         let lines: Vec<Div> = self
             .lines
             .into_iter()
-            .map(|line| div().text_xs().text_color(muted).child(line))
+            .map(|line| {
+                div()
+                    .w_full()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(bright)
+                    .child(line)
+            })
             .collect();
         let graph = rating_graph(&self.history, theme.secondary);
-        let lines = v_flex().gap_0p5().children(lines);
+        let lines = v_flex().w_full().min_w_0().gap_1().children(lines);
         let card = v_flex()
             .flex_1()
             .min_w_0()

@@ -26,7 +26,6 @@ use crate::{
         puzzles::BattleStatus,
         settings::{Appearance, SoundSet},
         shell::Page,
-        sound::Sound,
     },
     models::{
         account::AccountChanged,
@@ -42,7 +41,7 @@ use crate::{
         puzzles::PuzzlesView,
         settings::apply_appearance,
         social::{OpenMessages, SocialView},
-        sound::{play_sound, use_sound_set},
+        sound::{play_sound_tour, use_sound_set},
     },
 };
 
@@ -71,6 +70,8 @@ pub struct AppShell {
     /// Signing in and out; it keeps the session the other pages will use.
     account: Entity<AccountView>,
     _account_changes: Subscription,
+    /// A game picked in the Account page's history opens on the analysis board.
+    _account_games: Subscription,
     /// Puzzles from the server, fetched the first time the page opens.
     puzzles: Entity<PuzzlesView>,
     /// The live connection Play's online games, Puzzle Battle and Social share.
@@ -120,6 +121,7 @@ impl AppShell {
         let ShellSetup { client, tokens } = setup;
         let account = cx.new(|cx| AccountView::new(client.clone(), tokens, window, cx));
         let _account_changes = cx.subscribe_in(&account, window, account_changed);
+        let _account_games = cx.subscribe_in(&account, window, analyze_history_game);
         let pages = Pages::new(&client, &account, engine_settings, window, cx);
         Self {
             page: Page::Play,
@@ -128,6 +130,7 @@ impl AppShell {
             analyze: pages.analyze,
             account,
             _account_changes,
+            _account_games,
             puzzles: pages.puzzles,
             live: pages.live,
             social: pages.social,
@@ -194,13 +197,13 @@ impl AppShell {
         cx.notify();
     }
 
-    /// Saves the new sound set, plays from it from now on, and gives a move's sound to hear it.
+    /// Saves the new sound set, plays from it from now on, and plays all of it to hear it.
     fn set_sound_set(&mut self, set: SoundSet, cx: &mut Context<Self>) {
         self.sound_set = set;
         // A failed save only means the next launch starts on the standard sounds.
         let _ = save_sound_set(set);
         use_sound_set(set, cx);
-        play_sound(Sound::MoveSelf, cx);
+        play_sound_tour(cx);
         cx.notify();
     }
 
@@ -395,10 +398,23 @@ fn change_appearance(
     }
 }
 
-/// Opens the finished game from Play on the analysis board, at the position Play was showing.
-fn analyze_game(
+/// A game picked in the Account page's history, if the player is still there to see it.
+fn analyze_history_game(
     shell: &mut AppShell,
-    _: &Entity<PlayPage>,
+    account: &Entity<AccountView>,
+    event: &AnalyzeGame,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if shell.page == Page::Account {
+        analyze_game(shell, account, event, window, cx);
+    }
+}
+
+/// Opens a finished game, from Play or the Account page's history, on the analysis board.
+fn analyze_game<Source: 'static>(
+    shell: &mut AppShell,
+    _: &Entity<Source>,
     event: &AnalyzeGame,
     window: &mut Window,
     cx: &mut Context<AppShell>,

@@ -30,6 +30,7 @@ pub struct FriendRow {
     on_challenge: OnClick,
     on_message: OnClick,
     on_remove: OnClick,
+    on_block: OnClick,
 }
 
 impl FriendRow {
@@ -37,7 +38,8 @@ impl FriendRow {
         (id, name): (impl Into<SharedString>, impl Into<SharedString>),
         (online, seen): (bool, impl Into<SharedString>),
         on_challenge: impl Fn(&mut Window, &mut App) + 'static,
-        (on_message, on_remove): (
+        (on_message, on_remove, on_block): (
+            impl Fn(&mut Window, &mut App) + 'static,
             impl Fn(&mut Window, &mut App) + 'static,
             impl Fn(&mut Window, &mut App) + 'static,
         ),
@@ -50,6 +52,7 @@ impl FriendRow {
             on_challenge: Rc::new(on_challenge),
             on_message: Rc::new(on_message),
             on_remove: Rc::new(on_remove),
+            on_block: Rc::new(on_block),
         }
     }
 }
@@ -113,33 +116,56 @@ impl RenderOnce for FriendRow {
                             .tooltip("Message")
                             .on_click(move |_, window, cx| message(window, cx)),
                     )
-                    .child(more_menu(&self.id, self.on_remove)),
+                    .child(more_menu(&self.id, (self.on_remove, self.on_block))),
             )
     }
 }
 
-/// The "…" menu: Remove friend.
-fn more_menu(id: &SharedString, on_remove: OnClick) -> Popover {
+/// The "…" menu: Remove friend, and Block.
+fn more_menu(id: &SharedString, (on_remove, on_block): (OnClick, OnClick)) -> Popover {
     let trigger = Button::new(SharedString::from(format!("more-{id}")))
         .ghost()
         .icon(IconName::Ellipsis);
-    let item_id = SharedString::from(format!("unfriend-{id}"));
+    let id = id.clone();
     Popover::new(SharedString::from(format!("more-menu-{id}")))
         .anchor(Anchor::TopRight)
         .trigger(trigger)
         .p_1()
         .content(move |_, _, cx| {
             let menu = cx.entity().downgrade();
-            let remove = Rc::clone(&on_remove);
-            Button::new(item_id.clone())
-                .ghost()
-                .small()
-                .icon(IconName::UserMinus)
-                .label("Remove friend")
-                .on_click(move |_, window, cx| {
-                    remove(window, cx);
-                    // Gone already only if the window is closing.
-                    let _ = menu.update(cx, |menu: &mut PopoverState, cx| menu.dismiss(window, cx));
-                })
+            v_flex()
+                .items_start()
+                .child(menu_item(
+                    (
+                        format!("unfriend-{id}"),
+                        IconName::UserMinus,
+                        "Remove friend",
+                    ),
+                    Rc::clone(&on_remove),
+                    menu.clone(),
+                ))
+                .child(menu_item(
+                    (format!("block-{id}"), IconName::Ban, "Block"),
+                    Rc::clone(&on_block),
+                    menu,
+                ))
+        })
+}
+
+/// One of the menu's choices: it acts, then the menu closes.
+fn menu_item(
+    (id, icon, label): (String, IconName, &'static str),
+    action: OnClick,
+    menu: WeakEntity<PopoverState>,
+) -> Button {
+    Button::new(SharedString::from(id))
+        .ghost()
+        .small()
+        .icon(icon)
+        .label(label)
+        .on_click(move |_, window, cx| {
+            action(window, cx);
+            // Gone already only if the window is closing.
+            let _ = menu.update(cx, |menu, cx| menu.dismiss(window, cx));
         })
 }

@@ -9,7 +9,7 @@ use crate::{
     errors::AppError,
     extract::{Body, SignedIn},
     models::{
-        account::{CreateSessionModel, GetSessionModel},
+        account::{CreateSessionModel, DeviceModel, GetSessionModel},
         message::MessageResponse,
     },
     state::AppState,
@@ -20,8 +20,9 @@ const USER_AGENT_MAX: usize = 200;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/", post(create))
         .route("/guest", post(create_guest))
+        .route("/", post(create).get(devices))
+        .route("/others", delete(delete_others))
         .route("/current", delete(delete_current))
 }
 
@@ -57,6 +58,30 @@ async fn delete_current(
         message: "Signed out successfully".to_owned(),
     };
     Ok(Json(response))
+}
+
+/// The devices signed in to the account, this one marked.
+async fn devices(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+) -> Result<Json<Vec<DeviceModel>>, AppError> {
+    let response = state
+        .sessions
+        .devices(signed_in.user_id, signed_in.session_id)
+        .await?;
+    Ok(Json(response))
+}
+
+/// Signs out every other device; this one stays signed in.
+async fn delete_others(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+) -> Result<StatusCode, AppError> {
+    state
+        .sessions
+        .sign_out_others(signed_in.user_id, signed_in.session_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Which app signed in, to tell sessions apart later.

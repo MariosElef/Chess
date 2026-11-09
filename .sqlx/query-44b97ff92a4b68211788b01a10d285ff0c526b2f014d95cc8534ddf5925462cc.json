@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- $1 lifts their block on $2; a block $2 made on $1 stays.\nDELETE FROM social.blocks\nWHERE blocks.blocker_id = $1 AND blocks.blocked_id = $2\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44b97ff92a4b68211788b01a10d285ff0c526b2f014d95cc8534ddf5925462cc"
+}

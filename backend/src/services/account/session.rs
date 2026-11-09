@@ -2,10 +2,10 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest as _, Sha256};
 use uuid::Uuid;
 
-use super::password;
+use super::{device::device_name, password};
 use crate::{
     errors::{AppError, ChessCode},
-    models::account::{CreateSessionModel, GetSessionModel, NewSession, SessionUser},
+    models::account::{CreateSessionModel, DeviceModel, GetSessionModel, NewSession, SessionUser},
     repositories::{
         account::{session, user},
         database::Db,
@@ -94,6 +94,37 @@ impl SessionService {
             .await?
             .ok_or(ChessCode::SignInRequired)?;
         Ok(response)
+    }
+
+    /// The devices signed in to the account, the most recently used first.
+    pub async fn devices(
+        &self,
+        user_id: Uuid,
+        current: Uuid,
+    ) -> Result<Vec<DeviceModel>, AppError> {
+        let rows = session::of_user(&self.db, user_id).await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| DeviceModel {
+                id: row.id,
+                device: device_name(row.user_agent.as_deref()),
+                current: row.id == current,
+                signed_in_s: row.signed_in_s,
+                seen_s: row.seen_s,
+            })
+            .collect())
+    }
+
+    /// Signs out every device but the one asking, closing their live sockets too.
+    pub async fn sign_out_others(&self, user_id: Uuid, current: Uuid) -> Result<(), AppError> {
+        session::revoke_others(&self.db, user_id, current).await?;
+        self.play.close_sockets_except(user_id, current);
+        Ok(())
+    }
+
+    /// Whether the session is still signed in, as a socket opening checks once it is counted.
+    pub async fn is_live(&self, session_id: Uuid) -> Result<bool, AppError> {
+        Ok(session::is_live(&self.db, session_id).await?)
     }
 
     pub async fn sign_out(&self, session_id: Uuid) -> Result<(), AppError> {

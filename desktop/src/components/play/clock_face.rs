@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use gpui_kit::{component::ActiveTheme as _, prelude::FluentBuilder as _, *};
 
-/// Below this, the clock shows tenths of a second and turns red.
+/// Below this, the clock shows tenths of a second, in red.
 const LOW_TIME: Duration = Duration::from_secs(10);
 
 /// One player's time left; lit while it is running.
@@ -35,9 +35,8 @@ impl RenderOnce for ClockFace {
             .when(self.running, |this| {
                 this.bg(theme.primary).text_color(theme.primary_foreground)
             })
-            .when(low, |this| {
-                this.bg(theme.danger).text_color(theme.danger_foreground)
-            })
+            // Only the time itself turns red; the face keeps its colour.
+            .when(low, |this| this.text_color(theme.danger))
             .child(format_clock(self.remaining))
     }
 }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A request from $3, new or asked again after it was declined or withdrawn; none to a closed\n-- account or between a pair where either blocked the other, and one sent while it closes waits.\nINSERT INTO social.friendships (user_a_id, user_b_id, requester_id, status)\nSELECT $1::uuid, $2::uuid, $3::uuid, 'pending'\nFROM account.users\nWHERE\n    users.id = CASE WHEN $3::uuid = $1::uuid THEN $2::uuid ELSE $1::uuid END\n    AND users.deleted_at IS NULL\n    AND NOT EXISTS (\n        SELECT 1\n        FROM social.blocks\n        WHERE\n            (blocks.blocker_id = $1 AND blocks.blocked_id = $2)\n            OR (blocks.blocker_id = $2 AND blocks.blocked_id = $1)\n    )\nFOR SHARE\nON CONFLICT (user_a_id, user_b_id) DO UPDATE\nSET requester_id = excluded.requester_id, status = 'pending', updated_at = now()\nWHERE friendships.status = 'declined'\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba009037c766b837a22b27ecfd641487885de278f143b48ea5158c8f1c488b4b"
+}

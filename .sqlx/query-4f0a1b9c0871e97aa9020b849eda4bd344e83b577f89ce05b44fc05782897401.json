@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $3 of the player $1's puzzle attempts before the attempt $2 (all, without it), the\n-- latest first, with each puzzle's rating; ids are uuid v7, so they sort by when.\nSELECT\n    puzzle_attempts.id,\n    puzzle_attempts.puzzle_id,\n    (SELECT puzzles.rating FROM puzzle.puzzles WHERE puzzles.id = puzzle_attempts.puzzle_id)\n        AS puzzle_rating,\n    puzzle_attempts.solved,\n    puzzle_attempts.duration_ms,\n    puzzle_attempts.rated,\n    floor(extract(EPOCH FROM now() - puzzle_attempts.attempted_at))::bigint AS \"ago_s!\"\nFROM puzzle.puzzle_attempts\nWHERE puzzle_attempts.user_id = $1 AND ($2::uuid IS NULL OR puzzle_attempts.id < $2)\nORDER BY puzzle_attempts.id DESC\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzle_attempts",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "puzzle_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzle_attempts",
+            "name": "puzzle_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "puzzle_rating",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "solved",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzle_attempts",
+            "name": "solved"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "duration_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzle_attempts",
+            "name": "duration_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "rated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "puzzle.puzzle_attempts",
+            "name": "rated"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "ago_s!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4f0a1b9c0871e97aa9020b849eda4bd344e83b577f89ce05b44fc05782897401"
+}

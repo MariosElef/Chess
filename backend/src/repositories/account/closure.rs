@@ -117,6 +117,30 @@ pub async fn forget_memberships(db: &mut PgConnection, user_id: Uuid) -> Result<
     Ok(())
 }
 
+/// Every conversation they are in or started, held until the transaction ends.
+pub async fn held_conversations(
+    db: &mut PgConnection,
+    user_id: Uuid,
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_file_scalar!(
+        "src/repositories/sql/account/closure/held_conversations.sql",
+        user_id
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// Blocks they made and blocks made on them.
+pub async fn forget_blocks(db: &mut PgConnection, user_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query_file!(
+        "src/repositories/sql/account/closure/forget_blocks.sql",
+        user_id
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 /// Groups they started, which their other members keep.
 pub async fn forget_conversations_started(
     db: &mut PgConnection,

@@ -362,3 +362,160 @@ async fn friends_come_with_when_they_were_last_online_and_their_ratings(db: Db) 
             .expect("Bob's row");
     assert!(stored, "Bob's last time online is kept");
 }
+
+#[sqlx::test]
+async fn blocking_ends_the_friendship_and_only_the_blocker_can_lift_it(db: Db) {
+    let server = server(db);
+    let ((ann_token, ann_id), (bob_token, bob_id)) = friends_ann_and_bob(&server).await;
+    let block = |token: &str, id: &str| {
+        server
+            .post(&format!("/api/social/blocks/{id}"))
+            .authorization_bearer(token)
+    };
+    block(&ann_token, &bob_id)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    let anns = friends(&server, &ann_token).await;
+    assert_eq!(anns["friends"], json!([]));
+    assert_eq!(anns["blocked"][0]["username"], "bob");
+    let bobs = friends(&server, &bob_token).await;
+    assert_eq!(bobs["friends"], json!([]));
+    assert_eq!(bobs["blocked"], json!([]), "Bob is never told");
+
+    let asked = request(&server, &bob_token, &ann_id).await;
+    assert_eq!(asked["relation"], "request_sent", "it looks unanswered");
+    assert_eq!(friends(&server, &ann_token).await["incoming"], json!([]));
+    let mine = request(&server, &ann_token, &bob_id).await;
+    assert_eq!(mine["relation"], "blocked", "Ann must unblock first");
+
+    // Bob cannot lift Ann's block.
+    server
+        .delete(&format!("/api/social/blocks/{ann_id}"))
+        .authorization_bearer(&bob_token)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(
+        friends(&server, &ann_token).await["blocked"][0]["username"],
+        "bob"
+    );
+
+    server
+        .delete(&format!("/api/social/blocks/{bob_id}"))
+        .authorization_bearer(&ann_token)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(friends(&server, &ann_token).await["blocked"], json!([]));
+    let again = request(&server, &bob_token, &ann_id).await;
+    assert_eq!(again["relation"], "request_sent");
+    assert_eq!(
+        friends(&server, &ann_token).await["incoming"][0]["username"],
+        "bob",
+        "after unblocking, a request arrives"
+    );
+}
+
+#[sqlx::test]
+async fn signing_out_other_devices_ends_their_sessions_and_sockets(db: Db) {
+    let server = server(db);
+    let ((desk, _), (bob, _)) = friends_ann_and_bob(&server).await;
+    let laptop: Value = server
+        .post("/api/sessions")
+        .add_header(
+            axum::http::header::USER_AGENT,
+            axum::http::HeaderValue::from_static("Chess 0.1.0 (macos)"),
+        )
+        .json(&json!({ "login": "ann", "password": "correct horse" }))
+        .await
+        .json();
+    let laptop = laptop["token"].as_str().expect("a token").to_owned();
+    let _laptop_socket = connect(&server, &laptop).await;
+    assert_eq!(friends(&server, &bob).await["friends"][0]["online"], true);
+
+    let devices: Value = server
+        .get("/api/sessions")
+        .authorization_bearer(&desk)
+        .await
+        .json();
+    assert_eq!(devices.as_array().map(Vec::len), Some(2));
+    let current: Vec<&Value> = devices
+        .as_array()
+        .expect("a list")
+        .iter()
+        .filter(|device| device["current"] == true)
+        .collect();
+    assert_eq!(current.len(), 1, "the asking device is marked");
+    assert_eq!(current[0]["device"], "Unknown device");
+    assert_eq!(
+        devices[0]["current"], true,
+        "asking uses it, so it is the last used"
+    );
+    assert_eq!(devices[1]["device"], "Chess app on macOS");
+
+    server
+        .delete("/api/sessions/others")
+        .authorization_bearer(&desk)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    server
+        .get("/api/users/me")
+        .authorization_bearer(&laptop)
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    server
+        .get("/api/users/me")
+        .authorization_bearer(&desk)
+        .await
+        .assert_status_ok();
+    tokio::time::timeout(PATIENCE, async {
+        while friends(&server, &bob).await["friends"][0]["online"] == true {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the laptop's socket closes, so Ann goes offline");
+}
+
+#[sqlx::test]
+async fn two_players_can_block_each_other_and_each_lifts_only_their_own(db: Db) {
+    let server = server(db);
+    let ((ann_token, ann_id), (bob_token, bob_id)) = friends_ann_and_bob(&server).await;
+    for (token, id) in [(&ann_token, &bob_id), (&bob_token, &ann_id)] {
+        server
+            .post(&format!("/api/social/blocks/{id}"))
+            .authorization_bearer(token)
+            .await
+            .assert_status(StatusCode::NO_CONTENT);
+    }
+    assert_eq!(
+        friends(&server, &bob_token).await["blocked"][0]["username"],
+        "ann"
+    );
+    server
+        .delete(&format!("/api/social/blocks/{bob_id}"))
+        .authorization_bearer(&ann_token)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(friends(&server, &ann_token).await["blocked"], json!([]));
+    assert_eq!(
+        friends(&server, &bob_token).await["blocked"][0]["username"],
+        "ann",
+        "Bob's block stays"
+    );
+    let asked = request(&server, &ann_token, &bob_id).await;
+    assert_eq!(asked["relation"], "request_sent");
+    assert_eq!(friends(&server, &bob_token).await["incoming"], json!([]));
+}
+
+#[sqlx::test]
+async fn a_guest_has_no_history_from_the_last_holder(db: Db) {
+    let server = server(db);
+    let token = guest(&server).await;
+    for path in [
+        "/api/games",
+        "/api/puzzles/battles",
+        "/api/puzzles/attempts",
+    ] {
+        let listed: Value = server.get(path).authorization_bearer(&token).await.json();
+        assert_eq!(listed, json!([]), "{path}");
+    }
+}

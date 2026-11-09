@@ -14,7 +14,7 @@ pub use battle_menu::{BattleMenu, BattleMenuActions, BattleMenuState};
 pub use battle_panel::BattlePanel;
 pub use puzzle_menu::PuzzleMenu;
 pub use puzzle_panel::PuzzlePanel;
-pub use puzzle_pictures::{puzzle_picture, puzzle_picture_paths};
+pub use puzzle_pictures::{BATTLE_PICTURE, puzzle_picture, puzzle_picture_paths};
 pub use range_picker::RangePicker;
 pub use rush_menu::{RUSH_PICTURE, RushMenu};
 pub use rush_panels::{RushResult, RushScore};

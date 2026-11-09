@@ -2,7 +2,7 @@ use axum::{
     Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use uuid::Uuid;
 
@@ -10,7 +10,10 @@ use crate::{
     errors::AppError,
     extract::{Body, SignedIn},
     models::chat::{
-        conversation::{AddMemberModel, ConversationModel, CreateDirectModel, CreateGroupModel},
+        conversation::{
+            AddMemberModel, ConversationModel, CreateDirectModel, CreateGroupModel,
+            RenameGroupModel,
+        },
         message::{ChatMessageModel, CreateMessageModel, MessagesQuery},
     },
     state::AppState,
@@ -22,7 +25,9 @@ pub fn router() -> Router<AppState> {
         .route("/direct", post(open_direct))
         .route("/groups", post(create_group))
         .route("/groups/{id}/members", post(add_member))
+        .route("/groups/{id}", patch(rename))
         .route("/groups/{id}/members/me", delete(leave))
+        .route("/groups/{id}/members/{user_id}", delete(remove_member))
         .route("/conversations/{id}/messages", get(messages).post(send))
         .route("/conversations/{id}/read", post(mark_read))
 }
@@ -79,6 +84,33 @@ async fn leave(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     state.chat.leave(signed_in.user_id, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The owner renames their group.
+async fn rename(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Path(id): Path<Uuid>,
+    Body(body): Body<RenameGroupModel>,
+) -> Result<Json<ConversationModel>, AppError> {
+    let response = state
+        .chat
+        .rename(signed_in.user_id, id, &body.title)
+        .await?;
+    Ok(Json(response))
+}
+
+/// The owner takes a member out of their group.
+async fn remove_member(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Path((id, user_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    state
+        .chat
+        .remove_member(signed_in.user_id, id, user_id)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

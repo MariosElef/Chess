@@ -1,8 +1,4 @@
-const MINUTE: i64 = 60;
-const HOUR: i64 = 60 * MINUTE;
-const DAY: i64 = 24 * HOUR;
-const MONTH: i64 = 30 * DAY;
-const YEAR: i64 = 365 * DAY;
+use crate::services::time::{MINUTE, span_words};
 
 /// The line under a friend's name: "Online now" or how long since they were.
 pub fn last_online_text(online: bool, away_s: Option<i64>) -> String {
@@ -14,23 +10,6 @@ pub fn last_online_text(online: bool, away_s: Option<i64>) -> String {
         Some(away) if away < MINUTE => "Last online just now".to_owned(),
         Some(away) => format!("Last online {} ago", span_words(away)),
     }
-}
-
-/// "5 minutes", "1 hour", "3 days", "2 months", "1 year".
-fn span_words(seconds: i64) -> String {
-    let (count, unit) = if seconds < HOUR {
-        (seconds / MINUTE, "minute")
-    } else if seconds < DAY {
-        (seconds / HOUR, "hour")
-    } else if seconds < MONTH {
-        (seconds / DAY, "day")
-    } else if seconds < YEAR {
-        (seconds / MONTH, "month")
-    } else {
-        (seconds / YEAR, "year")
-    };
-    let plural = if count == 1 { "" } else { "s" };
-    format!("{count} {unit}{plural}")
 }
 
 #[cfg(test)]

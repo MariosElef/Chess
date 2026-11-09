@@ -38,6 +38,7 @@ icon_assets!(
         UserMinus,
         UserCheck,
         UserX,
+        Ban,
         Mail,
         Monitor,
         Volume2

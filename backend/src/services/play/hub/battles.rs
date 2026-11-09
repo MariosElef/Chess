@@ -175,6 +175,13 @@ impl PlayHub {
         };
         self.send_battle_challenges(pending.from.id);
         self.send_battle_challenges(pending.to.id);
+        if !self
+            .are_friends(pending.from.id, pending.to.id)
+            .await
+            .unwrap_or(false)
+        {
+            return self.refuse(player.id, "That invitation is no longer open");
+        }
         if self.is_battling(pending.from.id) || self.is_battling(pending.to.id) {
             return self.refuse(player.id, "One of you is already in a battle");
         }
@@ -308,6 +315,15 @@ impl PlayHub {
     /// In a battle, or about to be.
     fn is_battling(&self, player: Uuid) -> bool {
         self.battle_of(player).is_some() || lock(&self.inner.battles_starting).contains(&player)
+    }
+
+    /// Battle invitations between the two, either way, withdrawn; both hear.
+    pub fn drop_battle_invitations_between(&self, first: Uuid, second: Uuid) {
+        lock(&self.inner.battle_challenges)
+            .retain(|pending| !(pending.involves(first) && pending.involves(second)));
+        for player in [first, second] {
+            self.send_battle_challenges(player);
+        }
     }
 
     /// The player's battle invitations, either way, withdrawn; whoever else was in them hears.

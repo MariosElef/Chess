@@ -1,0 +1,10 @@
+CREATE INDEX rating_history_user_id_category_id_idx ON play.rating_history (user_id, category_id, recorded_at);
+CREATE INDEX puzzle_attempts_user_id_idx ON puzzle.puzzle_attempts (user_id, attempted_at DESC);
+CREATE INDEX games_black_id_idx ON play.games (black_id, started_at DESC);
+CREATE INDEX games_white_id_idx ON play.games (white_id, started_at DESC);
+DROP INDEX play.rating_history_user_id_category_id_id_idx;
+DROP INDEX puzzle.puzzle_attempts_user_id_id_idx;
+DROP INDEX play.games_black_id_id_idx;
+DROP INDEX play.games_white_id_id_idx;
+DROP INDEX puzzle.battles_second_id_id_idx;
+DROP INDEX puzzle.battles_first_id_id_idx;

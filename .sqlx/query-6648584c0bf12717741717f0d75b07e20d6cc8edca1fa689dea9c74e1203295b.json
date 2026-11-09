@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $3 of the player $1's finished battles before the battle $2 (all, without it), the\n-- latest first, with the other player's name; ids are uuid v7, so they sort by start. Each seat\n-- reads its own index.\nSELECT\n    battles.id,\n    battles.first_id,\n    (\n        SELECT users.username\n        FROM account.users\n        WHERE users.id = CASE\n            WHEN battles.first_id = $1 THEN battles.second_id\n            ELSE battles.first_id\n        END\n    ) AS \"opponent!\",\n    battles.first_score,\n    battles.second_score,\n    battles.winner_id,\n    battles.rated,\n    floor(extract(EPOCH FROM now() - battles.finished_at))::bigint AS \"ago_s!\"\nFROM puzzle.battles\nWHERE battles.id IN (\n    (\n        SELECT battles.id\n        FROM puzzle.battles\n        WHERE\n            battles.first_id = $1\n            AND battles.finished_at IS NOT NULL\n            AND ($2::uuid IS NULL OR battles.id < $2)\n        ORDER BY battles.id DESC\n        LIMIT $3\n    )\n    UNION ALL\n    (\n        SELECT battles.id\n        FROM puzzle.battles\n        WHERE\n            battles.second_id = $1\n            AND battles.finished_at IS NOT NULL\n            AND ($2::uuid IS NULL OR battles.id < $2)\n        ORDER BY battles.id DESC\n        LIMIT $3\n    )\n)\nORDER BY battles.id DESC\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "first_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "first_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "opponent!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "first_score",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "first_score"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "second_score",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "second_score"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "winner_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "winner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "rated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "puzzle.battles",
+            "name": "rated"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "ago_s!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "6648584c0bf12717741717f0d75b07e20d6cc8edca1fa689dea9c74e1203295b"
+}

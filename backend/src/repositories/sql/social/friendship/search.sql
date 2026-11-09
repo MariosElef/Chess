@@ -1,10 +1,15 @@
 -- Players whose name contains $2 (lowercase, LIKE-escaped), names starting with it first;
--- never $1. With the friendship to $1, if any.
+-- never $1. With the friendship to $1, if any, and whether $1 has blocked them.
 SELECT
     users.id AS user_id,
     users.username,
     friendships.status AS "status?",
-    friendships.requester_id AS "requester_id?"
+    friendships.requester_id AS "requester_id?",
+    EXISTS (
+        SELECT 1
+        FROM social.blocks
+        WHERE blocks.blocker_id = $1 AND blocks.blocked_id = users.id
+    ) AS "blocked!"
 FROM account.users
 LEFT JOIN social.friendships
     ON

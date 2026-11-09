@@ -197,7 +197,7 @@ impl SettingsPage {
             .collect();
         card(
             (IconName::Volume2, "Sounds"),
-            "Every move, capture, check and clock warning. Pick one to hear it.",
+            "Every move, capture, check and clock warning. Pick one to hear them all.",
             h_flex().gap_3().children(tiles),
             cx,
         )

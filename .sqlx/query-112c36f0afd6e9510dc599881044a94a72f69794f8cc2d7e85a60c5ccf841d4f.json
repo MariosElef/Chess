@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Which of $1 and $2 has blocked the other: none, one or both.\nSELECT blocks.blocker_id\nFROM social.blocks\nWHERE\n    (blocks.blocker_id = $1 AND blocks.blocked_id = $2)\n    OR (blocks.blocker_id = $2 AND blocks.blocked_id = $1)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocker_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.blocks",
+            "name": "blocker_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "112c36f0afd6e9510dc599881044a94a72f69794f8cc2d7e85a60c5ccf841d4f"
+}

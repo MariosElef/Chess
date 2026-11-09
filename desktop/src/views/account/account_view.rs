@@ -5,9 +5,11 @@ use gpui_kit::{
         input::{InputEvent, InputState},
         v_flex,
     },
+    prelude::FluentBuilder as _,
     *,
 };
 
+use super::{devices_view::DevicesView, history_view::HistoryView};
 use crate::{
     clients::{server::ServerClient, settings::SessionTokenFile},
     components::{
@@ -20,6 +22,7 @@ use crate::{
     enums::account::AccountForm,
     models::{
         account::{AccountChanged, FormProblems, Session, SignIn, SignUp, Stats, User},
+        play::AnalyzeGame,
         server::ServerError,
     },
     services::{account::form_problems, server::error_message},
@@ -46,9 +49,18 @@ pub struct AccountView {
     closing: Option<Closing>,
     /// The signed-in player's ratings and results, once fetched.
     stats: Option<Stats>,
+    /// The stats on their way; signing out drops them, so they never reach the next account.
+    _stats: Option<Task<()>>,
+    /// Their finished games, under the stats; not for a guest, whose account is shared.
+    history: Entity<HistoryView>,
+    /// What is signed in to the account, under the history; not for a guest either.
+    devices: Entity<DevicesView>,
+    /// A game picked there is passed on, to open on the analysis board.
+    _history_events: Subscription,
 }
 
 impl EventEmitter<AccountChanged> for AccountView {}
+impl EventEmitter<AnalyzeGame> for AccountView {}
 
 impl AccountView {
     /// Starts signed out, then signs back in with the saved token if there is one.
@@ -65,6 +77,11 @@ impl AccountView {
         let _enter_presses = [&login, &email, &username, &password]
             .map(|input| cx.subscribe_in(input, window, submit_on_enter))
             .into();
+        let history = cx.new(|_| HistoryView::new(client.clone()));
+        let devices = cx.new(|_| DevicesView::new(client.clone()));
+        let _history_events = cx.subscribe(&history, |_, _, event: &AnalyzeGame, cx| {
+            cx.emit(event.clone());
+        });
         let mut view = Self {
             client,
             tokens,
@@ -80,6 +97,10 @@ impl AccountView {
             _enter_presses,
             stats: None,
             closing: None,
+            _stats: None,
+            history,
+            devices,
+            _history_events,
         };
         view.restore(window, cx);
         view
@@ -98,6 +119,11 @@ impl AccountView {
     /// The token the server knows this app by, for requests made while signed in.
     pub fn token(&self) -> Option<String> {
         self.session.as_ref().map(|session| session.token.clone())
+    }
+
+    /// Signed in as one of the shared guests, whose games are not theirs alone.
+    fn is_guest(&self) -> bool {
+        self.user().is_some_and(|user| user.guest)
     }
 
     /// The account signed in on this app, if any.
@@ -227,8 +253,15 @@ impl AccountView {
         let Some(token) = self.token() else {
             return;
         };
+        if !self.is_guest() {
+            let (history_token, devices_token) = (token.clone(), token.clone());
+            self.history
+                .update(cx, |history, cx| history.open(history_token, cx));
+            self.devices
+                .update(cx, |devices, cx| devices.open(devices_token, cx));
+        }
         let request = self.client.stats(&token);
-        cx.spawn(async move |view, cx| {
+        self._stats = Some(cx.spawn(async move |view, cx| {
             // Without them the page shows the account alone.
             if let Ok(stats) = request.await {
                 let _ = view.update(cx, |view, cx| {
@@ -236,8 +269,7 @@ impl AccountView {
                     cx.notify();
                 });
             }
-        })
-        .detach();
+        }));
     }
 
     /// Signs out here at once and tells the server; if unreachable, the token simply expires there.
@@ -258,7 +290,10 @@ impl AccountView {
     fn forget_session(&mut self, cx: &mut Context<Self>) {
         self.session = None;
         self.stats = None;
+        self._stats = None;
         self.closing = None;
+        self.history.update(cx, |history, _| history.clear());
+        self.devices.update(cx, |devices, _| devices.clear());
         // A failed delete of the saved token only means a sign-in screen at next launch.
         let _ = self.tokens.forget();
         self.form = AccountForm::SignIn;
@@ -489,7 +524,10 @@ impl Render for AccountView {
             .gap_5()
             .child(self.heading(cx))
             .child(div().flex().justify_center().child(self.card(cx)))
-            .children(self.stats.clone().map(StatsPanel::new));
+            .children(self.stats.clone().map(StatsPanel::new))
+            .when(!self.is_guest(), |this| {
+                this.child(self.history.clone()).child(self.devices.clone())
+            });
         div()
             .id("account-page")
             .size_full()

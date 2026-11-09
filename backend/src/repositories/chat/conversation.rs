@@ -136,3 +136,59 @@ pub async fn mark_read(
     .await?;
     Ok(())
 }
+
+/// Names the group `title`.
+pub async fn rename(
+    db: impl PgExecutor<'_>,
+    conversation: Uuid,
+    title: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query_file!(
+        "src/repositories/sql/chat/conversation/rename.sql",
+        conversation,
+        title
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Makes the longest-standing member the owner of a group that has none.
+pub async fn pass_ownership(
+    db: impl PgExecutor<'_>,
+    conversation: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query_file!(
+        "src/repositories/sql/chat/conversation/pass_ownership.sql",
+        conversation
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Holds the conversation until the transaction ends, so its members change one at a time.
+pub async fn lock(db: impl PgExecutor<'_>, conversation: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query_file_scalar!(
+        "src/repositories/sql/chat/conversation/lock.sql",
+        conversation
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(())
+}
+
+/// Whether `user` owns the conversation.
+pub async fn is_owner(
+    db: impl PgExecutor<'_>,
+    conversation: Uuid,
+    user: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_file_scalar!(
+        "src/repositories/sql/chat/conversation/is_owner.sql",
+        conversation,
+        user
+    )
+    .fetch_one(db)
+    .await
+}

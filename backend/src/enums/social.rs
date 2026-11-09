@@ -6,7 +6,6 @@ pub enum FriendshipStatus {
     Pending,
     Accepted,
     Declined,
-    Blocked,
 }
 
 impl FriendshipStatus {
@@ -15,7 +14,6 @@ impl FriendshipStatus {
             "pending" => Some(Self::Pending),
             "accepted" => Some(Self::Accepted),
             "declined" => Some(Self::Declined),
-            "blocked" => Some(Self::Blocked),
             _ => None,
         }
     }
@@ -31,4 +29,6 @@ pub enum Relation {
     RequestSent,
     /// The other player asked; the signed-in one can accept.
     RequestReceived,
+    /// The signed-in player blocked them; the blocked one is never told.
+    Blocked,
 }

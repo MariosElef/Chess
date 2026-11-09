@@ -1,7 +1,7 @@
 use sqlx::{PgConnection, PgExecutor};
 use uuid::Uuid;
 
-use crate::models::rating::{RatingRow, RatingSource, UserRatingRow};
+use crate::models::rating::{RatingChangeRow, RatingRow, RatingSource, UserRatingRow};
 
 /// The player's rating in `category`, or `None` before their first result in it.
 pub async fn get(
@@ -95,4 +95,20 @@ pub async fn record_result(
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// The player's rating after each of `sources` (games, puzzle attempts or battles), and before.
+pub async fn changes(
+    db: impl PgExecutor<'_>,
+    user_id: Uuid,
+    sources: &[Uuid],
+) -> Result<Vec<RatingChangeRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        RatingChangeRow,
+        "src/repositories/sql/rating/changes.sql",
+        user_id,
+        sources
+    )
+    .fetch_all(db)
+    .await
 }

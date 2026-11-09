@@ -21,3 +21,21 @@ pub enum Sound {
     /// A clock is down to the last 5% of its starting time.
     LowTime,
 }
+
+impl Sound {
+    /// Every sound, in the order Settings plays them to show a set off.
+    pub const ALL: [Self; 12] = [
+        Self::GameStart,
+        Self::MoveSelf,
+        Self::MoveOpponent,
+        Self::Capture,
+        Self::Castle,
+        Self::Check,
+        Self::Promote,
+        Self::Premove,
+        Self::Illegal,
+        Self::Notify,
+        Self::LowTime,
+        Self::GameEnd,
+    ];
+}

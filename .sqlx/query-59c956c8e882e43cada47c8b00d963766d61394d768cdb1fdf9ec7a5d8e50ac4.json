@@ -1,0 +1,147 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $3 of the player $1's finished games before the game $2 (all, without it), the latest\n-- first; ids are uuid v7, so they sort by when the games began. Each side reads its own index.\nSELECT\n    games.id,\n    games.white_id,\n    (SELECT users.username FROM account.users WHERE users.id = games.white_id) AS \"white_name!\",\n    (SELECT users.username FROM account.users WHERE users.id = games.black_id) AS \"black_name!\",\n    games.category_id AS category,\n    games.initial_s,\n    games.increment_s,\n    games.rated,\n    games.outcome AS \"outcome!\",\n    games.winner,\n    games.ply_count,\n    floor(extract(EPOCH FROM now() - games.finished_at))::bigint AS \"ago_s!\"\nFROM play.games\nWHERE games.id IN (\n    (\n        SELECT games.id\n        FROM play.games\n        WHERE\n            games.white_id = $1\n            AND games.status = 'finished'\n            AND ($2::uuid IS NULL OR games.id < $2)\n        ORDER BY games.id DESC\n        LIMIT $3\n    )\n    UNION ALL\n    (\n        SELECT games.id\n        FROM play.games\n        WHERE\n            games.black_id = $1\n            AND games.status = 'finished'\n            AND ($2::uuid IS NULL OR games.id < $2)\n        ORDER BY games.id DESC\n        LIMIT $3\n    )\n)\nORDER BY games.id DESC\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "white_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "white_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "white_name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "black_name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "category",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "initial_s",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "initial_s"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "increment_s",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "increment_s"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "rated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "rated"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "outcome!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "outcome"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "winner",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "winner"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "ply_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "ply_count"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "ago_s!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "59c956c8e882e43cada47c8b00d963766d61394d768cdb1fdf9ec7a5d8e50ac4"
+}

@@ -1,6 +1,7 @@
 mod attempt_report;
 mod battle;
 mod puzzle;
+mod puzzle_history;
 mod puzzle_rating;
 mod puzzle_summary;
 mod puzzle_text;
@@ -10,6 +11,7 @@ mod rush_record;
 pub use attempt_report::AttemptReport;
 pub use battle::{BattleChallenge, BattleSide, BattleSnapshot, BattleSummary};
 pub use puzzle::Puzzle;
+pub use puzzle_history::{PlayedAttempt, PlayedBattle};
 pub use puzzle_rating::PuzzleRating;
 pub use puzzle_summary::{BestRush, PuzzleSummary};
 pub use puzzle_text::PuzzleText;

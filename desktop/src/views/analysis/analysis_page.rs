@@ -562,10 +562,18 @@ impl AnalysisPage {
             .collect()
     }
 
-    /// The eval bar on the left of the board, in the column every page's board has.
+    /// Stockfish is switched on and was found: the switch reads on and the eval bar shows.
+    fn engine_on(&self) -> bool {
+        self.enabled && self.problem.is_none()
+    }
+
+    /// The board, with the eval bar on its left while Stockfish is on.
     fn board_column(&self, cx: &mut Context<Self>) -> BoardColumn {
+        let flipped = self.board.read(cx).flipped();
         BoardColumn::new(self.board.clone())
-            .left_strip(EvalBar::new(self.eval(), self.board.read(cx).flipped()))
+            .when(self.engine_on(), |column| {
+                column.left_strip(EvalBar::new(self.eval(), flipped))
+            })
             .tool(flip_button("analysis-flip-board", cx, AnalysisPage::flip))
             .tool(copy_fen(self.history.shown()))
     }
@@ -576,7 +584,7 @@ impl AnalysisPage {
             .header(PanelHeader::new(ANALYSIS_PICTURE, "Analysis"))
             .child(self.header(cx))
             .child(EnginePanel::new(
-                self.enabled && self.problem.is_none(),
+                self.engine_on(),
                 self.engine_status(),
                 self.line_views(),
                 toggle_engine(page.clone()),

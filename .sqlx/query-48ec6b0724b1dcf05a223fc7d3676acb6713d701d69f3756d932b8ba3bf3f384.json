@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The group $1 is called $2 from now on.\nUPDATE social.conversations\nSET title = $2\nWHERE conversations.id = $1 AND conversations.kind = 'group'\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48ec6b0724b1dcf05a223fc7d3676acb6713d701d69f3756d932b8ba3bf3f384"
+}

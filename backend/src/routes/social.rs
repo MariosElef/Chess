@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/friends/requests", post(create_request))
         .route("/friends/requests/{user_id}/accept", post(accept_request))
         .route("/friends/{user_id}", delete(remove))
+        .route("/blocks/{user_id}", post(block).delete(unblock))
 }
 
 /// Players whose name contains `q`, with where the searcher stands with each.
@@ -73,5 +74,25 @@ async fn remove(
     Path(user_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     state.friends.remove(signed_in.user_id, user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Blocks a player: whatever stood between the two goes, and they cannot ask or message again.
+async fn block(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Path(user_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    state.friends.block(signed_in.user_id, user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Lifts a block the player made.
+async fn unblock(
+    State(state): State<AppState>,
+    signed_in: SignedIn,
+    Path(user_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    state.friends.unblock(signed_in.user_id, user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

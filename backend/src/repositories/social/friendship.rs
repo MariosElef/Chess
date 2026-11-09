@@ -107,3 +107,18 @@ pub async fn friend_ids(db: impl PgExecutor<'_>, user: Uuid) -> Result<Vec<Uuid>
     .fetch_all(db)
     .await
 }
+
+/// Holds the pair until the transaction ends, so a request and a block between them take turns.
+pub async fn lock_pair(
+    db: impl PgExecutor<'_>,
+    (first, second): (Uuid, Uuid),
+) -> Result<(), sqlx::Error> {
+    sqlx::query_file!(
+        "src/repositories/sql/social/friendship/lock_pair.sql",
+        first,
+        second
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(())
+}

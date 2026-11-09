@@ -274,3 +274,144 @@ async fn both_players_of_a_game_can_close_their_accounts(db: Db) {
             .assert_status(StatusCode::NO_CONTENT);
     }
 }
+
+#[sqlx::test]
+async fn a_direct_chat_goes_quiet_once_they_are_not_friends(db: Db) {
+    let server = server(db);
+    let ann = account(&server, "ann").await;
+    let bob = account(&server, "bob").await;
+    befriend(&server, &ann, &bob).await;
+    let chat = open_direct(&server, &ann.0, &bob.1).await;
+    let id = chat["id"].as_str().expect("an id");
+    assert_eq!(send(&server, &bob.0, id, "hi").await, StatusCode::CREATED);
+    server
+        .post(&format!("/api/social/blocks/{}", bob.1))
+        .authorization_bearer(&ann.0)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(
+        send(&server, &bob.0, id, "hello?").await,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        send(&server, &ann.0, id, "bye").await,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[sqlx::test]
+async fn only_the_owner_renames_and_removes_and_leaving_passes_it_on(db: Db) {
+    let server = server(db);
+    let ann = account(&server, "ann").await;
+    let bob = account(&server, "bob").await;
+    let cat = account(&server, "cat").await;
+    befriend(&server, &ann, &bob).await;
+    befriend(&server, &ann, &cat).await;
+    let group: Value = server
+        .post("/api/chat/groups")
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "title": "club", "member_ids": [bob.1, cat.1] }))
+        .await
+        .json();
+    let id = group["id"].as_str().expect("an id").to_owned();
+    assert_eq!(group["owner_id"], ann.1.as_str());
+    let rename = |token: &str, title: &str| {
+        server
+            .patch(&format!("/api/chat/groups/{id}"))
+            .authorization_bearer(token)
+            .json(&json!({ "title": title }))
+    };
+    let remove = |token: &str, user: &str| {
+        server
+            .delete(&format!("/api/chat/groups/{id}/members/{user}"))
+            .authorization_bearer(token)
+    };
+
+    rename(&bob.0, "bobs")
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+    remove(&bob.0, &cat.1)
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+    let renamed: Value = rename(&ann.0, " chess club ").await.json();
+    assert_eq!(renamed["title"], "chess club");
+    remove(&ann.0, &cat.1)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert_eq!(
+        conversations(&server, &cat.0).await,
+        json!([]),
+        "Cat is out"
+    );
+
+    server
+        .delete(&format!("/api/chat/groups/{id}/members/me"))
+        .authorization_bearer(&ann.0)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    let bobs = conversations(&server, &bob.0).await;
+    assert_eq!(bobs[0]["owner_id"], bob.1.as_str(), "Bob owns it now");
+    assert_eq!(bobs[0]["title"], "chess club");
+}
+
+#[sqlx::test]
+async fn no_one_joins_a_group_with_someone_who_blocked_them(db: Db) {
+    let server = server(db);
+    let ann = account(&server, "ann").await;
+    let bob = account(&server, "bob").await;
+    let cat = account(&server, "cat").await;
+    befriend(&server, &ann, &bob).await;
+    befriend(&server, &ann, &cat).await;
+    server
+        .post(&format!("/api/social/blocks/{}", bob.1))
+        .authorization_bearer(&cat.0)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    server
+        .post("/api/chat/groups")
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "title": "club", "member_ids": [bob.1, cat.1] }))
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+    let group: Value = server
+        .post("/api/chat/groups")
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "title": "club", "member_ids": [bob.1] }))
+        .await
+        .json();
+    let id = group["id"].as_str().expect("an id");
+    server
+        .post(&format!("/api/chat/groups/{id}/members"))
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "user_id": cat.1 }))
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn a_block_inside_a_group_still_lets_others_join(db: Db) {
+    let server = server(db);
+    let ann = account(&server, "ann").await;
+    let bob = account(&server, "bob").await;
+    let cat = account(&server, "cat").await;
+    befriend(&server, &ann, &bob).await;
+    befriend(&server, &ann, &cat).await;
+    let group: Value = server
+        .post("/api/chat/groups")
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "title": "club", "member_ids": [bob.1] }))
+        .await
+        .json();
+    let id = group["id"].as_str().expect("an id");
+    server
+        .post(&format!("/api/social/blocks/{}", ann.1))
+        .authorization_bearer(&bob.0)
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    server
+        .post(&format!("/api/chat/groups/{id}/members"))
+        .authorization_bearer(&ann.0)
+        .json(&json!({ "user_id": cat.1 }))
+        .await
+        .assert_status_ok();
+}

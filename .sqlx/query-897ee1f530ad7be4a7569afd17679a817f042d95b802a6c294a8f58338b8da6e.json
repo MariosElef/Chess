@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Whether $2 owns the conversation $1.\nSELECT EXISTS (\n    SELECT 1\n    FROM social.conversation_members\n    WHERE\n        conversation_members.conversation_id = $1\n        AND conversation_members.user_id = $2\n        AND conversation_members.role = 'owner'\n) AS \"owner!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "897ee1f530ad7be4a7569afd17679a817f042d95b802a6c294a8f58338b8da6e"
+}

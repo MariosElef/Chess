@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Every conversation $1 is in or started, held in id order until the transaction ends, so no\n-- member change runs alongside and ownership can pass on.\nSELECT conversations.id\nFROM social.conversations\nWHERE\n    conversations.created_by_id = $1\n    OR conversations.id IN (\n        SELECT conversation_members.conversation_id\n        FROM social.conversation_members\n        WHERE conversation_members.user_id = $1\n    )\nORDER BY conversations.id\nFOR NO KEY UPDATE\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "social.conversations",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f375c3a8dde8416a25d1ec046f60d6a986d063a3cfcc4580d1ee06d0dacbdde1"
+}

@@ -69,6 +69,14 @@ impl ChatView {
         view
     }
 
+    /// The conversation was renamed.
+    pub fn set_title(&mut self, title: SharedString, cx: &mut Context<Self>) {
+        if self.title != title {
+            self.title = title;
+            cx.notify();
+        }
+    }
+
     /// Comes on screen or goes off it; coming back reads what arrived meanwhile.
     pub fn set_reading(&mut self, reading: bool, cx: &mut Context<Self>) {
         let back = reading && !self.reading;

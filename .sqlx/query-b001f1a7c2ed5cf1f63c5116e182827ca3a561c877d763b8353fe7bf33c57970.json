@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The members of each of the conversations $1, by name.\nSELECT\n    conversation_members.conversation_id,\n    users.id AS user_id,\n    users.username\nFROM social.conversation_members\nINNER JOIN account.users ON users.id = conversation_members.user_id\nWHERE conversation_members.conversation_id = ANY($1)\nORDER BY lower(users.username)\n",
+  "query": "-- The members of each of the conversations $1, by name, and which of them owns it.\nSELECT\n    conversation_members.conversation_id,\n    users.id AS user_id,\n    users.username,\n    conversation_members.role = 'owner' AS \"owner!\"\nFROM social.conversation_members\nINNER JOIN account.users ON users.id = conversation_members.user_id\nWHERE conversation_members.conversation_id = ANY($1)\nORDER BY lower(users.username)\n",
   "describe": {
     "columns": [
       {
@@ -35,6 +35,12 @@
             "name": "username"
           }
         }
+      },
+      {
+        "ordinal": 3,
+        "name": "owner!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -45,8 +51,9 @@
     "nullable": [
       false,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "8b83557cb4dfc3f122d94af1fca9ae30e88a2b51de5f578292e5e5f4baab5d95"
+  "hash": "b001f1a7c2ed5cf1f63c5116e182827ca3a561c877d763b8353fe7bf33c57970"
 }

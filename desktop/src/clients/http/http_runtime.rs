@@ -24,6 +24,7 @@ impl HttpRuntime {
             .build()?;
         let http = Client::builder()
             .timeout(REQUEST_TIMEOUT)
+            .user_agent(user_agent())
             .build()
             .map_err(io::Error::other)?;
         Ok(Self {
@@ -75,4 +76,13 @@ impl HttpRuntime {
         });
         format!("http://{address}")
     }
+}
+
+/// How the app names itself to the server, which lists it among the account's devices.
+fn user_agent() -> String {
+    format!(
+        "Chess {} ({})",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS
+    )
 }

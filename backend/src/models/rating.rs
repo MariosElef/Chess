@@ -1,5 +1,13 @@
 use uuid::Uuid;
 
+/// A rating after one result and the rating before it, keyed by the result that moved it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RatingChangeRow {
+    pub source_id: Uuid,
+    pub rating: f64,
+    pub before: f64,
+}
+
 /// One player's rating in one category, for showing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserRatingRow {

@@ -7,6 +7,9 @@ use crate::errors::AppError;
 /// The connection pool: a cheap handle, cloned into every service.
 pub type Db = PgPool;
 
+/// A transaction on the pool, as a service holds one across several repository calls.
+pub type Tx = sqlx::Transaction<'static, sqlx::Postgres>;
+
 const MAX_CONNECTIONS: u32 = 10;
 /// Waiting longer than this for a connection fails the request instead of hanging it.
 const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);

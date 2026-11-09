@@ -6,6 +6,7 @@ use uuid::Uuid;
 use super::{PlayHub, lock, seek_refusal};
 use crate::{
     enums::{play::ChallengeStatus, social::FriendshipStatus},
+    errors::AppError,
     models::{
         play::{
             challenge::{ChallengeModel, NewChallenge},
@@ -87,18 +88,24 @@ impl PlayHub {
         self.expire_later(new.id);
     }
 
+    /// Whether the two are friends now: a block or unfriending since a challenge calls it off.
+    pub(super) async fn are_friends(&self, first: Uuid, second: Uuid) -> Result<bool, AppError> {
+        let pair = (first.min(second), first.max(second));
+        let friendship = friendship::between(&self.inner.db, pair).await?;
+        Ok(friendship.is_some_and(|row| {
+            FriendshipStatus::from_key(&row.status) == Some(FriendshipStatus::Accepted)
+        }))
+    }
+
     /// The friend to challenge, or why they cannot be.
     pub(super) async fn challengeable(&self, player: &Player, to: Uuid) -> Result<Player, String> {
         if to == player.id {
             return Err("You cannot challenge yourself".to_owned());
         }
-        let pair = (player.id.min(to), player.id.max(to));
-        let friendship = friendship::between(&self.inner.db, pair)
+        let friends = self
+            .are_friends(player.id, to)
             .await
             .map_err(|_| "Challenges are unavailable right now".to_owned())?;
-        let friends = friendship.is_some_and(|row| {
-            FriendshipStatus::from_key(&row.status) == Some(FriendshipStatus::Accepted)
-        });
         if !friends {
             return Err("You can only challenge friends".to_owned());
         }
@@ -133,6 +140,10 @@ impl PlayHub {
         let Some((from, control, rated)) = found else {
             return self.refuse(player.id, "That challenge is no longer open");
         };
+        if !self.are_friends(from.id, player.id).await.unwrap_or(false) {
+            self.drop_challenges_between(from.id, player.id);
+            return self.refuse(player.id, "That challenge is no longer open");
+        }
         if !self.games_of(player.id).is_empty() {
             return self.refuse(player.id, "Finish your game first");
         }
