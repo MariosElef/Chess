@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use chess_domain::{
     Move, Position,
-    engine::{Command, SearchInfo, UciMessage},
+    engine::{Command, SearchInfo, UciMessage, UciScore},
 };
 use gpui_kit::*;
 
@@ -22,10 +22,12 @@ const BOT_HASH_MB: usize = 16;
 /// What the bot says: the move it chose for a position, or that its engine stopped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BotEvent {
-    /// `fen` is the position it was asked about, so a stale answer can be told apart.
+    /// `fen` is the position it was asked about, so a stale answer can be told apart; `score` is
+    /// what its engine thought of that position, from the bot's side.
     Moved {
         fen: String,
         mv: Move,
+        score: Option<UciScore>,
     },
     Failed,
 }
@@ -142,11 +144,12 @@ impl BotPlayer {
         let Some(mv) = pick_bot_move(&self.style, (&best, &legal), rolls) else {
             return;
         };
+        let score = lines.first().map(|line| line.score);
         let wait = asked.think.saturating_sub(asked.since.elapsed());
         let fen = asked.fen;
         self._reply = Some(cx.spawn(async move |bot, cx| {
             cx.background_executor().timer(wait).await;
-            let _ = bot.update(cx, |_, cx| cx.emit(BotEvent::Moved { fen, mv }));
+            let _ = bot.update(cx, |_, cx| cx.emit(BotEvent::Moved { fen, mv, score }));
         }));
     }
 

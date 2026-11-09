@@ -1,6 +1,9 @@
-use chess_domain::{Move, PieceKind, Position};
+use chess_domain::{Move, Position};
 
-use crate::enums::sound::Sound;
+use crate::{
+    enums::sound::Sound,
+    services::board::{is_capture, is_castle},
+};
 
 /// The sound `mv` makes: a check above all, then a promotion, a castle, a capture, else `plain`.
 pub fn move_sound(before: &Position, after: &Position, mv: Move, plain: Sound) -> Sound {
@@ -15,21 +18,6 @@ pub fn move_sound(before: &Position, after: &Position, mv: Move, plain: Sound) -
     } else {
         plain
     }
-}
-
-/// The king moving two files is a castle.
-fn is_castle(before: &Position, mv: Move) -> bool {
-    moved_kind(before, mv) == Some(PieceKind::King) && mv.from.file().abs_diff(mv.to.file()) == 2
-}
-
-/// Something stood on the target, or a pawn went sideways onto an empty square: en passant.
-fn is_capture(before: &Position, mv: Move) -> bool {
-    before.board().piece_at(mv.to).is_some()
-        || (moved_kind(before, mv) == Some(PieceKind::Pawn) && mv.from.file() != mv.to.file())
-}
-
-fn moved_kind(before: &Position, mv: Move) -> Option<PieceKind> {
-    before.board().piece_at(mv.from).map(|piece| piece.kind)
 }
 
 #[cfg(test)]

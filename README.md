@@ -131,7 +131,17 @@ plays on a Stockfish of its own in the app, so it works offline. From 1400 up, S
 strength limit plays it; below, it looks only a few moves ahead, chooses among its best few,
 and now and then plays any move, so a low bot plays like a beginner rather than a slowed-down
 master. It pauses between half a second and two seconds before moving, less when its clock is
-low. Bot games are unrated; a bot makes and takes no draw offers.
+low. Bot games are unrated; a bot takes no draw offers, and only Andreas makes them.
+
+Each named bot has a character of its own: it talks in a bubble at the top of the game's panel,
+reacting to captures, checks and now and then a quiet move, and some act on the game too.
+Vasilis is bored and thinks only of food: he moves almost at once and shrugs off what happens
+on the board. Danis is angry from his first words and resigns on his turn once his engine sees
+him two pawns down or being mated. Stefanos is a metalhead who screams at nearly every capture
+and check, and talks about goth girls in between. Andreas gambles on everything and checks his
+kouponoui between moves; once a pawn down he now and then offers a deal, a draw you can accept
+or decline. Sporos, the strongest, is sure nobody likes him and that he gave up his happiness
+for games, and sighs about it while he beats you.
 
 ## Game review
 

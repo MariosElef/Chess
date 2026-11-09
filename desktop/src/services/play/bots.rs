@@ -10,7 +10,10 @@ use std::time::Duration;
 
 use chess_domain::{Move, Side};
 
-use crate::{enums::play::ColourChoice, models::play::Bot};
+use crate::{
+    enums::play::{BotCharacter, ColourChoice},
+    models::play::Bot,
+};
 
 /// The named bots, weakest first.
 pub const BOTS: [Bot; 5] = [
@@ -18,26 +21,31 @@ pub const BOTS: [Bot; 5] = [
         name: "Vasilis",
         rating: 400,
         picture: Some("bots/vasilis.jpg"),
+        character: Some(BotCharacter::Vasilis),
     },
     Bot {
         name: "Danis",
         rating: 800,
         picture: Some("bots/danis.jpg"),
+        character: Some(BotCharacter::Danis),
     },
     Bot {
         name: "Stefanos",
         rating: 1200,
         picture: Some("bots/stefanos.jpg"),
+        character: Some(BotCharacter::Stefanos),
     },
     Bot {
         name: "Andreas",
         rating: 1600,
         picture: Some("bots/andreas.jpg"),
+        character: Some(BotCharacter::Andreas),
     },
     Bot {
         name: "Sporos",
         rating: 2000,
         picture: Some("bots/sporos.jpg"),
+        character: Some(BotCharacter::Sporos),
     },
 ];
 
@@ -77,6 +85,7 @@ pub fn custom_bot(rating: u32) -> Bot {
         name: "Custom",
         rating,
         picture: None,
+        character: None,
     }
 }
 
@@ -133,7 +142,7 @@ pub fn pick_bot_move(
 }
 
 /// A roll from 0 to 1 as an index into `len` things.
-fn index_for(roll: f64, len: usize) -> usize {
+pub(super) fn index_for(roll: f64, len: usize) -> usize {
     let len_f = u32::try_from(len).map_or(f64::from(u32::MAX), f64::from);
     // The roll is below 1, so this is below `len`.
     #[expect(

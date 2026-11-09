@@ -110,3 +110,33 @@ impl ColourChoice {
         }
     }
 }
+
+/// Who a named bot is: each has its own way of talking and acting at the board.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BotCharacter {
+    /// Bored, hungry, and moves almost without thinking.
+    Vasilis,
+    /// Angry all the time, and quits any game he is losing.
+    Danis,
+    /// A metalhead who screams at captures and talks about goth girls.
+    Stefanos,
+    /// Gambles on everything, and offers deals once he is behind.
+    Andreas,
+    /// The strongest, and sure nobody likes him.
+    Sporos,
+}
+
+/// What just happened on the board, as a bot sees it, for it to react to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BotMoment {
+    /// The player took one of the bot's pieces.
+    LostPiece,
+    /// The bot took one of the player's.
+    TookPiece,
+    /// The player put the bot in check.
+    InCheck,
+    /// The bot put the player in check.
+    GaveCheck,
+    /// Any other move.
+    Quiet,
+}

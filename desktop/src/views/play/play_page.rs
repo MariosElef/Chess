@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use chess_domain::{Clock, Move, Side, TimeControl};
+use chess_domain::{Clock, Move, Position, Side, TimeControl, engine::UciScore};
 use gpui_kit::{
     assets::IconName,
     component::{
@@ -21,8 +21,8 @@ use crate::{
         history::{MoveList, NavigationBar},
         panel::{ChoiceTile, PanelHeader, SidePanel, action_bar},
         play::{
-            BotOptions, BotPicker, CapturedRow, ClockFace, GameOverActions, GameOverCard,
-            GameSetup, PlayPanel, WaitingBar, with_card,
+            BotOptions, BotPicker, BotSpeech, CapturedRow, ClockFace, GameOverActions,
+            GameOverCard, GameSetup, PlayPanel, WaitingBar, with_card,
         },
         shell::PLAY_PICTURE,
         social::avatar,
@@ -38,8 +38,9 @@ use crate::{
     services::{
         history::GameHistory,
         play::{
-            BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, outcome_reason,
-            player_side, result_title, status_text, think_time,
+            BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, deal_answer,
+            deal_offer, greeting, moment_of, move_line, outcome_reason, player_side, quit_line,
+            rage_quits, result_title, status_text, think_time, think_time_for,
         },
     },
     views::{
@@ -70,6 +71,8 @@ struct BotGame {
     /// The bot's side, not the player's.
     side: Side,
     player: Entity<BotPlayer>,
+    /// What the bot said last, in its bubble at the top of the panel.
+    says: Option<&'static str>,
     _moves: Subscription,
 }
 
@@ -296,6 +299,7 @@ impl PlayPage {
             bot,
             side,
             player,
+            says: greeting(bot.character, rand::random::<f64>()),
             _moves,
         });
         true
@@ -309,7 +313,8 @@ impl PlayPage {
         if self.history.game().is_over() || self.side_to_move() != game.side {
             return;
         }
-        let think = think_time(self.time_left(game.side), rand::random::<f64>());
+        let natural = think_time(self.time_left(game.side), rand::random::<f64>());
+        let think = think_time_for(game.bot.character, natural);
         let position = *self.history.live();
         game.player
             .update(cx, |player, cx| player.ask(position, think, cx));
@@ -321,12 +326,18 @@ impl PlayPage {
             return;
         };
         match event {
-            BotEvent::Moved { fen, mv } => {
+            BotEvent::Moved { fen, mv, score } => {
                 let still_due = !self.history.game().is_over()
                     && self.side_to_move() == game.side
                     && self.history.live().to_string() == *fen;
-                if still_due {
+                let quits = score.is_some_and(|score| rage_quits(game.bot.character, score));
+                if still_due && quits {
+                    self.bot_rage_quits(cx);
+                } else if still_due {
                     self.play(*mv, cx);
+                    if let Some(score) = score {
+                        self.bot_offers_deal(*score);
+                    }
                     cx.notify();
                 }
             }
@@ -334,6 +345,47 @@ impl PlayPage {
                 self.bot_problem = Some("The bot's engine stopped".to_owned());
                 cx.notify();
             }
+        }
+    }
+
+    /// The bot shouts its last words and resigns instead of moving.
+    fn bot_rage_quits(&mut self, cx: &mut Context<Self>) {
+        let Some(game) = self.versus.as_mut() else {
+            return;
+        };
+        game.says = quit_line(game.bot.character, rand::random::<f64>());
+        let side = game.side;
+        self.stop_clock();
+        self.history
+            .resign(side)
+            .expect("the bot only quits while the game is on");
+        self.end_interaction(cx);
+        play_sound(Sound::GameEnd, cx);
+    }
+
+    /// After its move, the bot may offer a deal: a draw, with its pitch in the bubble. Not once a
+    /// premove has already answered, as the player would never see it.
+    fn bot_offers_deal(&mut self, score: UciScore) {
+        let to_move = self.side_to_move();
+        let Some(game) = self.versus.as_mut().filter(|game| game.side != to_move) else {
+            return;
+        };
+        let rolls = (rand::random::<f64>(), rand::random::<f64>());
+        let Some(line) = deal_offer(game.bot.character, score, rolls) else {
+            return;
+        };
+        if self.history.offer_draw(game.side).is_ok() {
+            game.says = Some(line);
+        }
+    }
+
+    /// The bot's word on the player taking or turning down its deal.
+    fn bot_hears_answer(&mut self, taken: bool) {
+        let Some(game) = self.versus.as_mut() else {
+            return;
+        };
+        if let Some(line) = deal_answer(game.bot.character, taken, rand::random::<f64>()) {
+            game.says = Some(line);
         }
     }
 
@@ -361,6 +413,20 @@ impl PlayPage {
         let is_over = self.history.game().is_over();
         play_move_sound(&before, self.history.live(), mv, plain, is_over, cx);
         self.turn_started = (!is_over).then(Instant::now);
+        self.bot_reacts(&before, mv);
+    }
+
+    /// The bot, if it has something to say about the move just played, says it.
+    fn bot_reacts(&mut self, before: &Position, mv: Move) {
+        let after = *self.history.live();
+        let Some(game) = self.versus.as_mut() else {
+            return;
+        };
+        let moment = moment_of(before, &after, mv, game.side);
+        let rolls = (rand::random::<f64>(), rand::random::<f64>());
+        if let Some(line) = move_line(game.bot.character, moment, rolls) {
+            game.says = Some(line);
+        }
     }
 
     /// Plays each side's queued premoves while legal; one that is not drops that side's queue.
@@ -497,6 +563,7 @@ impl PlayPage {
         self.history
             .accept_draw(self.side_to_move())
             .expect("the button only shows for an offer made to this side");
+        self.bot_hears_answer(true);
         self.end_interaction(cx);
         play_sound(Sound::GameEnd, cx);
     }
@@ -505,6 +572,7 @@ impl PlayPage {
         self.history
             .decline_draw(self.side_to_move())
             .expect("the button only shows for an offer made to this side");
+        self.bot_hears_answer(false);
         cx.notify();
     }
 
@@ -606,11 +674,11 @@ impl PlayPage {
     fn actions(&self, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let game = self.history.game();
         let mut buttons = Vec::new();
-        if self.versus.is_some() {
-            // A bot makes no offers and takes none.
-            buttons.push(resign_button(cx));
-        } else if self.has_offer_to_answer() {
+        if self.has_offer_to_answer() {
+            // A bot that makes deals offers draws, but takes none.
             buttons.extend([accept_draw_button(cx), decline_draw_button(cx)]);
+        } else if self.versus.is_some() {
+            buttons.push(resign_button(cx));
         } else {
             let already_offered = game.draw_offer() == Some(self.side_to_move());
             buttons.extend([offer_draw_button(already_offered, cx), resign_button(cx)]);
@@ -636,6 +704,7 @@ impl PlayPage {
         };
         SidePanel::new()
             .header(PanelHeader::new(PLAY_PICTURE, title))
+            .children(self.bot_speech())
             .child(self.status(cx))
             .child(MoveList::new(
                 self.history.sans().to_vec(),
@@ -650,6 +719,13 @@ impl PlayPage {
                     this.child(action_bar(self.actions(cx)))
                 }
             })
+    }
+
+    /// The bot, large, with what it said last; the custom bot has no picture to show.
+    fn bot_speech(&self) -> Option<BotSpeech> {
+        let game = self.versus.as_ref()?;
+        let picture = game.bot.picture?;
+        Some(BotSpeech::new(picture, game.bot.rating).line(game.says))
     }
 
     /// The board between two player bars: the side drawn at the top above it, the other below.
@@ -900,7 +976,7 @@ fn rating_of(point: f32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use chess_domain::{Move, Side, Square, TimeControl};
+    use chess_domain::{Move, Side, Square, TimeControl, engine::UciScore};
     use std::time::Duration;
 
     use gpui_kit::{
@@ -923,7 +999,7 @@ mod tests {
         views::sound::{played_sounds, record_sounds},
         views::{
             live::{LiveConnection, SessionSource},
-            play::OnlineView,
+            play::{BotEvent, OnlineView},
         },
     };
 
@@ -1174,6 +1250,69 @@ mod tests {
                 page.shown_position().player == Some(Side::White),
                 "only White's pieces"
             );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn andreas_offers_a_deal_when_behind_and_the_player_can_take_it(cx: &mut TestAppContext) {
+        if locate_stockfish().is_none() {
+            return;
+        }
+        let (page, cx) = against_bot(cx, Some(3), ColourChoice::White);
+        page.update(cx, |page, cx| {
+            assert_eq!(
+                page.versus.as_ref().expect("a bot game").bot.name,
+                "Andreas"
+            );
+            page.play(mv("e2", "e4"), cx);
+            page.play(mv("e7", "e5"), cx);
+            // He deals now and then, not every move: a hundred chances are plenty.
+            for _ in 0..100 {
+                if page.has_offer_to_answer() {
+                    break;
+                }
+                page.bot_offers_deal(UciScore::Mate(-1));
+            }
+            assert!(page.has_offer_to_answer(), "a draw offer to answer");
+            let pitch = page.versus.as_ref().and_then(|game| game.says);
+            page.accept_draw(cx);
+            assert_eq!(
+                page.history.game().outcome(),
+                Some(chess_domain::Outcome::DrawAgreement)
+            );
+            let answer = page.versus.as_ref().and_then(|game| game.says);
+            assert!(answer.is_some() && answer != pitch, "he thanks the player");
+        });
+    }
+
+    #[gpui_kit::test]
+    fn danis_shouts_and_resigns_once_he_is_two_pawns_down(cx: &mut TestAppContext) {
+        if locate_stockfish().is_none() {
+            return;
+        }
+        let (page, cx) = against_bot(cx, Some(1), ColourChoice::White);
+        page.update(cx, |page, cx| {
+            let versus = page.versus.as_ref().expect("a bot game");
+            assert_eq!(versus.bot.name, "Danis");
+            assert!(versus.says.is_some(), "he greets the player, angrily");
+            let greeting = versus.says;
+            page.play(mv("e2", "e4"), cx);
+            let fen = page.history.live().to_string();
+            let losing = BotEvent::Moved {
+                fen,
+                mv: mv("e7", "e5"),
+                score: Some(UciScore::Cp(-250)),
+            };
+            page.on_bot_event(&losing, cx);
+            assert_eq!(
+                page.history.game().outcome(),
+                Some(chess_domain::Outcome::Resignation {
+                    winner: Side::White
+                }),
+                "he quits instead of moving"
+            );
+            let versus = page.versus.as_ref().expect("still the bot game");
+            assert!(versus.says.is_some() && versus.says != greeting);
         });
     }
 

@@ -13,7 +13,10 @@ use gpui_kit::{
 };
 
 use super::play_pictures::DICE_PICTURE;
-use crate::{components::panel::StartButton, enums::play::ColourChoice, models::play::Bot};
+use crate::{
+    components::panel::StartButton, enums::play::ColourChoice, models::play::Bot,
+    services::play::custom_bot,
+};
 
 type OnPick = Rc<dyn Fn(Option<usize>, &mut Window, &mut App)>;
 type OnColour = Rc<dyn Fn(ColourChoice, &mut Window, &mut App)>;
@@ -59,11 +62,7 @@ impl RenderOnce for BotPicker {
             .enumerate()
             .map(|(index, bot)| self.card(Some(index), bot, cx))
             .collect();
-        let custom = Bot {
-            name: "Custom",
-            rating: self.custom_rating,
-            picture: None,
-        };
+        let custom = custom_bot(self.custom_rating);
         v_flex()
             .w_full()
             .gap_3()

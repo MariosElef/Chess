@@ -1,3 +1,4 @@
+mod bot_characters;
 mod bots;
 mod clock_warning;
 mod countdown;
@@ -9,6 +10,9 @@ mod time_controls;
 mod time_left;
 mod whole_seconds;
 
+pub use bot_characters::{
+    deal_answer, deal_offer, greeting, moment_of, move_line, quit_line, rage_quits, think_time_for,
+};
 pub use bots::{
     BOTS, BotStyle, CUSTOM_STRENGTH, bot_options, bot_style, custom_bot, pick_bot_move,
     player_side, think_time,
