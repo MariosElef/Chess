@@ -13,6 +13,13 @@ This is a community, non-commercial project: anyone is welcome to use it, learn 
 contribute by opening a pull request (see [Contributing](#contributing)), for any purpose except
 a commercial one. See [License](#license).
 
+## Download
+
+**[Get the latest version →](https://github.com/MariosElef/Chess/releases/latest)**: macOS (`.dmg`,
+Apple silicon), Windows (`.zip` with `Chess.exe`) and Linux (`.tar.gz`). Each comes with
+Stockfish and plays on the server at `chess.marioselef.com`. The app is not signed: on a Mac,
+right-click it and choose Open the first time; on Windows, choose More info → Run anyway.
+
 ## What it does
 
 - **Play**: online games against other players, with ratings, premoves and reconnecting; bots
@@ -43,7 +50,7 @@ a commercial one. See [License](#license).
 ## Running it
 
 ```sh
-docker compose up -d                       # Postgres on localhost:5433
+docker compose up -d postgres              # Postgres on localhost:5433
 DATABASE_URL=postgres://chess:change-me@localhost:5433/chess cargo run -p chess-backend
 cargo run --release -p chess-desktop       # in another terminal
 ```
@@ -68,6 +75,40 @@ else on the `PATH`.
 
 The app keeps its own settings (appearance, board, Stockfish, the signed-in session) in
 `~/Library/Application Support/Chess/`.
+
+## Hosting and installers
+
+**The server.** It runs on a VPS with Docker, beside other projects, and publishes no port: a
+Cloudflare Tunnel (`cloudflared`) connects out to Cloudflare, which serves it over HTTPS at
+`https://chess.marioselef.com`. In Cloudflare: Zero Trust → Networks → Tunnels → create a tunnel
+for chess, and give it one route, `chess.marioselef.com` → `http://backend:8080`. Then:
+
+```sh
+cp .env.example .env.prod      # fill in POSTGRES_PASSWORD and the tunnel's TUNNEL_TOKEN
+stackup deploy --path . --host <user@server> --dry-run   # see the steps
+stackup deploy --path . --host <user@server>
+```
+
+`stackup` builds the image for `linux/amd64`, streams it over SSH, copies `docker-compose.yml`
+and `.env.prod` (as `.env`) to `/srv/chess`, and starts it. `COMPOSE_PROFILES=tunnel` in that
+`.env` is what starts the tunnel there; on a development machine `docker compose up -d postgres`
+starts the database alone. To load the Lichess puzzles on the server, copy the
+file there and run `docker compose run --rm -v "$PWD":/import backend import-puzzles
+/import/lichess_db_puzzle.csv.zst` in `/srv/chess`.
+
+**The app.** An installed app talks to the server whose address `CHESS_SERVER_URL` held when it
+was built (the variable still overrides it when the app runs), and runs the Stockfish shipped
+beside it.
+
+- macOS: `CHESS_SERVER_URL=https://… scripts/package-macos.sh` makes `dist/Chess.app` and a
+  `.dmg` for this Mac's architecture. It is signed ad hoc only, so others open it with
+  right-click → Open the first time.
+- Windows, Linux and macOS together: `.github/workflows/release.yml` builds all three when a
+  `v*` tag is pushed, with the address from the repository variable `CHESS_SERVER_URL`, and
+  attaches them to a GitHub release. Windows shows a SmartScreen warning for an unsigned app.
+
+Before handing the app to anyone, swap out the files `CREDITS.md` lists under "To be replaced
+before the app is shared".
 
 ## Puzzles
 

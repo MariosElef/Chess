@@ -1,0 +1,46 @@
+# Postgres for development (`docker compose up -d postgres`); on the server, the chess server too,
+# and the Cloudflare tunnel that is its way in (`COMPOSE_PROFILES=tunnel` in the server's `.env`).
+# The server has no profile: `stackup deploy` builds and sends only what the file shows without
+# one.
+services:
+  postgres:
+    image: postgres:alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chess}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-chess}
+    # Reachable from this computer only: the server is what the internet talks to.
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5433}:5432"]
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # The chess server, built from the Dockerfile. It publishes no port: only cloudflared, on this
+  # project's Docker network, reaches it.
+  backend:
+    build: .
+    image: chess-backend
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      BIND_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-chess}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-chess}
+    restart: unless-stopped
+
+  # The public way in: an outbound tunnel to Cloudflare, so no inbound port opens. Its route,
+  # set in Cloudflare, sends the chess hostname to http://backend:8080.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on: [backend]
+    restart: unless-stopped
+
+volumes:
+  pgdata:

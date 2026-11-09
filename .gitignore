@@ -1,5 +1,6 @@
 /target
 .env
+.env.*
+!.env.example
 
-# Bot photos: kept out of the repository for now (the app embeds them, so a fresh clone needs them copied in)
-desktop/assets/bots/
+dist/

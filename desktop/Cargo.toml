@@ -16,7 +16,8 @@ rodio = { version = "0.23.0", default-features = false, features = ["playback", 
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "macros"] }
-tokio-tungstenite = "0.30.0"
+# Live games over `wss://` once the server is behind HTTPS, trusting the system's certificates.
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
 
 # The Dock's icon is set through AppKit, as the app runs unbundled.
 [target.'cfg(target_os = "macos")'.dependencies]

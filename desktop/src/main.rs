@@ -1,3 +1,6 @@
+// A release build on Windows opens as a window app, without a console window behind it.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod assets;
 mod clients;
 mod components;
