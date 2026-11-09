@@ -22,6 +22,9 @@ fn standard(sound: Sound) -> &'static [u8] {
         Sound::GameEnd => include_bytes!("../../../assets/sounds/standard/game-end.mp3"),
         Sound::Notify => include_bytes!("../../../assets/sounds/standard/notify.mp3"),
         Sound::LowTime => include_bytes!("../../../assets/sounds/standard/tenseconds.mp3"),
+        Sound::PuzzleCorrect => {
+            include_bytes!("../../../assets/sounds/standard/puzzle-correct.mp3")
+        }
     }
 }
 
@@ -39,5 +42,6 @@ fn lisp(sound: Sound) -> &'static [u8] {
         Sound::GameEnd => include_bytes!("../../../assets/sounds/lisp/game-end.mp3"),
         Sound::Notify => include_bytes!("../../../assets/sounds/lisp/notify.mp3"),
         Sound::LowTime => include_bytes!("../../../assets/sounds/lisp/tenseconds.mp3"),
+        Sound::PuzzleCorrect => include_bytes!("../../../assets/sounds/lisp/puzzle-correct.mp3"),
     }
 }

@@ -79,6 +79,7 @@ impl PuzzlesView {
         (live, session): (Entity<LiveConnection>, SessionSource),
         cx: &mut Context<Self>,
     ) -> Self {
+        let face = Rc::clone(&session);
         let battle = cx.new(|cx| BattleView::new(live, session, cx));
         let _battles = cx.subscribe(&battle, |view, _, BattleBegan, cx| {
             // A rush going on elsewhere on the page ends, so its score is the one it had, and a
@@ -114,6 +115,8 @@ impl PuzzlesView {
         let practice =
             cx.new(|cx| PracticeView::new(client.clone(), Rc::clone(&token), (slider, range), cx));
         let rush = cx.new(|cx| RushView::new(client.clone(), Rc::clone(&token), cx));
+        practice.update(cx, |practice, _| practice.face_from(Rc::clone(&face)));
+        rush.update(cx, |rush, _| rush.face_from(face));
         let _rush_saves = cx.subscribe(&rush, |view, _, RushSaved, cx| view.refresh_summary(cx));
         let board = cx.new(|cx| BoardView::new(|_| Some(ShownPosition::waiting()), cx));
         let (from_practice, from_rush) = (cx.weak_entity(), cx.weak_entity());

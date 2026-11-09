@@ -85,16 +85,22 @@ for chess, and give it one route, `chess.marioselef.com` → `http://backend:808
 
 ```sh
 cp .env.example .env.prod      # fill in POSTGRES_PASSWORD and the tunnel's TUNNEL_TOKEN
-stackup deploy --path . --host <user@server> --dry-run   # see the steps
-stackup deploy --path . --host <user@server>
+stackup deploy --path . --host <user@server> --dir /root/chess --dry-run   # see the steps
+stackup deploy --path . --host <user@server> --dir /root/chess
 ```
 
 `stackup` builds the image for `linux/amd64`, streams it over SSH, copies `docker-compose.yml`
-and `.env.prod` (as `.env`) to `/srv/chess`, and starts it. `COMPOSE_PROFILES=tunnel` in that
+and `.env.prod` (as `.env`) to `/root/chess`, and starts it. `COMPOSE_PROFILES=tunnel` in that
 `.env` is what starts the tunnel there; on a development machine `docker compose up -d postgres`
 starts the database alone. To load the Lichess puzzles on the server, copy the
 file there and run `docker compose run --rm -v "$PWD":/import backend import-puzzles
-/import/lichess_db_puzzle.csv.zst` in `/srv/chess`.
+/import/lichess_db_puzzle.csv.zst` in `/root/chess`.
+
+To fill an empty server with made-up players, `docker compose run --rm backend
+seed-fake-players 120` there creates 120 accounts nobody can sign in to, most with a drawn
+avatar from [DiceBear](https://www.dicebear.com)'s CC0 styles. They play real games against
+each other over the past weeks, so the leaderboards, profiles, stats and rating graphs fill up;
+their puzzle and Puzzle Battle ratings are set directly.
 
 **The app.** An installed app talks to the server whose address `CHESS_SERVER_URL` held when it
 was built (the variable still overrides it when the app runs), and runs the Stockfish shipped
@@ -131,11 +137,14 @@ Solve Puzzles is rated, as on chess.com: the server picks each puzzle near your 
 moves the rating up or down. Custom Practice gives puzzles in a range you set with the slider and
 moves no rating.
 
-A wrong move plays on the board with the miss icon on its square for a second, as on chess.com;
-in Practice it then goes back so you can try again. Puzzle Rush (3 minutes, 5 minutes or
-Survival) counts down 3, 2, 1 with a beep each, then starts easy and gets harder with each
-puzzle; three mistakes end it. Its panel shows your best score of the kind picked, ever and
-today.
+A right move gets a green tick on its piece, and a wrong one plays on the board with the miss
+icon on its square for a second, as on chess.com; in Practice it then goes back so you can try
+again. Solving a puzzle plays a chime, and in Practice the next one comes by itself a moment
+later. Under the board's panel, your picture shows over your puzzle rating (or how many you
+solved, in Custom Practice, or your score in a rush), with a tick or a cross and the rating of
+every puzzle so far. Puzzle Rush (3 minutes, 5 minutes or Survival) counts down 3, 2, 1 with a
+beep each, then starts easy and gets harder with each puzzle; three mistakes end it. Its panel
+shows your best score of the kind picked, ever and today.
 
 ## Online play
 

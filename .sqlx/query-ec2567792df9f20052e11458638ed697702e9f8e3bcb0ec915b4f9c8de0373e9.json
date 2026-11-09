@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Every move of game $1, numbered from 1, with both clocks after each.\nINSERT INTO play.game_moves (game_id, ply, uci, white_clock_ms, black_clock_ms, played_at)\nSELECT\n    $1,\n    moves.ply,\n    moves.uci,\n    moves.white_clock_ms,\n    moves.black_clock_ms,\n    moves.played_at\nFROM unnest($2::text[], $3::integer[], $4::integer[], $5::timestamptz[])\n    WITH ORDINALITY AS moves (uci, white_clock_ms, black_clock_ms, played_at, ply)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int4Array",
+        "Int4Array",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec2567792df9f20052e11458638ed697702e9f8e3bcb0ec915b4f9c8de0373e9"
+}

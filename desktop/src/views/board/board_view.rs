@@ -10,7 +10,9 @@ use crate::{
     },
     enums::{board::ClickMode, sound::Sound},
     models::board::{MoveMade, ShownPosition},
-    services::board::{BoardInteraction, PremoveQueue, click_mode, end_badges, move_slides},
+    services::board::{
+        BoardInteraction, PremoveQueue, cell_of, click_mode, end_badges, move_slides,
+    },
     views::sound::play_sound,
 };
 
@@ -371,8 +373,10 @@ impl BoardView {
         shown: &ShownPosition,
         view: WeakEntity<Self>,
     ) -> Option<PromotionPrompt> {
-        self.interaction.is_promoting().then(|| PromotionPrompt {
+        let square = self.interaction.promotion_square()?;
+        Some(PromotionPrompt {
             side: self.promoting_side(shown),
+            cell: cell_of(square, self.interaction.flipped()),
             on_pick: Rc::new(pick_promotion(view.clone())),
             on_cancel: Rc::new(cancel_promotion(view)),
         })

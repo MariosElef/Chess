@@ -14,7 +14,7 @@ mod state;
 pub mod telemetry;
 
 pub use clients::lichess::LichessClient;
-pub use commands::import_puzzles;
+pub use commands::{import_puzzles, seed_fake_players};
 pub use config::AppConfig;
 pub use repositories::database::Db;
 pub use routes::build_router;

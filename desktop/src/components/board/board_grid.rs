@@ -269,7 +269,7 @@ impl RenderOnce for BoardGrid {
             .child(self.arrow_layer(colors))
             .children(overlay)
             .when_some(self.promotion.clone(), |this, prompt| {
-                this.child(PromotionPicker::new(prompt, colors))
+                this.child(PromotionPicker::new(prompt))
             })
     }
 }

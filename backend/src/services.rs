@@ -5,4 +5,5 @@ pub mod leaderboard;
 pub mod play;
 pub mod puzzles;
 pub mod rating;
+pub mod seed;
 pub mod social;

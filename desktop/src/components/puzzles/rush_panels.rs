@@ -17,10 +17,10 @@ use crate::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// During a rush: the score, the clock and the strikes, and how the puzzle is going.
+/// During a rush: the clock and the strikes, and how the puzzle is going. The score shows large
+/// under the player's picture, beside it.
 #[derive(IntoElement)]
 pub struct RushScore {
-    score: u32,
     strikes: u32,
     time_left: Option<Duration>,
     status: String,
@@ -31,13 +31,11 @@ pub struct RushScore {
 
 impl RushScore {
     pub fn new(
-        score: u32,
         strikes: u32,
         time_left: Option<Duration>,
         (status, status_good): (String, bool),
     ) -> Self {
         Self {
-            score,
             strikes,
             time_left,
             status,
@@ -64,26 +62,17 @@ impl RenderOnce for RushScore {
             .time_left
             .map_or_else(|| "∞".to_owned(), minutes_seconds);
         panel()
-            .child(
-                h_flex()
-                    .gap_3()
-                    .child(StatCard::new(
-                        (IconName::Zap, theme.yellow),
-                        self.score.to_string(),
-                        "Score",
-                    ))
-                    .child(StatCard::new(
-                        (IconName::Timer, theme.green),
-                        time,
-                        "Time left",
-                    )),
-            )
+            .child(status_card(&self.status, self.status_good, None, cx))
+            .child(h_flex().gap_3().child(StatCard::new(
+                (IconName::Timer, theme.green),
+                time,
+                "Time left",
+            )))
             .child(
                 h_flex()
                     .justify_center()
                     .child(strike_marks(self.strikes, cx)),
             )
-            .child(status_card(&self.status, self.status_good, None, cx))
             .when_some(self.problem, |this, (problem, on_retry)| {
                 this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
                     .child(

@@ -20,11 +20,13 @@ pub enum Sound {
     Notify,
     /// A clock is down to the last 5% of its starting time.
     LowTime,
+    /// A puzzle was solved.
+    PuzzleCorrect,
 }
 
 impl Sound {
     /// Every sound, in the order Settings plays them to show a set off.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::GameStart,
         Self::MoveSelf,
         Self::MoveOpponent,
@@ -36,6 +38,7 @@ impl Sound {
         Self::Illegal,
         Self::Notify,
         Self::LowTime,
+        Self::PuzzleCorrect,
         Self::GameEnd,
     ];
 }

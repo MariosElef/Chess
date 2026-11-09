@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use chess_domain::{Move, Position};
+use chess_domain::{Move, Position, Square};
 use gpui_kit::*;
 
 use crate::{
@@ -133,6 +133,12 @@ impl PuzzleSolver {
         &self.board
     }
 
+    /// The icon on the board's last move: the tick, the miss, or none.
+    #[cfg(test)]
+    pub fn badge(&self) -> Option<(Square, MoveClass)> {
+        self.shown_position().badge
+    }
+
     /// The wrong move on the board with its miss, before it is taken back.
     #[cfg(test)]
     pub fn shows_miss(&self) -> bool {
@@ -171,6 +177,7 @@ impl PuzzleSolver {
             PuzzleVerdict::Solved => {
                 self.solved_at = Some(Instant::now());
                 play_move_sound(&before, run.position(), mv, Sound::MoveSelf, false, cx);
+                play_sound(Sound::PuzzleCorrect, cx);
                 self.board.update(cx, |board, _| board.drop_all_premoves());
             }
         }
@@ -246,13 +253,22 @@ impl PuzzleSolver {
                 premoves: true,
                 player: Some(run.solver()),
                 engine_arrow: None,
-                badge: None,
+                badge: correct_tick(run),
                 best_arrow: None,
                 outcome: None,
             },
             None => ShownPosition::waiting(),
         }
     }
+}
+
+/// A green tick on the piece the player just moved, as the miss marks a wrong one: on every
+/// right move until the answer comes, and on the move that solves the puzzle.
+fn correct_tick(run: &PuzzleRun) -> Option<(Square, MoveClass)> {
+    let players_move = run.position().side_to_move() != run.solver();
+    run.last_move()
+        .filter(|_| players_move)
+        .map(|mv| (mv.to, MoveClass::Good))
 }
 
 impl Render for PuzzleSolver {

@@ -14,21 +14,25 @@ use crate::{
     components::{
         board::{BoardColumn, board_page},
         panel::{OnBack, PanelTitle, SidePanel},
-        puzzles::{RUSH_PICTURE, RushResult, RushScore},
+        puzzles::{PlayerHeader, RUSH_PICTURE, RushResult, RushScore, SessionResults},
     },
     enums::{
         puzzles::{PuzzleVerdict, RushKind},
         sound::Sound,
     },
     models::{
-        puzzles::{AttemptReport, Puzzle, RushRecord},
+        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, RushRecord},
         server::ServerError,
     },
     services::{
         puzzles::RushRun,
         server::{error_message, is_problem},
     },
-    views::{sound::play_sound, ticker::start_ticker},
+    views::{
+        live::{SessionSource, my_face},
+        sound::play_sound,
+        ticker::start_ticker,
+    },
 };
 
 /// How often the rush clock is redrawn and checked.
@@ -75,6 +79,10 @@ pub struct RushView {
     _verdicts: Subscription,
     /// Back to the Rush panel, from the arrow at the top of the side column.
     on_back: OnBack,
+    /// Each puzzle of this rush, solved or missed, for the row of ticks and crosses.
+    outcomes: Vec<PuzzleOutcome>,
+    /// Who is signed in, for their picture over the score.
+    session: Option<SessionSource>,
 }
 
 impl EventEmitter<RushSaved> for RushView {}
@@ -105,7 +113,14 @@ impl RushView {
             _countdown: None,
             _verdicts,
             on_back: Rc::new(|_, _| {}),
+            outcomes: Vec::new(),
+            session: None,
         }
+    }
+
+    /// The signed-in player, whose picture shows over the score.
+    pub fn face_from(&mut self, session: SessionSource) {
+        self.session = Some(session);
     }
 
     #[cfg(test)]
@@ -125,6 +140,7 @@ impl RushView {
 
     pub fn start(&mut self, kind: RushKind, cx: &mut Context<Self>) {
         self.rush = Some(RushRun::new(kind));
+        self.outcomes.clear();
         self.started = None;
         self.over = false;
         self.upcoming = None;
@@ -264,17 +280,41 @@ impl RushView {
             PuzzleVerdict::Correct => {}
             PuzzleVerdict::Solved => {
                 rush.solved_one();
+                self.record_outcome(true, cx);
                 self.report(true, cx);
                 self.next_soon(cx);
             }
             PuzzleVerdict::Wrong => {
                 rush.missed_one();
+                self.record_outcome(false, cx);
                 self.report(false, cx);
                 // The wrong move shows with its miss for a moment before the next puzzle.
                 self.next_after(MISS_PAUSE, cx);
             }
         }
         cx.notify();
+    }
+
+    /// The puzzle just finished, for the row under the score.
+    fn record_outcome(&mut self, solved: bool, cx: &App) {
+        let rating = self.solver.read(cx).run().map(|run| run.puzzle().rating);
+        if let Some(rating) = rating {
+            self.outcomes.push(PuzzleOutcome { solved, rating });
+        }
+    }
+
+    /// The player's picture with the score under it, and every puzzle so far under that.
+    fn scoreboard(&self, score: u32, cx: &App) -> Div {
+        let face = self
+            .session
+            .as_ref()
+            .and_then(|session| my_face(session, cx));
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(PlayerHeader::new(face, score.to_string()))
+            .child(SessionResults::new(self.outcomes.clone()))
     }
 
     /// A rush puzzle is remembered, so it is not served again, but never rated.
@@ -391,28 +431,37 @@ impl RushView {
     fn panel(&self, cx: &mut Context<Self>) -> AnyElement {
         let view = cx.entity().downgrade();
         match self.rush {
-            Some(rush) if self.over => {
-                RushResult::new(rush.solved(), rush.kind(), self.record, move |_, cx| {
-                    let _ = view.update(cx, |view, cx| view.start(rush.kind(), cx));
-                })
-                .into_any_element()
-            }
+            Some(rush) if self.over => div()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .child(RushResult::new(
+                    rush.solved(),
+                    rush.kind(),
+                    self.record,
+                    move |_, cx| {
+                        let _ = view.update(cx, |view, cx| view.start(rush.kind(), cx));
+                    },
+                ))
+                .child(SessionResults::new(self.outcomes.clone()))
+                .into_any_element(),
             Some(rush) => {
                 let status = self
                     .solver
                     .read(cx)
                     .status()
                     .unwrap_or_else(|| ("Next puzzle…".to_owned(), false));
-                RushScore::new(
-                    rush.solved(),
-                    rush.strikes(),
-                    rush.time_left(self.elapsed()),
-                    status,
-                )
-                .problem(self.problem.clone(), move |_, cx| {
-                    let _ = view.update(cx, |view, cx| view.retry(cx));
-                })
-                .into_any_element()
+                let score = RushScore::new(rush.strikes(), rush.time_left(self.elapsed()), status)
+                    .problem(self.problem.clone(), move |_, cx| {
+                        let _ = view.update(cx, |view, cx| view.retry(cx));
+                    });
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .child(score)
+                    .child(self.scoreboard(rush.solved(), cx))
+                    .into_any_element()
             }
             None => div().into_any_element(),
         }

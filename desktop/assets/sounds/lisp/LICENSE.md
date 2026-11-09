@@ -17,6 +17,7 @@ game-start.mp3 | GenericNotify.mp3
 game-end.mp3 | Draw.mp3
 notify.mp3 | NewChallenge.mp3
 tenseconds.mp3 | LowTime.mp3
+puzzle-correct.mp3 | PuzzleStormGood.mp3
 
 License: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), as listed in
 lila's `COPYING.md`.

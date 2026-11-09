@@ -1080,6 +1080,40 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn the_promotion_choices_hang_from_the_promotion_square(cx: &mut TestAppContext) {
+        let (page, cx) = opened(cx);
+        page.update(cx, |page, cx| {
+            let position = "k7/4P3/8/8/8/8/8/4K3 w - - 0 1".parse().expect("valid");
+            page.history = crate::services::history::GameHistory::from_position(position);
+            cx.notify();
+        });
+        cx.run_until_parked();
+        drag(cx, "square-e7", "square-e8");
+        let square = cx.debug_bounds("square-e8").expect("e8");
+        let queen = cx
+            .debug_bounds("promote-0")
+            .expect("the queen, offered first");
+        let bishop = cx
+            .debug_bounds("promote-2")
+            .expect("the bishop, offered last");
+        let near = |a: gpui_kit::Pixels, b: gpui_kit::Pixels| (a - b).abs() < gpui_kit::px(2.);
+        assert!(near(queen.origin.x, square.origin.x), "on the e-file");
+        assert!(
+            near(queen.origin.y, square.origin.y),
+            "the queen on e8 itself"
+        );
+        assert!(near(queen.size.width, square.size.width), "one square wide");
+        assert!(
+            near(bishop.origin.y, square.origin.y + square.size.height * 3.),
+            "the column runs down from e8: queen, knight, rook, bishop"
+        );
+        click(cx, "promote-3");
+        page.update(cx, |page, _| {
+            assert_eq!(page.history.sans().last().map(String::as_str), Some("e8=N"));
+        });
+    }
+
+    #[gpui_kit::test]
     fn a_premove_that_mates_drops_every_other_premove(cx: &mut TestAppContext) {
         let (page, cx) = opened(cx);
         drag(cx, "square-f2", "square-f3");

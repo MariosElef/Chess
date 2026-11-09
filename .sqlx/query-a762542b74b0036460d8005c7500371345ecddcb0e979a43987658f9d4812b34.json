@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A made-up account, joined at $4; a taken username inserts nothing.\nINSERT INTO account.users (id, username, password_hash, created_at, updated_at)\nVALUES ($1, $2, $3, $4, $4)\nON CONFLICT DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a762542b74b0036460d8005c7500371345ecddcb0e979a43987658f9d4812b34"
+}

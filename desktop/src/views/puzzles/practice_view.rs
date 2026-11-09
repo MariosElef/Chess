@@ -1,6 +1,9 @@
 use std::{rc::Rc, time::Duration};
 
-use gpui_kit::{component::slider::SliderState, *};
+use gpui_kit::{
+    component::{slider::SliderState, v_flex},
+    *,
+};
 
 use super::{
     puzzle_request::{TokenSource, report_attempt, request_puzzle, request_rated_puzzle},
@@ -11,19 +14,24 @@ use crate::{
     components::{
         board::{BoardColumn, board_page},
         panel::{OnBack, SidePanel},
-        puzzles::{PuzzlePanel, RangePicker},
+        puzzles::{PlayerHeader, PuzzlePanel, RangePicker, SessionResults},
     },
     enums::puzzles::{PracticeKind, PuzzleState, PuzzleVerdict},
     models::{
-        puzzles::{AttemptReport, Puzzle, PuzzleRating, RatingRange},
+        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, PuzzleRating, RatingRange},
         server::ServerError,
     },
     services::{puzzles::rating_with_change, server::error_message},
-    views::ticker::start_ticker,
+    views::{
+        live::{SessionSource, my_face},
+        ticker::start_ticker,
+    },
 };
 
 /// How often the puzzle's timer is redrawn.
 const TICK: Duration = Duration::from_millis(500);
+/// How long a solved puzzle stays on the board before the next one comes by itself.
+pub const SOLVED_PAUSE: Duration = Duration::from_millis(1500);
 
 /// One puzzle at a time: rated ones at the player's own rating, whose first try moves it, or
 /// custom ones in a difficulty range the player picks, which move nothing.
@@ -48,6 +56,13 @@ pub struct PracticeView {
     _ticker: Option<Task<()>>,
     /// The next puzzle on its way; dropped when Practice is left.
     _request: Option<Task<()>>,
+    /// The pause after a solve, before the next puzzle is asked for; dropped when Practice is
+    /// left or Next is pressed first.
+    _advance: Option<Task<()>>,
+    /// Each puzzle of this session as its first try went, for the row of ticks and crosses.
+    outcomes: Vec<PuzzleOutcome>,
+    /// Who is signed in, for their picture over their rating.
+    session: Option<SessionSource>,
 }
 
 impl PracticeView {
@@ -78,7 +93,15 @@ impl PracticeView {
             on_back: Rc::new(|_, _| {}),
             _ticker: None,
             _request: None,
+            _advance: None,
+            outcomes: Vec::new(),
+            session: None,
         }
+    }
+
+    /// The signed-in player, whose picture shows over their rating.
+    pub fn face_from(&mut self, session: SessionSource) {
+        self.session = Some(session);
     }
 
     /// From the menu: rated puzzles, or custom ones at `range`, with the player's rating as the
@@ -91,6 +114,7 @@ impl PracticeView {
     ) {
         self.kind = kind;
         self.range = range;
+        self.outcomes.clear();
         self.player_rating = rating;
         self.next_puzzle(cx);
     }
@@ -121,6 +145,7 @@ impl PracticeView {
     }
 
     fn next_puzzle(&mut self, cx: &mut Context<Self>) {
+        self._advance = None;
         match self.kind {
             PracticeKind::Rated => {
                 let request = request_rated_puzzle(&self.client, &self.token, cx);
@@ -167,7 +192,11 @@ impl PracticeView {
     }
 
     /// The first try decides: a wrong move loses, solving cleanly wins; later moves change nothing.
+    /// A solved puzzle, first try or not, moves on to the next by itself after a moment.
     fn judged(&mut self, verdict: PuzzleVerdict, cx: &mut Context<Self>) {
+        if verdict == PuzzleVerdict::Solved {
+            self.advance_soon(cx);
+        }
         let first_try = match verdict {
             PuzzleVerdict::Wrong => Some(false),
             PuzzleVerdict::Solved => Some(true),
@@ -175,9 +204,46 @@ impl PracticeView {
         };
         if let (Some(solved), false) = (first_try, self.reported) {
             self.reported = true;
+            self.record_outcome(solved, cx);
             self.report(solved, cx);
         }
         cx.notify();
+    }
+
+    /// The puzzle's first try, for the row under the player's number.
+    fn record_outcome(&mut self, solved: bool, cx: &App) {
+        let rating = self.solver.read(cx).run().map(|run| run.puzzle().rating);
+        if let Some(rating) = rating {
+            self.outcomes.push(PuzzleOutcome { solved, rating });
+        }
+    }
+
+    /// The player's picture over their rating, rated, or over how many they solved, custom; then
+    /// this session's puzzles.
+    fn scoreboard(&self, cx: &App) -> Div {
+        let face = self
+            .session
+            .as_ref()
+            .and_then(|session| my_face(session, cx));
+        let number = match self.kind {
+            PracticeKind::Rated => self
+                .player_rating
+                .map_or_else(|| "–".to_owned(), rating_with_change),
+            PracticeKind::Custom => solved_count(&self.outcomes),
+        };
+        v_flex()
+            .gap_4()
+            .child(PlayerHeader::new(face, number))
+            .child(SessionResults::new(self.outcomes.clone()))
+    }
+
+    /// The next puzzle after the solved one has been seen for a moment.
+    fn advance_soon(&mut self, cx: &mut Context<Self>) {
+        self._advance = Some(cx.spawn(async move |view, cx| {
+            cx.background_executor().timer(SOLVED_PAUSE).await;
+            // Practice outlives its pause unless the window is closing.
+            let _ = view.update(cx, |view, cx| view.next_puzzle(cx));
+        }));
     }
 
     fn report(&mut self, solved: bool, cx: &mut Context<Self>) {
@@ -239,7 +305,12 @@ impl PracticeView {
             )
             .elapsed(elapsed)
             .problem(self.problem.clone())
-            .player_rating(self.player_rating.map(rating_with_change))
+            // Rated, the rating shows large over the session instead.
+            .player_rating(
+                self.player_rating
+                    .filter(|_| self.kind == PracticeKind::Custom)
+                    .map(rating_with_change),
+            )
             .difficulty(
                 (self.kind == PracticeKind::Custom)
                     .then(|| RangePicker::new(self.slider.clone(), self.range)),
@@ -258,6 +329,7 @@ impl PracticeView {
         self.solver.update(cx, |solver, cx| solver.clear(cx));
         self._ticker = None;
         self._request = None;
+        self._advance = None;
         self.loading = false;
     }
 
@@ -270,9 +342,20 @@ impl Render for PracticeView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         board_page(
             BoardColumn::new(self.solver.clone()),
-            SidePanel::new().child(self.panel(cx)),
+            SidePanel::new()
+                .child(self.panel(cx))
+                .child(self.scoreboard(cx)),
         )
     }
+}
+
+/// How many of the session's puzzles were solved on the first try.
+fn solved_count(outcomes: &[PuzzleOutcome]) -> String {
+    outcomes
+        .iter()
+        .filter(|outcome| outcome.solved)
+        .count()
+        .to_string()
 }
 
 #[cfg(test)]
@@ -283,10 +366,13 @@ mod tests {
         AppContext as _, Entity, TestAppContext, VisualTestContext, component::slider::SliderState,
     };
 
-    use super::PracticeView;
+    use super::{PracticeView, SOLVED_PAUSE};
     use crate::views::puzzles::puzzle_solver::MISS_PAUSE;
     use crate::{
-        enums::puzzles::{PracticeKind, PuzzleState},
+        enums::{
+            analysis::MoveClass,
+            puzzles::{PracticeKind, PuzzleState},
+        },
         models::puzzles::RatingRange,
         testing::{ANSWER_WAIT, click, drag, play_and_wait, puzzle_server, wait_until},
     };
@@ -333,6 +419,42 @@ mod tests {
         std::thread::sleep(ANSWER_WAIT);
         cx.run_until_parked();
         assert_eq!(view.update(cx, |view, _| view.player_rating()), None);
+    }
+
+    #[gpui_kit::test]
+    fn each_right_move_gets_a_green_tick_on_its_piece(cx: &mut TestAppContext) {
+        let (view, cx) = opened(cx, Some("abc"));
+        wait_until(cx, |cx| state(&view, cx).is_some());
+        let badge =
+            |cx: &mut VisualTestContext| view.update(cx, |view, cx| view.solver().read(cx).badge());
+        assert_eq!(badge(cx), None, "nothing before the player moves");
+        play_and_wait(cx, "square-h5", "square-e8");
+        let after_answer = badge(cx);
+        assert_eq!(
+            after_answer, None,
+            "the opponent's answer takes the tick's place"
+        );
+        play_and_wait(cx, "square-e1", "square-e8");
+        play_and_wait(cx, "square-e8", "square-f8");
+        assert_eq!(
+            badge(cx),
+            Some(("f8".parse().expect("a square"), MoveClass::Good)),
+            "the solving move keeps its tick"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_solved_puzzle_moves_on_to_the_next_by_itself(cx: &mut TestAppContext) {
+        let (view, cx) = opened(cx, Some("abc"));
+        wait_until(cx, |cx| state(&view, cx).is_some());
+        play_and_wait(cx, "square-h5", "square-e8");
+        play_and_wait(cx, "square-e1", "square-e8");
+        play_and_wait(cx, "square-e8", "square-f8");
+        assert_eq!(state(&view, cx), Some(PuzzleState::Solved));
+        cx.executor().advance_clock(SOLVED_PAUSE);
+        wait_until(cx, |cx| {
+            state(&view, cx).is_some_and(|state| state != PuzzleState::Solved)
+        });
     }
 
     #[gpui_kit::test]

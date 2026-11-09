@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A made-up game, already finished: its moves follow in insert_moves.sql.\nINSERT INTO play.games (\n    id, white_id, black_id, category_id, initial_s, increment_s, rated, status, outcome, winner,\n    ply_count, fen, white_clock_ms, black_clock_ms, last_move_at, started_at, finished_at,\n    updated_at\n)\nVALUES (\n    $1, $2, $3, $4, $5, $6, true, 'finished', $7, $8, $9, $10, $11, $12, $14, $13, $14, $14\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Int4",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68a1c409607766a230988c57c4369b2849dac3ea449406c74c900f5e06233ccb"
+}

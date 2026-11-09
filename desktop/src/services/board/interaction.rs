@@ -45,6 +45,11 @@ impl BoardInteraction {
         self.pending_promotion.is_some()
     }
 
+    /// The square a pawn is promoting on while its choice is open, where the choices show.
+    pub fn promotion_square(&self) -> Option<Square> {
+        self.pending_promotion.map(|(_, to)| to)
+    }
+
     /// Whether a move can be started: the page allows it and no promotion choice is open.
     pub fn accepts_moves(&self, page_allows: bool) -> bool {
         page_allows && !self.is_promoting()

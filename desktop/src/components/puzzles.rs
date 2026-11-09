@@ -1,21 +1,25 @@
 mod battle_bar;
 mod battle_menu;
 mod battle_panel;
+mod player_header;
 mod puzzle_menu;
 mod puzzle_panel;
 mod puzzle_pictures;
 mod range_picker;
 mod rush_menu;
 mod rush_panels;
+mod session_results;
 mod status_card;
 
 pub use battle_bar::BattleBar;
 pub use battle_menu::{BattleMenu, BattleMenuActions, BattleMenuState};
 pub use battle_panel::BattlePanel;
+pub use player_header::PlayerHeader;
 pub use puzzle_menu::PuzzleMenu;
 pub use puzzle_panel::PuzzlePanel;
 pub use puzzle_pictures::{BATTLE_PICTURE, puzzle_picture, puzzle_picture_paths};
 pub use range_picker::RangePicker;
 pub use rush_menu::{RUSH_PICTURE, RushMenu};
 pub use rush_panels::{RushResult, RushScore};
+pub use session_results::SessionResults;
 pub use status_card::status_card;
