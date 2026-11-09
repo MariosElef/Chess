@@ -24,6 +24,8 @@ pub struct GameOverActions {
     /// Ids are prefixed, so the card's and the panel's buttons are told apart.
     prefix: &'static str,
     on_review: OnClick,
+    /// Whether Game Review is offered: an aborted game has nothing to review.
+    reviewable: bool,
     choices: Vec<(&'static str, SharedString, IconName, OnClick)>,
     /// The smaller buttons' icons over their labels, as on the narrow card.
     stacked: bool,
@@ -34,9 +36,16 @@ impl GameOverActions {
         Self {
             prefix: "",
             on_review: Rc::new(on_review),
+            reviewable: true,
             choices: Vec::new(),
             stacked: false,
         }
+    }
+
+    /// Leaves out Game Review, for a game with nothing to review.
+    pub fn without_review(mut self) -> Self {
+        self.reviewable = false;
+        self
     }
 
     /// A smaller button under Game Review; its id stays as its label changes, as Rematch's does.
@@ -80,16 +89,18 @@ impl RenderOnce for GameOverActions {
         v_flex()
             .w_full()
             .gap_2()
-            .child(
-                StartButton::new(
-                    format!("{prefix}game-review"),
-                    "Game Review",
-                    move |window, cx| {
-                        on_review(window, cx);
-                    },
+            .when(self.reviewable, |this| {
+                this.child(
+                    StartButton::new(
+                        format!("{prefix}game-review"),
+                        "Game Review",
+                        move |window, cx| {
+                            on_review(window, cx);
+                        },
+                    )
+                    .picture(REVIEW_PICTURE),
                 )
-                .picture(REVIEW_PICTURE),
-            )
+            })
             .child(action_bar(choices))
     }
 }
@@ -106,6 +117,12 @@ pub struct GameOverCard {
 }
 
 impl GameOverCard {
+    /// Its title and reason, as drawn.
+    #[cfg(test)]
+    pub fn words(&self) -> (String, String) {
+        (self.title.clone(), self.reason.clone())
+    }
+
     pub fn new(
         (title, reason): (String, String),
         actions: GameOverActions,

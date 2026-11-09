@@ -476,6 +476,59 @@ async fn signing_out_other_devices_ends_their_sessions_and_sockets(db: Db) {
 }
 
 #[sqlx::test]
+async fn signing_out_closes_the_sockets_of_that_session(db: Db) {
+    let server = server(db);
+    let ((ann, _), (bob, _)) = friends_ann_and_bob(&server).await;
+    // Ann's session in a second app, as when two apps share one saved sign-in.
+    let _shared = connect(&server, &ann).await;
+    assert_eq!(friends(&server, &bob).await["friends"][0]["online"], true);
+    server
+        .delete("/api/sessions/current")
+        .authorization_bearer(&ann)
+        .await
+        .assert_status_ok();
+    tokio::time::timeout(PATIENCE, async {
+        while friends(&server, &bob).await["friends"][0]["online"] == true {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the session's socket closes, so Ann goes offline");
+}
+
+#[sqlx::test]
+async fn signing_out_leaves_the_sockets_of_other_sessions_open(db: Db) {
+    let server = server(db);
+    let ((ann, _), _) = friends_ann_and_bob(&server).await;
+    let laptop: Value = server
+        .post("/api/sessions")
+        .json(&json!({ "login": "ann", "password": "correct horse" }))
+        .await
+        .json();
+    let laptop = laptop["token"].as_str().expect("a token").to_owned();
+    let mut laptop_socket = connect(&server, &laptop).await;
+    server
+        .delete("/api/sessions/current")
+        .authorization_bearer(&ann)
+        .await
+        .assert_status_ok();
+    // The laptop's socket still answers.
+    laptop_socket
+        .send_json(&json!({ "type": "seek", "initial_s": 180, "increment_s": 2, "rated": false }))
+        .await;
+    tokio::time::timeout(PATIENCE, async {
+        loop {
+            let message: Value = laptop_socket.receive_json().await;
+            if message["type"] == "seeking" {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("the laptop is still connected");
+}
+
+#[sqlx::test]
 async fn two_players_can_block_each_other_and_each_lifts_only_their_own(db: Db) {
     let server = server(db);
     let ((ann_token, ann_id), (bob_token, bob_id)) = friends_ann_and_bob(&server).await;

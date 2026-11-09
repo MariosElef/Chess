@@ -1,11 +1,11 @@
 use gpui_kit::{
     assets::IconName,
-    component::{ActiveTheme as _, Icon, Sizable as _, button::Button, h_flex, v_flex},
+    component::{ActiveTheme as _, Icon, h_flex, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
 
-use crate::{models::account::Device, services::time::ago_text};
+use crate::{components::panel::StartButton, models::account::Device, services::time::ago_text};
 
 type OnClick = Box<dyn Fn(&mut Window, &mut App)>;
 
@@ -59,13 +59,15 @@ impl RenderOnce for DevicesPanel {
                     )
                     .when(others, |this| {
                         this.child(
-                            Button::new("sign-out-others")
-                                .outline()
-                                .small()
-                                .icon(IconName::LogOut)
-                                .label("Sign out everywhere else")
-                                .loading(self.busy)
-                                .on_click(move |_, window, cx| on_sign_out_others(window, cx)),
+                            StartButton::new(
+                                "sign-out-others",
+                                "Sign out everywhere else",
+                                move |window, cx| on_sign_out_others(window, cx),
+                            )
+                            .icon(IconName::LogOut)
+                            .danger()
+                            .small()
+                            .busy(self.busy),
                         )
                     }),
             )

@@ -4,7 +4,11 @@ use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream, connect_async,
-    tungstenite::{Message, client::IntoClientRequest as _, http::HeaderValue},
+    tungstenite::{
+        Error, Message,
+        client::IntoClientRequest as _,
+        http::{HeaderValue, StatusCode},
+    },
 };
 
 use crate::{
@@ -60,13 +64,21 @@ async fn keep_connected(
     events: &mpsc::Sender<LiveEvent>,
 ) {
     loop {
-        if let Some(socket) = connect(url, token).await {
-            if events.send(LiveEvent::Connected).await.is_err() {
+        match connect(url, token).await {
+            Connecting::Open(socket) => {
+                if events.send(LiveEvent::Connected).await.is_err() {
+                    return;
+                }
+                if let Ended::Released = converse(*socket, outbox, events).await {
+                    return;
+                }
+            }
+            Connecting::SignedOut => {
+                // Nothing to retry: the app hears it and stops using the session.
+                let _ = events.send(LiveEvent::SignedOut).await;
                 return;
             }
-            if let Ended::Released = converse(socket, outbox, events).await {
-                return;
-            }
+            Connecting::Failed => {}
         }
         if events.send(LiveEvent::Disconnected).await.is_err() || outbox.is_closed() {
             return;
@@ -75,12 +87,31 @@ async fn keep_connected(
     }
 }
 
-async fn connect(url: &str, token: &str) -> Option<Socket> {
-    let mut request = url.into_client_request().ok()?;
-    let bearer = HeaderValue::from_str(&format!("Bearer {token}")).ok()?;
+/// How an attempt to connect went.
+enum Connecting {
+    /// Connected: the socket to talk over.
+    Open(Box<Socket>),
+    /// The server turned the session away: it was signed out.
+    SignedOut,
+    /// No connection, for now: try again.
+    Failed,
+}
+
+async fn connect(url: &str, token: &str) -> Connecting {
+    let Ok(mut request) = url.into_client_request() else {
+        return Connecting::Failed;
+    };
+    let Ok(bearer) = HeaderValue::from_str(&format!("Bearer {token}")) else {
+        return Connecting::Failed;
+    };
     request.headers_mut().insert("authorization", bearer);
-    let (socket, _) = connect_async(request).await.ok()?;
-    Some(socket)
+    match connect_async(request).await {
+        Ok((socket, _)) => Connecting::Open(Box::new(socket)),
+        Err(Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED => {
+            Connecting::SignedOut
+        }
+        Err(_) => Connecting::Failed,
+    }
 }
 
 /// Passes the server's messages to the app and the app's to the server.
@@ -126,7 +157,8 @@ mod tests {
     use axum::{
         Router,
         extract::ws::{Message, WebSocketUpgrade},
-        http::HeaderMap,
+        http::{HeaderMap, StatusCode},
+        response::IntoResponse as _,
         routing::get,
     };
 
@@ -141,9 +173,12 @@ mod tests {
         let app = Router::new().route(
             "/api/ws",
             get(|headers: HeaderMap, upgrade: WebSocketUpgrade| async move {
-                let signed_in = headers
-                    .get("authorization")
-                    .is_some_and(|value| value == "Bearer abc");
+                let bearer = headers.get("authorization");
+                // A session signed out: turned away before the socket opens.
+                if bearer.is_some_and(|value| value == "Bearer revoked") {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+                let signed_in = bearer.is_some_and(|value| value == "Bearer abc");
                 upgrade.on_upgrade(move |mut socket| async move {
                     while let Some(Ok(Message::Text(_))) = socket.recv().await {
                         let answer = if signed_in {
@@ -156,6 +191,7 @@ mod tests {
                         }
                     }
                 })
+                .into_response()
             }),
         );
         http.serve(app).replacen("http", "ws", 1)
@@ -192,5 +228,14 @@ mod tests {
             "abc".to_owned(),
         );
         assert_eq!(http.block_on(events.recv()), Some(LiveEvent::Disconnected));
+    }
+
+    #[test]
+    fn a_session_the_server_turns_away_is_signed_out_and_not_retried() {
+        let http = HttpRuntime::new().expect("a runtime");
+        let url = format!("{}/api/ws", echo_server(&http));
+        let (_socket, mut events) = LiveSocket::open(&http, url, "revoked".to_owned());
+        assert_eq!(http.block_on(events.recv()), Some(LiveEvent::SignedOut));
+        assert_eq!(http.block_on(events.recv()), None, "it stops trying");
     }
 }

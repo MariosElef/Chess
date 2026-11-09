@@ -1040,3 +1040,17 @@ async fn a_refusal_answers_only_the_device_that_asked(db: Db) {
         assert_eq!(heard["type"], "challenges", "{heard}");
     }
 }
+
+#[sqlx::test]
+async fn an_aborted_game_can_be_asked_for_again(db: Db) {
+    let server = server(db);
+    let (a, b) = (account(&server, "ann").await, account(&server, "bob").await);
+    let (mut white, mut black, id, _) = paired(&server, (&a, &b), 180, false).await;
+    white
+        .send_json(&json!({ "type": "abort", "game_id": id }))
+        .await;
+    next(&mut black, "game").await;
+    ask_rematch(&mut white, &id).await;
+    let offer = received_rematch(&mut black).await;
+    assert_eq!(offer["rematch_of"], id.as_str());
+}

@@ -113,12 +113,7 @@ pub struct PlayPage {
     focus_handle: FocusHandle,
     /// The end-of-game card was put away, to look at the board.
     card_closed: bool,
-    /// The game whose rematch the online card answers, so the shell hears only when it changes.
-    answering: Option<String>,
 }
-
-/// Which game's rematch the Play page's card answers changed: the shell rethinks the toast.
-pub struct RematchCardChanged;
 
 impl PlayPage {
     pub fn new(online: Entity<OnlineView>, session: SessionSource, cx: &mut Context<Self>) -> Self {
@@ -127,7 +122,6 @@ impl PlayPage {
             if online.read(cx).in_game() && page.stage == Stage::Playing {
                 page.new_game(cx);
             }
-            page.follow_answering(cx);
             cx.notify();
         });
         let _online_analyze = cx.subscribe(&online, |_, _, event: &AnalyzeGame, cx| {
@@ -181,7 +175,6 @@ impl PlayPage {
             versus: None,
             focus_handle: cx.focus_handle(),
             card_closed: false,
-            answering: None,
         }
     }
 
@@ -203,35 +196,11 @@ impl PlayPage {
         self.online.update(cx, |online, cx| online.connect(cx));
     }
 
-    /// Whether the online game's card is on screen with a rematch of `game_id` to answer.
-    /// The game whose rematch the card on show answers, if any.
-    pub fn answering(&self) -> Option<&str> {
-        self.answering.as_deref()
-    }
-
-    /// The game whose rematch the card on show answers: an online game's, while Play shows it.
-    fn answering_game(&self, cx: &App) -> Option<String> {
-        let online = self.online.read(cx);
-        self.shows_online(cx)
-            .then(|| online.answering_game().map(str::to_owned))
-            .flatten()
-    }
-
-    /// Tells the shell when the card answering a rematch comes, goes, or is another game's.
-    fn follow_answering(&mut self, cx: &mut Context<Self>) {
-        let now = self.answering_game(cx);
-        if now != self.answering {
-            self.answering = now;
-            cx.emit(RematchCardChanged);
-        }
-    }
-
     fn choose_mode(&mut self, mode: PlayMode, cx: &mut Context<Self>) {
         self.mode = mode;
         if mode == PlayMode::Online {
             self.connect_online(cx);
         }
-        self.follow_answering(cx);
         cx.notify();
     }
 
@@ -290,7 +259,6 @@ impl PlayPage {
             .is_some()
             .then(|| start_ticker(CLOCK_TICK, cx, PlayPage::tick));
         self.stage = Stage::Playing;
-        self.follow_answering(cx);
         self.clock_warning = ClockWarning::default();
         self.end_interaction(cx);
         play_sound(Sound::GameStart, cx);
@@ -607,7 +575,6 @@ impl PlayPage {
         self._ticker = None;
         self.turn_started = None;
         self.stage = Stage::Setup;
-        self.follow_answering(cx);
         self.end_interaction(cx);
         // The waiting board faces White, whichever side the last game had the player on.
         self.board
@@ -807,8 +774,6 @@ impl PlayPage {
 }
 
 impl EventEmitter<AnalyzeGame> for PlayPage {}
-
-impl EventEmitter<RematchCardChanged> for PlayPage {}
 
 impl HistoryNavigation for PlayPage {
     fn history_mut(&mut self) -> Option<&mut GameHistory> {
@@ -1343,11 +1308,5 @@ mod tests {
         );
         drag(cx, "square-e2", "square-e4");
         assert_eq!(sans(&page, cx), ["e4", "Nf6"]);
-    }
-
-    #[gpui_kit::test]
-    fn a_bot_game_answers_no_rematch(cx: &mut TestAppContext) {
-        let (page, cx) = started(cx, false);
-        assert_eq!(page.read_with(cx, |page, cx| page.answering_game(cx)), None);
     }
 }

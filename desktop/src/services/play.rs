@@ -18,8 +18,8 @@ pub use countdown::{COUNTDOWN_TICK, Countdown};
 pub use game_history::{game_line, opened_game, result_word};
 pub use game_over::{outcome_reason, result_title};
 pub use online_game::{
-    can_abort, challenge_terms, clock_left, friend_challenges, my_side, outcome_of, rating_line,
-    replay, result_line,
+    can_abort, challenge_terms, clock_left, friend_challenges, has_ended, my_side, outcome_of,
+    rating_line, replay, result_line,
 };
 pub use status::status_text;
 pub use time_controls::{DEFAULT as DEFAULT_TIME_CONTROL, presets_in};

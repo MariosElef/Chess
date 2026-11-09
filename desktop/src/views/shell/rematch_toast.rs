@@ -56,10 +56,6 @@ pub struct RematchToast {
     rung: HashSet<String>,
     /// The rematch accepted here, until a game starts or its refusal brings it back.
     accepting: Option<Offer>,
-    /// The challenges waiting for the player, as the server last listed them.
-    received: Vec<Challenge>,
-    /// The game whose card on Play answers its rematch, so the toast leaves that one be.
-    card_game: Option<String>,
     _ticker: Option<Task<()>>,
 }
 
@@ -73,8 +69,8 @@ impl RematchToast {
         let _live = cx.subscribe(&connection, |toast, _, event: &LiveEvent, cx| {
             match event {
                 LiveEvent::Message(message) => toast.on_message(message, cx),
-                // The lists come again on reconnecting, and the toast starts afresh from them.
-                LiveEvent::Disconnected => toast.forget(cx),
+                // Gone with the connection: the lists come again on reconnecting, if it does.
+                LiveEvent::Disconnected | LiveEvent::SignedOut => toast.forget(cx),
                 LiveEvent::Connected => {}
             }
         });
@@ -85,8 +81,6 @@ impl RematchToast {
             answered: HashSet::new(),
             rung: HashSet::new(),
             accepting: None,
-            received: Vec::new(),
-            card_game: None,
             _ticker: None,
         }
     }
@@ -122,7 +116,6 @@ impl RematchToast {
 
     /// The newest rematch waiting for the player, as the server now has it: a new one rings.
     fn follow(&mut self, received: &[Challenge], cx: &mut Context<Self>) {
-        self.received = received.to_vec();
         let still_there = |offer: &Offer| received.iter().any(|new| new.id == offer.challenge.id);
         if !self.accepting.as_ref().is_some_and(still_there) {
             self.accepting = None;
@@ -135,7 +128,7 @@ impl RematchToast {
             .iter()
             .filter(|challenge| challenge.is_rematch() && !self.answered.contains(&challenge.id))
             .collect();
-        // A new rematch rings once, even one the game's card answers instead.
+        // A new rematch rings once.
         let mut new_one = false;
         for challenge in &open {
             new_one |= self.rung.insert(challenge.id.clone());
@@ -143,10 +136,7 @@ impl RematchToast {
         if new_one {
             play_sound(Sound::Notify, cx);
         }
-        let waiting = open
-            .into_iter()
-            .rev()
-            .find(|challenge| challenge.rematch_of != self.card_game);
+        let waiting = open.into_iter().next_back();
         // A refusal stays to be read, though its rematch has gone, until its bar runs out.
         let refused = |offer: &&mut Offer| waiting.is_none() && offer.problem.is_some();
         if let Some(offer) = self.offer.as_mut().filter(refused) {
@@ -162,16 +152,6 @@ impl RematchToast {
         }
         let offer = waiting.map(Offer::new).filter(|offer| !offer.is_over());
         self.show(offer, cx);
-    }
-
-    /// The game whose card on Play answers its rematch: that one is left to the card.
-    pub fn set_card_game(&mut self, game_id: Option<String>, cx: &mut Context<Self>) {
-        if self.card_game == game_id {
-            return;
-        }
-        self.card_game = game_id;
-        let received = std::mem::take(&mut self.received);
-        self.follow(&received, cx);
     }
 
     /// Accepting the rematch here was refused: the toast comes back saying why.
@@ -570,33 +550,5 @@ mod tests {
         toast.update(cx, |toast, cx| toast.on_message(&lists(), cx));
         assert_eq!(shown(cx), None, "both put away");
         assert_eq!(rings(cx), before);
-    }
-
-    #[gpui_kit::test]
-    fn the_cards_own_rematch_is_left_to_it_and_another_shows(cx: &mut TestAppContext) {
-        let (toast, _asked, cx) = bob_asked(cx);
-        let mut cat = offer("r2");
-        cat.rematch_of = Some("g2".to_owned());
-        let lists = ServerMessage::Challenges {
-            sent: Vec::new(),
-            received: vec![cat, offer("r1")],
-        };
-        toast.update(cx, |toast, cx| toast.on_message(&lists, cx));
-        let shown = |cx: &mut gpui_kit::VisualTestContext| {
-            toast.read_with(cx, |toast, _| {
-                toast.offer.as_ref().map(|offer| offer.challenge.id.clone())
-            })
-        };
-        assert_eq!(shown(cx).as_deref(), Some("r1"), "the newest");
-        toast.update(cx, |toast, cx| {
-            toast.set_card_game(Some("g1".to_owned()), cx)
-        });
-        assert_eq!(
-            shown(cx).as_deref(),
-            Some("r2"),
-            "g1's card answers r1: the older one shows"
-        );
-        toast.update(cx, |toast, cx| toast.set_card_game(None, cx));
-        assert_eq!(shown(cx).as_deref(), Some("r1"), "the card put away");
     }
 }

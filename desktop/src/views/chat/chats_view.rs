@@ -14,7 +14,7 @@ use gpui_kit::{
 use super::{chat_view::ChatView, group_form::GroupForm, new_group_form::NewGroupForm};
 use crate::{
     clients::server::ServerClient,
-    components::social::PersonRow,
+    components::{panel::StartButton, social::PersonRow},
     enums::{
         chat::{ConversationKind, GroupChange},
         sound::Sound,
@@ -274,6 +274,8 @@ impl ChatsView {
                 window,
                 cx,
             )
+            // The card above it shows the chat's title.
+            .without_header()
         });
         chat.update(cx, |chat, cx| chat.set_reading(self.shown, cx));
         self.problem = None;
@@ -286,7 +288,7 @@ impl ChatsView {
     fn on_event(&mut self, event: &LiveEvent, cx: &mut Context<Self>) {
         match event {
             LiveEvent::Connected => self.refresh(cx),
-            LiveEvent::Disconnected => {}
+            LiveEvent::Disconnected | LiveEvent::SignedOut => {}
             LiveEvent::Message(message) => match message.as_ref() {
                 ServerMessage::ConversationsChanged => self.refresh(cx),
                 ServerMessage::ChatMessage { message } => {
@@ -518,16 +520,16 @@ impl ChatsView {
                 h_flex()
                     .justify_between()
                     .child(div().font_weight(FontWeight::BOLD).child("Chats"))
-                    .child(
-                        Button::new("new-group")
-                            .outline()
-                            .small()
-                            .icon(IconName::Plus)
-                            .label("New group")
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.open_new_group(window, cx);
-                            })),
-                    ),
+                    .child({
+                        let view = cx.entity().downgrade();
+                        StartButton::new("new-group", "New group", move |window, cx| {
+                            // The page outlives its buttons unless the window is closing.
+                            let _ = view.update(cx, |view, cx| view.open_new_group(window, cx));
+                        })
+                        .icon(IconName::Plus)
+                        .plain()
+                        .small()
+                    }),
             )
             .when_some(self.problem.clone(), |this, problem| {
                 this.child(div().text_xs().text_color(danger).child(problem))

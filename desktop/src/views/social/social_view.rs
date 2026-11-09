@@ -18,6 +18,7 @@ use super::challenge_form::ChallengeForm;
 use crate::{
     clients::server::ServerClient,
     components::{
+        panel::StartButton,
         shell::SOCIAL_PICTURE,
         social::{ActionTile, EmptyState, FriendRow, Leaderboard, PeopleList, PersonRow, SortMenu},
     },
@@ -264,7 +265,7 @@ impl SocialView {
     fn on_event(&mut self, event: &LiveEvent, cx: &mut Context<Self>) {
         match event {
             LiveEvent::Connected => self.refresh(cx),
-            LiveEvent::Disconnected => self.awaiting = false,
+            LiveEvent::Disconnected | LiveEvent::SignedOut => self.awaiting = false,
             LiveEvent::Message(message) => self.on_message(message, cx),
         }
         cx.notify();
@@ -424,19 +425,18 @@ impl SocialView {
             let row = PersonRow::new(challenge.from.username.clone())
                 .picture(picture_of(&challenge.from))
                 .detail(format!("Challenges you · {}", challenge_terms(challenge)))
-                .action(
-                    Button::new(SharedString::from(format!("accept-challenge-{accept}")))
-                        .success()
-                        .small()
-                        .icon(IconName::Check)
-                        .label("Accept")
-                        .on_click(cx.listener(move |view, _, _, cx| {
-                            let message = ClientMessage::AcceptChallenge {
-                                challenge_id: accept.clone(),
-                            };
-                            view.send_live(message, cx);
-                        })),
-                )
+                .action({
+                    let view = cx.entity().downgrade();
+                    let id = format!("accept-challenge-{accept}");
+                    StartButton::new(id, "Accept", move |_, cx| {
+                        let message = ClientMessage::AcceptChallenge {
+                            challenge_id: accept.clone(),
+                        };
+                        // The page outlives its buttons unless the window is closing.
+                        let _ = view.update(cx, |view, cx| view.send_live(message, cx));
+                    })
+                    .small()
+                })
                 .action(
                     icon_button(("decline-challenge", &decline), IconName::Close, "Decline")
                         .on_click(cx.listener(move |view, _, _, cx| {
@@ -712,14 +712,14 @@ impl SocialView {
     }
 
     /// Accepts a request they sent.
-    fn accept_button(&self, id: &str, person: &UserRef, cx: &mut Context<Self>) -> Button {
+    fn accept_button(&self, id: &str, person: &UserRef, cx: &mut Context<Self>) -> StartButton {
         let user_id = person.id.clone();
-        Button::new(SharedString::from(format!("{id}-{user_id}")))
-            .success()
-            .small()
-            .icon(IconName::UserCheck)
-            .label("Accept")
-            .on_click(cx.listener(move |view, _, _, cx| view.accept_friend(&user_id, cx)))
+        let view = cx.entity().downgrade();
+        StartButton::new(format!("{id}-{user_id}"), "Accept", move |_, cx| {
+            // The page outlives its buttons unless the window is closing.
+            let _ = view.update(cx, |view, cx| view.accept_friend(&user_id, cx));
+        })
+        .small()
     }
 
     /// Ends the request, whichever way it went.

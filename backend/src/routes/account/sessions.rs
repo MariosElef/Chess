@@ -53,7 +53,10 @@ async fn delete_current(
     State(state): State<AppState>,
     signed_in: SignedIn,
 ) -> Result<Json<MessageResponse>, AppError> {
-    state.sessions.sign_out(signed_in.session_id).await?;
+    state
+        .sessions
+        .sign_out(signed_in.user_id, signed_in.session_id)
+        .await?;
     let response = MessageResponse {
         message: "Signed out successfully".to_owned(),
     };

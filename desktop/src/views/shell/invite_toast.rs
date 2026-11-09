@@ -135,8 +135,8 @@ impl InviteToast {
         let _live = cx.subscribe(&connection, |toast, _, event: &LiveEvent, cx| {
             match event {
                 LiveEvent::Message(message) => toast.on_message(message, cx),
-                // The lists come again on reconnecting, and the toast starts afresh from them.
-                LiveEvent::Disconnected => toast.forget(cx),
+                // Gone with the connection: the lists come again on reconnecting, if it does.
+                LiveEvent::Disconnected | LiveEvent::SignedOut => toast.forget(cx),
                 LiveEvent::Connected => {}
             }
         });

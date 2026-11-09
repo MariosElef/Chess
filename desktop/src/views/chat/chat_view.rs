@@ -1,10 +1,8 @@
 use gpui_kit::{
+    assets::IconName,
     component::{
-        ActiveTheme as _,
-        button::{Button, ButtonVariants},
-        h_flex,
+        ActiveTheme as _, Icon, h_flex,
         input::{Input, InputEvent, InputState},
-        label::Label,
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -13,12 +11,16 @@ use gpui_kit::{
 
 use crate::{
     clients::server::ServerClient,
+    components::{
+        panel::{START_GREEN, StartButton},
+        social::avatar,
+    },
     models::{
         chat::ChatMessage,
         play::{LiveEvent, ServerMessage},
         server::ServerError,
     },
-    services::server::error_message,
+    services::{server::error_message, social::face_of},
     views::live::{LiveConnection, SessionSource},
 };
 
@@ -35,6 +37,12 @@ pub struct ChatView {
     _live: Subscription,
     /// On screen: what arrives is read. Off it, as while another page shows, it stays unread.
     reading: bool,
+    /// The history came back: until then, an empty chat is not yet known to be empty.
+    loaded: bool,
+    /// Whether it draws its own title; a page that titles it already turns this off.
+    headed: bool,
+    /// Kept at the newest message as messages come; scrolling up reads older ones.
+    scroll: ScrollHandle,
 }
 
 impl ChatView {
@@ -64,9 +72,18 @@ impl ChatView {
             _input_events,
             _live,
             reading: true,
+            loaded: false,
+            headed: true,
+            scroll: ScrollHandle::new(),
         };
         view.load(cx);
         view
+    }
+
+    /// Leaves the title to the page around it.
+    pub fn without_header(mut self) -> Self {
+        self.headed = false;
+        self
     }
 
     /// The conversation was renamed.
@@ -122,7 +139,11 @@ impl ChatView {
             // The view outlives the request unless its page is gone.
             let _ = view.update(cx, |view, cx| {
                 match result {
-                    Ok(messages) => view.messages = messages,
+                    Ok(messages) => {
+                        view.messages = messages;
+                        view.loaded = true;
+                        view.scroll.scroll_to_bottom();
+                    }
                     Err(error) => view.problem = Some(error_message(&error)),
                 }
                 if view.reading {
@@ -147,9 +168,11 @@ impl ChatView {
     }
 
     /// Adds a message once, whether it came back from sending or over the connection first.
+    /// Adds a message once, and brings it into view.
     fn add(&mut self, message: ChatMessage) {
         if !self.messages.iter().any(|kept| kept.id == message.id) {
             self.messages.push(message);
+            self.scroll.scroll_to_bottom();
         }
     }
 
@@ -193,31 +216,48 @@ impl ChatView {
         let mine = me == Some(message.sender.id.as_str());
         let theme = cx.theme();
         let bubble = v_flex()
-            .max_w(relative(0.8))
+            .max_w(relative(0.75))
             .px_3()
             .py_1p5()
             .rounded(theme.radius)
+            // Theirs stand out from the muted card the chat sits on.
             .when(!mine, |this| {
-                this.bg(theme.muted).child(
+                this.bg(theme.background).child(
                     div()
                         .text_xs()
                         .text_color(theme.muted_foreground)
                         .child(message.sender.username.clone()),
                 )
             })
-            .when(mine, |this| {
-                this.bg(theme.primary).text_color(theme.primary_foreground)
-            })
+            .when(mine, |this| this.bg(rgb(START_GREEN)).text_color(white()))
             .child(message.body.clone());
-        h_flex()
-            .w_full()
-            .when(mine, |this| this.justify_end())
-            .child(bubble)
+        let sender = &message.sender;
+        let face = face_of(&sender.id, &sender.username, sender.avatar.as_deref());
+        let picture = avatar(&face.name, face.picture.as_deref(), px(28.), cx);
+        // Each message beside its sender's picture: theirs on the left, the player's on the right.
+        let row = h_flex().w_full().items_end().gap_2();
+        if mine {
+            row.justify_end().child(bubble).child(picture)
+        } else {
+            row.child(picture).child(bubble)
+        }
     }
 }
 
-impl Render for ChatView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+impl ChatView {
+    /// The chat's own title, with its icon.
+    fn header(&self, cx: &App) -> Div {
+        h_flex()
+            .gap_2()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(cx.theme().muted_foreground)
+            .child(Icon::from(IconName::Mail).size_4())
+            .child(self.title.clone())
+    }
+
+    /// The messages, newest at the bottom, or a word that there are none yet.
+    fn messages(&self, cx: &App) -> Stateful<Div> {
         let me = (self.session)(cx).map(|session| session.user.id);
         // Newest first in a column drawn bottom up: the latest message sits at the bottom.
         let bubbles: Vec<Div> = self
@@ -226,32 +266,53 @@ impl Render for ChatView {
             .rev()
             .map(|message| self.bubble(message, me.as_deref(), cx))
             .collect();
+        let none_yet = self.loaded && bubbles.is_empty();
+        div()
+            .id("chat-messages")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
+            .when(none_yet, |this| {
+                this.flex()
+                    .items_center()
+                    .justify_center()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("No messages yet")
+            })
+            .child(v_flex().flex_col_reverse().gap_1p5().children(bubbles))
+    }
+
+    /// The field to write in and the Send button.
+    fn compose_row(&self, cx: &mut Context<Self>) -> Div {
+        let view = cx.entity().downgrade();
+        h_flex()
+            .gap_2()
+            // A click here is the field's: the page under it must not take the focus back.
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(div().flex_1().child(Input::new(&self.input)))
+            .child(
+                StartButton::new("send-message", "Send", move |window, cx| {
+                    // The chat outlives its button unless its page is gone.
+                    let _ = view.update(cx, |view, cx| view.send(window, cx));
+                })
+                .small(),
+            )
+    }
+}
+
+impl Render for ChatView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .gap_2()
-            .child(Label::new(self.title.clone()))
-            .child(
-                div()
-                    .id("chat-messages")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .child(v_flex().flex_col_reverse().gap_1p5().children(bubbles)),
-            )
+            .when(self.headed, |this| this.child(self.header(cx)))
+            .child(self.messages(cx))
             .when_some(self.problem.clone(), |this, problem| {
                 this.child(div().text_xs().text_color(cx.theme().danger).child(problem))
             })
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(div().flex_1().child(Input::new(&self.input)))
-                    .child(
-                        Button::new("send-message")
-                            .primary()
-                            .label("Send")
-                            .on_click(cx.listener(|view, _, window, cx| view.send(window, cx))),
-                    ),
-            )
+            .child(self.compose_row(cx))
     }
 }
 

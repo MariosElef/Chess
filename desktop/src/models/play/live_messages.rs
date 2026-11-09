@@ -154,5 +154,7 @@ pub enum LiveEvent {
     Connected,
     /// The connection dropped; it is tried again on its own.
     Disconnected,
+    /// The server no longer takes the session, as when another app signed it out: no retrying.
+    SignedOut,
     Message(Box<ServerMessage>),
 }

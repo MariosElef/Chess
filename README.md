@@ -91,36 +91,34 @@ today.
 
 ## Online play
 
-Play → Online finds an opponent who asked for the same time control. The game runs on the
-server over a WebSocket (`/api/ws`): it checks every move, keeps both clocks, ends the game
-and, for a rated game between two accounts, updates both ratings. Guests play unrated. If the
-app drops its connection it reconnects on its own, and the game comes back where it was.
-Before both sides have moved, either player can abort; a side that does not make its first
-move within 30 seconds has the game aborted for it. An aborted game is never rated. Every move
-costs at least a second, so a premove is never free: 5:02 becomes 5:01. Local games charge a
-premove the same second. Games left unfinished when the server stops
-are marked aborted when it starts again.
+Play → Online finds an opponent who asked for the same time control. The game runs on the server
+over a WebSocket (`/api/ws`): it checks every move, keeps both clocks, ends the game and, for a
+rated game between two accounts, updates both ratings. Guests play unrated. If the app drops its
+connection it reconnects on its own, and the game comes back where it was. Before both sides
+have moved, either player can abort; a side that does not make its first move within 30 seconds
+has the game aborted for it. An aborted game is never rated; its card still comes up, saying it
+was aborted, with New game and Rematch. Every move costs at least a second, so a premove is
+never free: 5:02 becomes 5:01. Local games charge a premove the same second. Games left
+unfinished when the server stops are marked aborted when it starts again.
 
 When a game ends, Rematch on its card asks your opponent to play again at the same time control,
 rated as before, with the colours swapped. Your opponent hears it and sees a toast in the corner
 of whatever page they are on, with Accept, Decline and a bar running down the minute it waits;
-the X only puts the toast away, leaving the rematch to their card or to run out. While their
-card for that game is open, its button says Accept instead (then Accepting… until the game
-starts), and the toast leaves that rematch to the card, though it still rings, showing any other
-waiting; an accept refused from the toast shows on it even over the card. If both of you press
-Rematch, the game starts at once. Your card says Asking… and then Cancel while it waits, and No
-rematch this time if it ends unplayed: declined, run out, your opponent gone, or replaced by a
-rematch of another game you asked for. If they cannot take one at all it says so at once:
-playing a game, or simply not taking a rematch when offline or blocked. Asking for a rematch of
-another recent game replaces your earlier one. Signed in on several devices, the device you
-asked from can cancel and the others show Asking…; asking from a second device too keeps the
-first rematch and says so. Leaving the card for a new game declines their rematch for all your
-devices, and withdraws yours if you asked from that device. A rematch can be asked for up to ten
-minutes after the game, between any two players but those who blocked each other (unfriending
-leaves a waiting rematch alone, and a friend's challenge replaces only your earlier friend's
-challenge), while both accounts are still signed in somewhere from before it ended: if every
-sign-in since is newer, as a shared guest account handed to someone new, it means starting a new
-game instead.
+the X only puts the toast away, leaving the rematch to their card or to run out. Their card for
+that game also says Accept (then Accepting… until the game starts), so either answers it; an
+accept refused from the toast shows on it. If both of you press Rematch, the game starts at
+once. Your card says Asking… and then Cancel while it waits, and No rematch this time if it ends
+unplayed: declined, run out, your opponent gone, or replaced by a rematch of another game you
+asked for. If they cannot take one at all it says so at once: playing a game, or simply not
+taking a rematch when offline or blocked. Asking for a rematch of another recent game replaces
+your earlier one. Signed in on several devices, the device you asked from can cancel and the
+others show Asking…; asking from a second device too keeps the first rematch and says so.
+Leaving the card for a new game declines their rematch for all your devices, and withdraws yours
+if you asked from that device. A rematch can be asked for up to ten minutes after the game, an
+aborted one too, between any two players but those who blocked each other (unfriending leaves a
+waiting rematch alone, and a friend's challenge replaces only your earlier friend's challenge),
+while both accounts are still signed in somewhere from before it ended: if every sign-in since
+is newer, as a shared guest account handed to someone new, it means starting a new game instead.
 
 A guest is free again once no app signed in as it is connected, so Continue as guest always
 gives the lowest-numbered guest nobody is using.
@@ -236,7 +234,10 @@ you took, and the rating change. Guests have no history, since their accounts ar
 Under History, Devices lists what is signed in to your account: this device first, then the
 others with when each signed in and was last used (the app names itself to the server as "Chess
 <version> (<system>)", shown as "Chess app on macOS"). Sign out everywhere else ends every other
-session at once and closes their live connections.
+session at once and closes their live connections. Signing out closes that session's live
+connection too, so an app still using the same session, as a second copy sharing the saved
+sign-in, goes back to the sign-in form saying you were signed out, instead of failing on every
+page.
 
 ## Chat
 
@@ -247,7 +248,9 @@ whoever made the group owns it and can rename it and remove members, anyone in i
 own friends and leave, and when the owner leaves, or closes their account, the longest-standing
 member owns it. A direct chat only takes messages while the two are friends. Messages arrive at
 once while you are online, and unread ones count on Social in the rail and on Messages in its
-menu. During an online game the two players have a chat of their own beside the moves.
+menu. During an online game the two players have a chat of their own beside the moves. Each
+message shows its sender's picture, and a chat keeps to its newest message as messages come;
+scroll up to read older ones.
 
 ## Known limits
 

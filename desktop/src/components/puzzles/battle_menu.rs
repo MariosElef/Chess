@@ -230,11 +230,14 @@ fn invitation_row(invitation: &BattleChallenge, actions: &BattleMenuActions, cx:
             h_flex()
                 .gap_2()
                 .child(
-                    Button::new(SharedString::from(format!("accept-battle-{accept_id}")))
-                        .primary()
-                        .small()
-                        .label("Accept")
-                        .on_click(move |_, window, cx| accept(accept_id.clone(), window, cx)),
+                    StartButton::new(
+                        format!("accept-battle-{accept_id}"),
+                        "Accept",
+                        move |window, cx| {
+                            accept(accept_id.clone(), window, cx);
+                        },
+                    )
+                    .small(),
                 )
                 .child(
                     Button::new(SharedString::from(format!("decline-battle-{decline_id}")))

@@ -22,7 +22,7 @@ const GUEST_SESSION_HOURS: i32 = 12;
 #[derive(Clone)]
 pub struct SessionService {
     db: Db,
-    /// Says which guests are in use: those connected or at a board.
+    /// Which guests are in use, and the live sockets a sign-out closes.
     play: PlayHub,
 }
 
@@ -127,8 +127,10 @@ impl SessionService {
         Ok(session::is_live(&self.db, session_id).await?)
     }
 
-    pub async fn sign_out(&self, session_id: Uuid) -> Result<(), AppError> {
+    /// Signs this session out, closing its live sockets: an app sharing it hears it ended.
+    pub async fn sign_out(&self, user_id: Uuid, session_id: Uuid) -> Result<(), AppError> {
         session::revoke(&self.db, session_id).await?;
+        self.play.close_session_sockets(user_id, session_id);
         Ok(())
     }
 }

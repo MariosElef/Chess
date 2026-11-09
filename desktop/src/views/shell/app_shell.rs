@@ -44,7 +44,7 @@ use crate::{
         analysis::AnalysisPage,
         chat::ChatsView,
         live::{LiveConnection, SessionSource},
-        play::{OnlineView, PlayPage, RematchCardChanged},
+        play::{OnlineView, PlayPage},
         puzzles::PuzzlesView,
         settings::apply_appearance,
         social::{OpenMessages, SocialView},
@@ -87,9 +87,9 @@ pub struct AppShell {
     social: Entity<SocialView>,
     /// The player's chats: the Messages page.
     messages: Entity<ChatsView>,
-    /// An opponent's rematch, over every page, unless Play shows that game's card to answer it.
+    /// An opponent's rematch, over every page, the game's own card included.
     rematch_toast: Entity<RematchToast>,
-    _rematch_changes: [Subscription; 2],
+    _rematch_changes: Subscription,
     /// A friend's challenge or battle invitation, over every page but the one listing it.
     invite_toast: Entity<InviteToast>,
     _invite_changes: Subscription,
@@ -506,8 +506,8 @@ struct Pages {
     social: Entity<SocialView>,
     messages: Entity<ChatsView>,
     rematch_toast: Entity<RematchToast>,
-    /// The toast and the Play page change whether the toast shows.
-    rematch_changes: [Subscription; 2],
+    /// The toast's changes redraw the shell, not each tick of its bar.
+    rematch_changes: Subscription,
     invite_toast: Entity<InviteToast>,
     /// The invitation shown changes whether the toast shows.
     invite_changes: Subscription,
@@ -557,18 +557,9 @@ impl Pages {
         let social_changes = cx.observe(&social, |_, _, cx| cx.notify());
         let puzzle_changes = cx.observe(&puzzles, |_, _, cx| cx.notify());
         let rematch_toast = cx.new(|cx| RematchToast::new(live.clone(), cx));
-        // Whether the toast shows follows the toast and the Play page's game card both.
-        let rematch_changes = [
-            // The toast's bar ticks redraw the toast alone; this hears only what it shows.
-            cx.subscribe(&rematch_toast, |_, _, _: &ToastChanged, cx| cx.notify()),
-            cx.subscribe(&play, |shell, play, _: &RematchCardChanged, cx| {
-                let game_id = play.read(cx).answering().map(str::to_owned);
-                shell
-                    .rematch_toast
-                    .update(cx, |toast, cx| toast.set_card_game(game_id, cx));
-                cx.notify();
-            }),
-        ];
+        // The toast's bar ticks redraw the toast alone; this hears only what it shows.
+        let rematch_changes =
+            cx.subscribe(&rematch_toast, |_, _, _: &ToastChanged, cx| cx.notify());
         let invite_toast = cx.new(|cx| InviteToast::new(live.clone(), cx));
         let invite_changes = cx.subscribe(&invite_toast, |_, _, _: &InviteChanged, cx| cx.notify());
         Self {
@@ -655,6 +646,12 @@ fn follow_live(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
+    if let LiveEvent::SignedOut = event {
+        shell
+            .account
+            .update(cx, |account, cx| account.session_ended(cx));
+        return;
+    }
     if let LiveEvent::Connected = event {
         // Back in touch with the server: pictures that failed while it was away come now, and
         // the account is fetched again, as it may have changed on another device meanwhile.

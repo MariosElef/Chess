@@ -40,6 +40,14 @@ impl SessionTokenFile {
         owner_only(path)
     }
 
+    /// Forgets the saved token only if it is `token`: another app may have saved its own since.
+    pub fn forget_if(&self, token: &str) -> io::Result<()> {
+        if self.load().as_deref() == Some(token) {
+            return self.forget();
+        }
+        Ok(())
+    }
+
     /// Signing out: the token is gone from disk, whether or not the server heard about it.
     pub fn forget(&self) -> io::Result<()> {
         match &self.path {
@@ -90,6 +98,17 @@ mod tests {
             assert_eq!(mode & 0o777, 0o600, "only its owner can read it");
         }
         file.forget().expect("forgotten");
+        assert_eq!(file.load(), None);
+    }
+
+    #[test]
+    fn only_the_token_named_is_forgotten() {
+        let path = env::temp_dir().join(format!("chess-session-if-{}", process::id()));
+        let file = SessionTokenFile::at(path);
+        file.save("newer").expect("saved");
+        file.forget_if("older").expect("left be");
+        assert_eq!(file.load().as_deref(), Some("newer"), "another app's stays");
+        file.forget_if("newer").expect("forgotten");
         assert_eq!(file.load(), None);
     }
 }

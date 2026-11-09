@@ -85,7 +85,7 @@ pub async fn abort_unfinished(db: impl PgExecutor<'_>) -> Result<u64, sqlx::Erro
     Ok(result.rows_affected())
 }
 
-/// The game a rematch would replay, if the player was in it and it ended in the last ten minutes.
+/// The game a rematch would replay: the player was in it, and it ended in the last ten minutes.
 pub async fn rematch_terms(
     db: impl PgExecutor<'_>,
     game_id: Uuid,

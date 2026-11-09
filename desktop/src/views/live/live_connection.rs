@@ -76,7 +76,7 @@ impl LiveConnection {
     fn pass_on(&mut self, event: LiveEvent, cx: &mut Context<Self>) {
         match &event {
             LiveEvent::Connected => self.connected = true,
-            LiveEvent::Disconnected => self.connected = false,
+            LiveEvent::Disconnected | LiveEvent::SignedOut => self.connected = false,
             LiveEvent::Message(_) => {}
         }
         cx.emit(event);

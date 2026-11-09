@@ -238,11 +238,12 @@ impl RenderOnce for SignedInCard {
                     .on_click(move |_, window, cx| on_delete(window, cx)),
             )
             .child(
-                Button::new("sign-out")
-                    .outline()
-                    .icon(IconName::LogOut)
-                    .label("Sign out")
-                    .on_click(move |_, window, cx| on_sign_out(window, cx)),
+                StartButton::new("sign-out", "Sign out", move |window, cx| {
+                    on_sign_out(window, cx);
+                })
+                .icon(IconName::LogOut)
+                .danger()
+                .small(),
             );
         h_flex()
             .w_full()

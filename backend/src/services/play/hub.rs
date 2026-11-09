@@ -170,9 +170,19 @@ impl PlayHub {
 
     /// Closes the player's sockets opened by any session but `keep`: their sessions have ended.
     pub fn close_sockets_except(&self, player: Uuid, keep: Uuid) {
+        self.close_sockets_where(player, |session| session != keep);
+    }
+
+    /// Closes the player's sockets opened by `session`, which has just been signed out.
+    pub fn close_session_sockets(&self, player: Uuid, session: Uuid) {
+        self.close_sockets_where(player, |opened_by| opened_by == session);
+    }
+
+    /// Closes the player's sockets whose session `ended` picks.
+    fn close_sockets_where(&self, player: Uuid, ended: impl Fn(Uuid) -> bool) {
         // Dropping an outbox ends its socket, which then says it is gone through `disconnect`.
         if let Some(outboxes) = lock(&self.inner.connections).get_mut(&player) {
-            outboxes.retain(|outbox| outbox.session == keep);
+            outboxes.retain(|outbox| !ended(outbox.session));
         }
     }
 

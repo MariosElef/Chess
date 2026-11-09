@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "-- The game $1, if $2 played in it and it finished in the last ten minutes: a rematch replays it.\nSELECT\n    games.white_id,\n    games.black_id,\n    games.initial_s,\n    games.increment_s,\n    games.rated\nFROM play.games\nWHERE\n    games.id = $1\n    AND (games.white_id = $2 OR games.black_id = $2)\n    AND games.status = 'finished'\n    AND games.finished_at > now() - interval '10 minutes'\n",
+  "query": "-- The game $1, if $2 played in it and it ended in the last ten minutes, finished or aborted: a\n-- rematch replays it.\nSELECT\n    games.white_id,\n    games.black_id,\n    games.initial_s,\n    games.increment_s,\n    games.rated\nFROM play.games\nWHERE\n    games.id = $1\n    AND (games.white_id = $2 OR games.black_id = $2)\n    AND games.status IN ('finished', 'aborted')\n    AND games.finished_at > now() - interval '10 minutes'\n",
   "describe": {
     "columns": [
       {
@@ -73,5 +73,5 @@
       false
     ]
   },
-  "hash": "79fe51df77b74f985c8c0b62c4fbaefc6d94f3ae39b3f0f79b18654dd6140699"
+  "hash": "aea8f328285ade6a266831efbd28bc1ba59b731382ce243bb8a89ad48a3e3c94"
 }

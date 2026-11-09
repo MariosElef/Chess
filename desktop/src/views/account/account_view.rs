@@ -408,10 +408,26 @@ impl AccountView {
             let _ = request.await;
         })
         .detach();
+        self.signed_out_here(&session.token, cx);
+    }
+
+    /// The server no longer takes this session, as when another app sharing it signed out.
+    pub fn session_ended(&mut self, cx: &mut Context<Self>) {
+        let Some(token) = self.token() else {
+            return;
+        };
+        self.signed_out_here(&token, cx);
+        self.problems.form = Some("You were signed out: sign in again".to_owned());
+    }
+
+    /// `token`'s session is over here: its saved copy goes, unless another app saved its own since.
+    fn signed_out_here(&mut self, token: &str, cx: &mut Context<Self>) {
+        // A failed delete of the saved token only means a sign-in screen at next launch.
+        let _ = self.tokens.forget_if(token);
         self.forget_session(cx);
     }
 
-    /// No one signed in any more: their data and saved token go, and the sign-in form comes back.
+    /// No one signed in any more: their data goes, and the sign-in form comes back.
     fn forget_session(&mut self, cx: &mut Context<Self>) {
         self.session = None;
         self.stats = None;
@@ -422,8 +438,6 @@ impl AccountView {
         self.closing = None;
         self.history.update(cx, |history, _| history.clear());
         self.devices.update(cx, |devices, _| devices.clear());
-        // A failed delete of the saved token only means a sign-in screen at next launch.
-        let _ = self.tokens.forget();
         self.form = AccountForm::SignIn;
         cx.emit(AccountChanged);
         cx.notify();
@@ -608,7 +622,7 @@ impl AccountView {
             return;
         }
         match result {
-            Ok(()) => self.forget_session(cx),
+            Ok(()) => self.signed_out_here(token, cx),
             Err(error) => {
                 if let Some(closing) = self.closing.as_mut() {
                     closing.busy = false;
@@ -993,5 +1007,34 @@ mod tests {
         view.update(cx, |view, cx| view.remove_picture(cx));
         wait_for(&view, cx, |view| picture(view).is_none());
         assert!(view.update(cx, |view, _| view.picture_problem.is_none()));
+    }
+
+    #[gpui_kit::test]
+    fn a_session_ended_elsewhere_signs_out_here_and_says_so(cx: &mut TestAppContext) {
+        let (view, tokens, cx) = opened(cx, "account-ended");
+        view.update_in(cx, |view, window, cx| {
+            view.login
+                .update(cx, |input, cx| input.set_value("mario", window, cx));
+            view.password
+                .update(cx, |input, cx| input.set_value("correct horse", window, cx));
+            view.submit(window, cx);
+        });
+        wait_for(&view, cx, AccountView::is_admitted);
+        // Another app has saved a session of its own since.
+        tokens.save("another").expect("saved");
+        view.update(cx, |view, cx| view.session_ended(cx));
+        view.read_with(cx, |view, _| {
+            assert!(view.session.is_none());
+            assert_eq!(
+                view.problems.form.as_deref(),
+                Some("You were signed out: sign in again")
+            );
+        });
+        assert_eq!(
+            tokens.load().as_deref(),
+            Some("another"),
+            "left for the other app"
+        );
+        tokens.forget().expect("cleaned up");
     }
 }

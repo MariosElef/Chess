@@ -36,8 +36,9 @@ use crate::{
     services::{
         history::GameHistory,
         play::{
-            ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, my_side, outcome_of,
-            outcome_reason, rating_line, replay, result_line, result_title, whole_seconds,
+            ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, has_ended, my_side,
+            outcome_of, outcome_reason, rating_line, replay, result_line, result_title,
+            whole_seconds,
         },
         social::face_of,
     },
@@ -242,8 +243,8 @@ impl OnlineView {
     fn on_event(&mut self, event: LiveEvent, cx: &mut Context<Self>) {
         match event {
             LiveEvent::Connected => self.problem = None,
-            LiveEvent::Disconnected => {
-                // Forgotten here until said again: the server keeps them while another app is on.
+            LiveEvent::Disconnected | LiveEvent::SignedOut => {
+                // Gone with the connection; the server keeps them while another app is on.
                 self.seeking = false;
                 self.awaiting = false;
                 self.forget_rematch_on_disconnect();
@@ -411,14 +412,6 @@ impl OnlineView {
         self.problem = None;
         self.send(message, cx);
         cx.notify();
-    }
-
-    /// The game whose rematch the game-over card answers; the side panel's tiles do not count.
-    pub fn answering_game(&self) -> Option<&str> {
-        // As the card itself is drawn: a finished game the player was in, not put away.
-        let live = self.live.as_ref().filter(|_| !self.card_closed)?;
-        let answers = live.me.is_some() && outcome_of(&live.snapshot).is_some();
-        answers.then_some(live.snapshot.id.as_str())
     }
 
     /// The server's latest word on a game: board, sounds and clock follow, and a premove goes.
@@ -643,31 +636,40 @@ impl OnlineView {
 
     /// The end-of-game card: who won and how, the rating change, and what to do next.
     fn game_over_card(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Option<GameOverCard> {
-        let outcome = outcome_of(&live.snapshot).filter(|_| !self.card_closed)?;
-        let title = result_title(outcome.winner(), live.me, None);
+        if self.card_closed || !has_ended(&live.snapshot) {
+            return None;
+        }
+        let words = match outcome_of(&live.snapshot) {
+            Some(outcome) => (
+                result_title(outcome.winner(), live.me, None),
+                outcome_reason(outcome).to_owned(),
+            ),
+            None => (
+                "Game aborted".to_owned(),
+                "called off before both sides moved".to_owned(),
+            ),
+        };
         let detail = live.me.and_then(|me| rating_line(&live.snapshot, me));
         let close = cx.entity().downgrade();
-        let card = GameOverCard::new(
-            (title, outcome_reason(outcome).to_owned()),
-            self.game_over_actions(live, cx),
-            move |_, cx| {
-                let _ = close.update(cx, |view, cx| {
-                    view.card_closed = true;
-                    cx.notify();
-                });
-            },
-        )
+        let card = GameOverCard::new(words, self.game_over_actions(live, cx), move |_, cx| {
+            let _ = close.update(cx, |view, cx| {
+                view.card_closed = true;
+                cx.notify();
+            });
+        })
         .detail(detail);
         Some(card)
     }
 
-    /// Game Review, then the lobby or a rematch.
+    /// Game Review, then the lobby or a rematch; an aborted game has no review.
     fn game_over_actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> GameOverActions {
         let page = cx.entity().downgrade();
         let (review, fresh, rematch) = (page.clone(), page.clone(), page);
+        let aborted = outcome_of(&live.snapshot).is_none();
         GameOverActions::new(move |_, cx| {
             let _ = review.update(cx, |view, cx| view.review(cx));
         })
+        .when(aborted, GameOverActions::without_review)
         .choice(("new-game", "New game"), IconName::Plus, move |_, cx| {
             let _ = fresh.update(cx, |view, cx| view.leave_game(cx));
         })
@@ -809,11 +811,15 @@ impl OnlineView {
                 live.history.viewing(),
                 select_move(page.clone()),
             ))
-            .children(
-                self.chat
-                    .clone()
-                    .map(|chat| div().h(px(240.)).flex_shrink_0().child(chat)),
-            )
+            .children(self.chat.clone().map(|chat| {
+                div()
+                    .h(px(240.))
+                    .flex_shrink_0()
+                    .p_3()
+                    .rounded(px(8.))
+                    .bg(cx.theme().muted)
+                    .child(chat)
+            }))
             .child(
                 NavigationBar::new(
                     live.history.can_go_back(),
@@ -823,8 +829,7 @@ impl OnlineView {
                 .on_hold(hold_step(page)),
             )
             .map(|this| {
-                // An aborted game has no result to review: it keeps the plain buttons.
-                if outcome_of(&live.snapshot).is_some() {
+                if has_ended(&live.snapshot) {
                     this.child(self.game_over_actions(live, cx))
                 } else {
                     this.child(action_bar(self.actions(live, cx)))
@@ -864,20 +869,9 @@ impl OnlineView {
             )
     }
 
-    /// The game buttons: Abort, Draw and Resign, an offer's answers, or what to do once over.
+    /// The game buttons while it is on: Abort, Draw and Resign, or an offer's answers.
     fn actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> Vec<ChoiceTile> {
         let snapshot = &live.snapshot;
-        if snapshot.status != LiveStatus::Ongoing {
-            return vec![
-                game_tile(
-                    ("online-new-game", "New game"),
-                    false,
-                    cx,
-                    OnlineView::leave_game,
-                )
-                .icon(IconName::Plus),
-            ];
-        }
         if can_abort(snapshot) {
             return vec![
                 game_tile(("online-abort", "Abort"), false, cx, OnlineView::abort)
@@ -1516,18 +1510,6 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn the_card_answers_a_rematch_only_while_it_is_shown(cx: &mut TestAppContext) {
-        let (view, _sent, cx) = after_a_game(cx);
-        assert!(view.read_with(cx, |view, _| view.answering_game() == Some("g1")));
-        assert!(!view.read_with(cx, |view, _| view.answering_game() == Some("g9")));
-        view.update(cx, |view, _| view.card_closed = true);
-        assert!(
-            !view.read_with(cx, |view, _| view.answering_game() == Some("g1")),
-            "put away, the toast answers instead"
-        );
-    }
-
-    #[gpui_kit::test]
     fn asking_after_another_device_did_leaves_that_ask_to_it(cx: &mut TestAppContext) {
         let (view, _sent, cx) = after_a_game(cx);
         view.update(cx, |view, cx| view.rematch_pressed(cx));
@@ -1547,5 +1529,24 @@ mod tests {
         view.update(cx, |view, cx| view.on_event(LiveEvent::Disconnected, cx));
         view.update(cx, |view, cx| view.leave_game(cx));
         assert!(!view.read_with(cx, |view, _| view.ask_unsure));
+    }
+
+    #[gpui_kit::test]
+    fn an_aborted_game_has_its_card_with_a_rematch_but_no_review(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        hear(&view, cx, &aborted());
+        let words = view.update(cx, |view, cx| {
+            let live = view.live.as_ref().expect("the game");
+            view.game_over_card(live, cx).map(|card| card.words())
+        });
+        assert_eq!(
+            words,
+            Some((
+                "Game aborted".to_owned(),
+                "called off before both sides moved".to_owned()
+            ))
+        );
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        wait_until(cx, |_| was_heard(&sent, "offer_rematch g1"));
     }
 }

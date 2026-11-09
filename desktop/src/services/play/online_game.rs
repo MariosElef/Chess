@@ -86,6 +86,11 @@ pub fn challenge_terms(challenge: &Challenge) -> String {
 }
 
 /// How a finished game ended, for the kings' badges; `None` while it goes on or once aborted.
+/// Whether the game is over, finished with a result or aborted.
+pub fn has_ended(snapshot: &GameSnapshot) -> bool {
+    snapshot.status != LiveStatus::Ongoing
+}
+
 pub fn outcome_of(snapshot: &GameSnapshot) -> Option<Outcome> {
     if snapshot.status != LiveStatus::Finished {
         return None;
