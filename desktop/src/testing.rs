@@ -89,7 +89,9 @@ pub fn puzzle_server() -> crate::clients::server::ServerClient {
                         "guest": false,
                         "rating": { "rating": 1500, "deviation": 300, "provisional": true },
                         "best_rush": { "three_minutes": 9, "five_minutes": null, "survival": null },
-                        "best_today": { "three_minutes": 4, "five_minutes": null, "survival": null },
+                        "best_today": {
+                            "three_minutes": 4, "five_minutes": null, "survival": null
+                        },
                         "battle": { "rating": null, "wins_this_month": 2 }
                     }))
                 }),
@@ -115,4 +117,84 @@ pub fn play_and_wait(cx: &mut VisualTestContext, from: &'static str, to: &'stati
     click(cx, to);
     cx.executor().advance_clock(ANSWER_WAIT);
     cx.run_until_parked();
+}
+
+/// What an app asked a fake server, in order: each socket message as sent, or a line of its own.
+pub type Heard = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+/// A fake server's socket: sends `first` if given, then writes down each message the app sends.
+pub async fn record_socket(
+    mut socket: axum::extract::ws::WebSocket,
+    first: Option<serde_json::Value>,
+    heard: Heard,
+) {
+    use axum::extract::ws::Message;
+    if let Some(first) = first
+        && socket
+            .send(Message::Text(first.to_string().into()))
+            .await
+            .is_err()
+    {
+        return;
+    }
+    while let Some(Ok(Message::Text(text))) = socket.recv().await {
+        heard.lock().expect("the list").push(text.to_string());
+    }
+}
+
+/// Whether the fake server heard `line`: a socket message as "type id", or a line as written.
+pub fn was_heard(heard: &Heard, line: &str) -> bool {
+    heard
+        .lock()
+        .expect("the list")
+        .iter()
+        .any(|said| summary(said) == line)
+}
+
+/// The first socket message of type `kind` the fake server heard, whole.
+pub fn heard_message(heard: &Heard, kind: &str) -> Option<serde_json::Value> {
+    heard
+        .lock()
+        .expect("the list")
+        .iter()
+        .filter_map(|said| serde_json::from_str::<serde_json::Value>(said).ok())
+        .find(|message| message["type"] == kind)
+}
+
+/// A socket message as "type id", by the challenge or game it is about; any other line as is.
+fn summary(said: &str) -> String {
+    let Ok(message) = serde_json::from_str::<serde_json::Value>(said) else {
+        return said.to_owned();
+    };
+    let kind = message["type"].as_str().unwrap_or_default();
+    let id = message["challenge_id"]
+        .as_str()
+        .or_else(|| message["game_id"].as_str())
+        .unwrap_or_default();
+    format!("{kind} {id}")
+}
+
+/// Ann's session, as an account or as a guest.
+pub fn ann(guest: bool) -> crate::models::account::Session {
+    use crate::models::account::{Session, User};
+    Session {
+        token: "abc".to_owned(),
+        user: User {
+            id: "ann".to_owned(),
+            email: "ann@example.com".to_owned(),
+            username: "ann".to_owned(),
+            guest,
+            avatar: None,
+        },
+    }
+}
+
+/// A challenge to Ann from `from`, waiting its full minute: a rematch of `rematch_of` if given.
+pub fn challenge_json(id: &str, from: &str, rematch_of: Option<&str>) -> serde_json::Value {
+    serde_json::json!({
+        "id": id, "from": { "id": from, "username": from },
+        "to": { "id": "ann", "username": "ann" },
+        "initial_s": 180, "increment_s": 2, "rated": true, "rematch_of": rematch_of,
+        "wait_s": 60, "seconds_left": 60
+    })
 }

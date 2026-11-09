@@ -25,6 +25,7 @@ use crate::{
             GameSetup, PlayPanel, WaitingBar, with_card,
         },
         shell::PLAY_PICTURE,
+        social::avatar,
     },
     enums::{
         play::{ColourChoice, PlayMode},
@@ -46,6 +47,7 @@ use crate::{
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
+        live::{SessionSource, my_face},
         play::{BotEvent, BotPlayer, OnlineView},
         sound::{play_move_sound, play_sound},
         ticker::{CLOCK_TICK, start_ticker},
@@ -78,8 +80,10 @@ pub struct PlayPage {
     mode: PlayMode,
     /// The online lobby and game, shown in place of the local ones.
     online: Entity<OnlineView>,
+    /// Who is signed in, for the player's own bar against a bot.
+    session: SessionSource,
     _online_changes: Subscription,
-    /// The online game's Analyze goes out as this page's.
+    /// The online game's Game Review goes out as this page's.
     _online_analyze: Subscription,
     /// The time control picked in the menu; `None` is no clock.
     setup_choice: Option<TimeControl>,
@@ -109,15 +113,21 @@ pub struct PlayPage {
     focus_handle: FocusHandle,
     /// The end-of-game card was put away, to look at the board.
     card_closed: bool,
+    /// The game whose rematch the online card answers, so the shell hears only when it changes.
+    answering: Option<String>,
 }
 
+/// Which game's rematch the Play page's card answers changed: the shell rethinks the toast.
+pub struct RematchCardChanged;
+
 impl PlayPage {
-    pub fn new(online: Entity<OnlineView>, cx: &mut Context<Self>) -> Self {
+    pub fn new(online: Entity<OnlineView>, session: SessionSource, cx: &mut Context<Self>) -> Self {
         // An online game taking the page sets a local one aside: its clock would run unseen.
         let _online_changes = cx.observe(&online, |page, online, cx| {
             if online.read(cx).in_game() && page.stage == Stage::Playing {
                 page.new_game(cx);
             }
+            page.follow_answering(cx);
             cx.notify();
         });
         let _online_analyze = cx.subscribe(&online, |_, _, event: &AnalyzeGame, cx| {
@@ -150,6 +160,7 @@ impl PlayPage {
             stage: Stage::Setup,
             mode: PlayMode::default(),
             online,
+            session,
             _online_changes,
             _online_analyze,
             setup_choice: DEFAULT_TIME_CONTROL,
@@ -170,6 +181,7 @@ impl PlayPage {
             versus: None,
             focus_handle: cx.focus_handle(),
             card_closed: false,
+            answering: None,
         }
     }
 
@@ -191,11 +203,35 @@ impl PlayPage {
         self.online.update(cx, |online, cx| online.connect(cx));
     }
 
+    /// Whether the online game's card is on screen with a rematch of `game_id` to answer.
+    /// The game whose rematch the card on show answers, if any.
+    pub fn answering(&self) -> Option<&str> {
+        self.answering.as_deref()
+    }
+
+    /// The game whose rematch the card on show answers: an online game's, while Play shows it.
+    fn answering_game(&self, cx: &App) -> Option<String> {
+        let online = self.online.read(cx);
+        self.shows_online(cx)
+            .then(|| online.answering_game().map(str::to_owned))
+            .flatten()
+    }
+
+    /// Tells the shell when the card answering a rematch comes, goes, or is another game's.
+    fn follow_answering(&mut self, cx: &mut Context<Self>) {
+        let now = self.answering_game(cx);
+        if now != self.answering {
+            self.answering = now;
+            cx.emit(RematchCardChanged);
+        }
+    }
+
     fn choose_mode(&mut self, mode: PlayMode, cx: &mut Context<Self>) {
         self.mode = mode;
         if mode == PlayMode::Online {
             self.connect_online(cx);
         }
+        self.follow_answering(cx);
         cx.notify();
     }
 
@@ -254,6 +290,7 @@ impl PlayPage {
             .is_some()
             .then(|| start_ticker(CLOCK_TICK, cx, PlayPage::tick));
         self.stage = Stage::Playing;
+        self.follow_answering(cx);
         self.clock_warning = ClockWarning::default();
         self.end_interaction(cx);
         play_sound(Sound::GameStart, cx);
@@ -508,12 +545,12 @@ impl PlayPage {
         cx.notify();
     }
 
-    /// Hands the game to the shell for the analysis board; with `review`, reviewed at once.
-    fn analyze(&mut self, review: bool, cx: &mut Context<Self>) {
+    /// Hands the game to the shell for Game Review.
+    fn review(&mut self, cx: &mut Context<Self>) {
         cx.emit(AnalyzeGame {
             game: self.history.game().clone(),
             viewing: self.history.viewing(),
-            review,
+            review: true,
             outcome: self.history.game().outcome(),
         });
     }
@@ -543,7 +580,7 @@ impl PlayPage {
         Some(card)
     }
 
-    /// Game Review, then a new game, the same one again, or a look at it without a review.
+    /// Game Review, then a new game or the same one again.
     fn game_over_actions(&self, cx: &mut Context<Self>) -> GameOverActions {
         let new_label = if self.versus.is_some() {
             "New Bot"
@@ -551,18 +588,15 @@ impl PlayPage {
             "New game"
         };
         let page = cx.entity().downgrade();
-        let (review, look, fresh, again) = (page.clone(), page.clone(), page.clone(), page);
+        let (review, fresh, again) = (page.clone(), page.clone(), page);
         GameOverActions::new(move |_, cx| {
-            let _ = review.update(cx, |page, cx| page.analyze(true, cx));
+            let _ = review.update(cx, |page, cx| page.review(cx));
         })
-        .choice(new_label, IconName::Plus, move |_, cx| {
+        .choice(("new-game", new_label), IconName::Plus, move |_, cx| {
             let _ = fresh.update(cx, |page, cx| page.new_game(cx));
         })
-        .choice("Rematch", IconName::RotateCcw, move |_, cx| {
+        .choice(("rematch", "Rematch"), IconName::RotateCcw, move |_, cx| {
             let _ = again.update(cx, |page, cx| page.start_game(cx));
-        })
-        .choice("Analyze", IconName::Microscope, move |_, cx| {
-            let _ = look.update(cx, |page, cx| page.analyze(false, cx));
         })
     }
 
@@ -573,6 +607,7 @@ impl PlayPage {
         self._ticker = None;
         self.turn_started = None;
         self.stage = Stage::Setup;
+        self.follow_answering(cx);
         self.end_interaction(cx);
         // The waiting board faces White, whichever side the last game had the player on.
         self.board
@@ -654,14 +689,14 @@ impl PlayPage {
     fn board_column(&self, cx: &mut Context<Self>) -> BoardColumn {
         let bottom = self.board.read(cx).bottom_side();
         BoardColumn::new(with_card(self.board.clone(), self.game_over_card(cx)))
-            .top(self.player_bar(bottom.opponent()))
-            .bottom(self.player_bar(bottom))
+            .top(self.player_bar(bottom.opponent(), cx))
+            .bottom(self.player_bar(bottom, cx))
             .tool(flip_button("flip-board", cx, PlayPage::flip))
             .tool(copy_fen(self.history.shown()))
     }
 
     /// One side's captured pieces and, in a timed game, its clock; against a bot, who plays it.
-    fn player_bar(&self, side: Side) -> Div {
+    fn player_bar(&self, side: Side, cx: &App) -> Div {
         h_flex()
             .w_full()
             .h(PLAYER_BAR)
@@ -671,7 +706,7 @@ impl PlayPage {
             .child(
                 h_flex()
                     .gap_3()
-                    .when_some(self.player_label(side), |this, label| this.child(label))
+                    .when_some(self.player_label(side, cx), |this, label| this.child(label))
                     .child(CapturedRow::for_side(self.history.shown().board(), side)),
             )
             .when_some(self.time_left(side), |this, left| {
@@ -679,11 +714,14 @@ impl PlayPage {
             })
     }
 
-    /// Against a bot, its picture and name with its rating; the player is "You".
-    fn player_label(&self, side: Side) -> Option<Div> {
+    /// Against a bot, its picture and name with its rating; the player is "You", with theirs.
+    fn player_label(&self, side: Side, cx: &App) -> Option<Div> {
         let game = self.versus.as_ref()?;
         if side != game.side {
-            return Some(h_flex().child(Label::new("You")));
+            // Round, as the bot's picture beside it; none while signed out.
+            let face = my_face(&self.session, cx)
+                .map(|face| avatar(&face.name, face.picture.as_deref(), px(24.), cx));
+            return Some(h_flex().gap_2().children(face).child(Label::new("You")));
         }
         let bot = game.bot;
         Some(
@@ -697,7 +735,7 @@ impl PlayPage {
     }
 
     /// The board waiting between its two bars, and the panel with the tabs and the choices.
-    fn setup_view(&self, page: WeakEntity<Self>) -> Div {
+    fn setup_view(&self, page: WeakEntity<Self>, cx: &App) -> Div {
         let setup = GameSetup::new(
             self.setup_choice,
             choose_time(page.clone()),
@@ -715,17 +753,20 @@ impl PlayPage {
         let panel = PlayPanel::new(self.mode, choose_mode(page))
             .children(picker)
             .child(setup);
-        board_page(self.waiting_column(), panel)
+        board_page(self.waiting_column(cx), panel)
     }
 
     /// Before the game: the opponent above the board, the player below, each with their clock.
-    fn waiting_column(&self) -> BoardColumn {
+    fn waiting_column(&self, cx: &App) -> BoardColumn {
         let clock = self.setup_choice.map(|control| control.initial);
         let (top, bottom) = if self.mode == PlayMode::Bots {
             let bot = self.picked_bot();
             let top =
                 WaitingBar::new(format!("{} ({})", bot.name, bot.rating)).picture(bot.picture);
-            (top, WaitingBar::new("You"))
+            (
+                top,
+                WaitingBar::new("You").person(my_face(&self.session, cx)),
+            )
         } else {
             (WaitingBar::new("Black"), WaitingBar::new("White"))
         };
@@ -767,6 +808,8 @@ impl PlayPage {
 
 impl EventEmitter<AnalyzeGame> for PlayPage {}
 
+impl EventEmitter<RematchCardChanged> for PlayPage {}
+
 impl HistoryNavigation for PlayPage {
     fn history_mut(&mut self) -> Option<&mut GameHistory> {
         Some(&mut self.history)
@@ -796,7 +839,7 @@ impl Render for PlayPage {
                 self.online_view()
             } else {
                 match self.stage {
-                    Stage::Setup => self.setup_view(page),
+                    Stage::Setup => self.setup_view(page, cx),
                     Stage::Playing => self.game_view(page, cx),
                 }
             })
@@ -933,8 +976,8 @@ mod tests {
             ServerClient::new(HttpRuntime::new().expect("a runtime"), "http://127.0.0.1:9");
         let session: SessionSource = Rc::new(|_| None);
         let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
-        let online = cx.new(|cx| OnlineView::new(connection, session, cx));
-        PlayPage::new(online, cx)
+        let online = cx.new(|cx| OnlineView::new(connection, Rc::clone(&session), cx));
+        PlayPage::new(online, session, cx)
     }
 
     /// A Play page with a game started, with a 3 | 2 clock or none.
@@ -1300,5 +1343,11 @@ mod tests {
         );
         drag(cx, "square-e2", "square-e4");
         assert_eq!(sans(&page, cx), ["e4", "Nf6"]);
+    }
+
+    #[gpui_kit::test]
+    fn a_bot_game_answers_no_rematch(cx: &mut TestAppContext) {
+        let (page, cx) = started(cx, false);
+        assert_eq!(page.read_with(cx, |page, cx| page.answering_game(cx)), None);
     }
 }

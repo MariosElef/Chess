@@ -308,7 +308,9 @@ impl ChatsView {
                 | ServerMessage::BattleSeekCancelled
                 | ServerMessage::Battle { .. }
                 | ServerMessage::BattleChallenges { .. }
-                | ServerMessage::ProfileChanged => {}
+                | ServerMessage::ProfileChanged
+                | ServerMessage::RematchRefused { .. }
+                | ServerMessage::InviteRefused { .. } => {}
             },
         }
     }

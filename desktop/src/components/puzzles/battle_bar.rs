@@ -4,9 +4,13 @@ use gpui_kit::{
     *,
 };
 
-use crate::{models::puzzles::BattleSide, services::puzzles::STRIKES};
+use crate::{
+    components::social::strip_avatar,
+    models::puzzles::BattleSide,
+    services::{puzzles::STRIKES, social::face_of},
+};
 
-/// A player's bar in a battle: their name and rating, a mark for each mistake, and their score.
+/// A player's battle bar: picture, name and rating, a mark per mistake, and their score.
 #[derive(IntoElement)]
 pub struct BattleBar {
     side: BattleSide,
@@ -37,7 +41,19 @@ impl RenderOnce for BattleBar {
             .w_full()
             .justify_between()
             .gap_4()
-            .child(Label::new(name))
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(strip_avatar(
+                        &face_of(
+                            &self.side.id,
+                            &self.side.username,
+                            self.side.avatar.as_deref(),
+                        ),
+                        cx,
+                    ))
+                    .child(Label::new(name)),
+            )
             .child(
                 h_flex()
                     .gap_3()

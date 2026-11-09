@@ -31,6 +31,9 @@ pub struct GameSnapshot {
 pub struct PlayerAtBoard {
     pub id: String,
     pub username: String,
+    /// Their picture's hash; none shows their initial.
+    #[serde(default)]
+    pub avatar: Option<String>,
     pub rating: Option<i32>,
 }
 

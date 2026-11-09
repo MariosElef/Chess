@@ -22,6 +22,7 @@ use crate::{
             PlayPanel, WaitingBar, with_card,
         },
         shell::PLAY_PICTURE,
+        social::strip_avatar,
     },
     enums::{
         play::{LiveStatus, PlayMode},
@@ -30,14 +31,15 @@ use crate::{
     models::{
         account::ModeStats,
         board::{MoveMade, ShownPosition},
-        play::{AnalyzeGame, ClientMessage, GameSnapshot, LiveEvent, ServerMessage},
+        play::{AnalyzeGame, Challenge, ClientMessage, GameSnapshot, LiveEvent, ServerMessage},
     },
     services::{
         history::GameHistory,
         play::{
             ClockWarning, DEFAULT_TIME_CONTROL, can_abort, clock_left, my_side, outcome_of,
-            outcome_reason, rating_line, replay, result_line, result_title,
+            outcome_reason, rating_line, replay, result_line, result_title, whole_seconds,
         },
+        social::face_of,
     },
     views::{
         board::{BoardView, flip_button},
@@ -45,11 +47,14 @@ use crate::{
         history::{
             HistoryNavigation, Holding, hold_step, select_move, step_history, with_history_keys,
         },
-        live::{LiveConnection, SessionSource},
+        live::{LiveConnection, SessionSource, my_face},
         sound::{play_move_sound, play_sound},
         ticker::{CLOCK_TICK, start_ticker},
     },
 };
+
+/// How long after a rematch goes a new game may take to arrive, before "No rematch" shows.
+const REMATCH_SETTLES: Duration = Duration::from_millis(1500);
 
 /// Switches the Play page to another way to play.
 type OnMode = Rc<dyn Fn(PlayMode, &mut Window, &mut App)>;
@@ -91,6 +96,29 @@ pub struct OnlineView {
     ratings: Vec<ModeStats>,
     /// The lobby's tabs: another way to play, which the Play page shows.
     on_mode: Option<OnMode>,
+    /// A rematch of the game on the board: asked for by the player, or by their opponent.
+    rematch: Rematch,
+    /// A rematch sent has gone: unless a new game follows soon, it was declined or ran out.
+    _rematch_gone: Option<Task<()>>,
+    /// The game this app last asked a rematch of; another device's rematches are left alone.
+    asked_rematch_of: Option<String>,
+    /// The player pressed Accept on the opponent's rematch; its refusal is this app's to show.
+    accepting_rematch: bool,
+    /// An ask was in flight as the connection dropped: the next lists say whether it was posted.
+    ask_unsure: bool,
+}
+
+/// Where a rematch of the finished game on the board stands.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+enum Rematch {
+    #[default]
+    None,
+    /// The player pressed Rematch; the server has yet to post it.
+    Asking,
+    /// The player asked; the opponent has yet to answer.
+    Sent,
+    /// The opponent asked; the player can accept.
+    Received(String),
 }
 
 impl OnlineView {
@@ -128,6 +156,11 @@ impl OnlineView {
             _ticker: None,
             focus_handle: cx.focus_handle(),
             chat: None,
+            rematch: Rematch::default(),
+            _rematch_gone: None,
+            asked_rematch_of: None,
+            accepting_rematch: false,
+            ask_unsure: false,
             card_closed: false,
             ratings: Vec::new(),
             on_mode: None,
@@ -210,9 +243,10 @@ impl OnlineView {
         match event {
             LiveEvent::Connected => self.problem = None,
             LiveEvent::Disconnected => {
-                // The server forgets a seek when its player goes; the game waits for them.
+                // Forgotten here until said again: the server keeps them while another app is on.
                 self.seeking = false;
                 self.awaiting = false;
+                self.forget_rematch_on_disconnect();
             }
             LiveEvent::Message(message) => self.on_message(*message, cx),
         }
@@ -238,17 +272,153 @@ impl OnlineView {
                 }
                 self.problem = Some(message);
             }
+            ServerMessage::Challenges { sent, received } => {
+                self.follow_rematch(&sent, &received, cx);
+            }
+            ServerMessage::RematchRefused { game_id, message } => {
+                self.rematch_refused(&game_id, message);
+            }
             ServerMessage::Error { .. }
             | ServerMessage::FriendsChanged
-            | ServerMessage::Challenges { .. }
             | ServerMessage::ChatMessage { .. }
             | ServerMessage::ConversationsChanged
             | ServerMessage::ProfileChanged
             | ServerMessage::BattleSeeking
             | ServerMessage::BattleSeekCancelled
             | ServerMessage::Battle { .. }
-            | ServerMessage::BattleChallenges { .. } => {}
+            | ServerMessage::BattleChallenges { .. }
+            | ServerMessage::InviteRefused { .. } => {}
         }
+    }
+
+    /// The rematch of the game on the board as the server has it; theirs first, to accept.
+    fn follow_rematch(
+        &mut self,
+        sent: &[Challenge],
+        received: &[Challenge],
+        cx: &mut Context<Self>,
+    ) {
+        let unsure = std::mem::take(&mut self.ask_unsure);
+        let Some(game_id) = self.game_id() else {
+            self.rematch = Rematch::None;
+            return;
+        };
+        let of_this_game =
+            |challenge: &&Challenge| challenge.rematch_of.as_deref() == Some(game_id.as_str());
+        let theirs = received.iter().find(of_this_game);
+        if theirs.is_none() {
+            // Theirs is gone: whatever this app's Accept became, it no longer waits on it.
+            self.accepting_rematch = false;
+        }
+        let now = if let Some(theirs) = theirs {
+            Rematch::Received(theirs.id.clone())
+        } else if sent.iter().any(|mine| of_this_game(&mine)) {
+            Rematch::Sent
+        } else if self.rematch == Rematch::Asking && !unsure {
+            // Not posted yet: this list was sent for something else.
+            Rematch::Asking
+        } else {
+            Rematch::None
+        };
+        // Only the app that asked says how it went; the player's other devices stay quiet.
+        if matches!(self.rematch, Rematch::Sent) && now == Rematch::None && self.asked_here() {
+            self.asked_rematch_of = None;
+            self._rematch_gone = Some(self.say_if_no_rematch(game_id, cx));
+        }
+        self.rematch = now;
+    }
+
+    /// A rematch refused: this app's own ask or accept says why; another device's is left be.
+    fn rematch_refused(&mut self, game_id: &str, message: String) {
+        let asked_here = self.asked_rematch_of.as_deref() == Some(game_id);
+        if asked_here {
+            self.asked_rematch_of = None;
+        }
+        if self.board_game() != Some(game_id) || !(asked_here || self.accepting_rematch) {
+            return;
+        }
+        // An ask can be made again; an accept refused leaves their rematch waiting, as it was.
+        if self.rematch == Rematch::Asking {
+            self.rematch = Rematch::None;
+        }
+        self.accepting_rematch = false;
+        self.problem = Some(message);
+    }
+
+    /// The connection dropped: an ask may be lost, so the lists sent again say if it was posted.
+    fn forget_rematch_on_disconnect(&mut self) {
+        self.ask_unsure = self.rematch == Rematch::Asking;
+        self._rematch_gone = None;
+        self.accepting_rematch = false;
+    }
+
+    /// Whether this app asked for the rematch of the game on the board.
+    fn asked_here(&self) -> bool {
+        self.asked_rematch_of.is_some() && self.asked_rematch_of.as_deref() == self.board_game()
+    }
+
+    /// The id of the game on the board, if any.
+    fn board_game(&self) -> Option<&str> {
+        self.live.as_ref().map(|live| live.snapshot.id.as_str())
+    }
+
+    /// The id of the game on the board, owned, to send or keep.
+    fn game_id(&self) -> Option<String> {
+        self.board_game().map(str::to_owned)
+    }
+
+    /// A rematch sent went: a new game, if it was accepted, comes within a moment; else it says so.
+    fn say_if_no_rematch(&self, game_id: String, cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |view, cx| {
+            cx.background_executor().timer(REMATCH_SETTLES).await;
+            // The view outlives the wait unless the window is closing.
+            let _ = view.update(cx, |view, cx| {
+                if view.board_game() == Some(game_id.as_str()) && view.rematch == Rematch::None {
+                    view.problem = Some("No rematch this time".to_owned());
+                    cx.notify();
+                }
+            });
+        })
+    }
+
+    /// Asks the opponent to play again, withdraws the ask, or accepts theirs; once each.
+    fn rematch_pressed(&mut self, cx: &mut Context<Self>) {
+        let Some(game_id) = self.game_id() else {
+            return;
+        };
+        let message = match &self.rematch {
+            Rematch::None => {
+                self.asked_rematch_of = Some(game_id.clone());
+                self.rematch = Rematch::Asking;
+                ClientMessage::OfferRematch { game_id }
+            }
+            // Waiting on the server, or on an ask another of the player's devices made.
+            Rematch::Asking => return,
+            Rematch::Sent if !self.asked_here() => return,
+            Rematch::Sent => {
+                self.asked_rematch_of = None;
+                self.rematch = Rematch::None;
+                ClientMessage::CancelRematch { game_id }
+            }
+            Rematch::Received(_) if self.accepting_rematch => return,
+            // Accepted by game, so a refusal comes as this game's, and one gone is not re-asked.
+            Rematch::Received(_) => {
+                self.accepting_rematch = true;
+                ClientMessage::AcceptRematch { game_id }
+            }
+        };
+        self._rematch_gone = None;
+        self.problem = None;
+        self.send(message, cx);
+        cx.notify();
+    }
+
+    /// The game whose rematch the game-over card answers; the side panel's tiles do not count.
+    pub fn answering_game(&self) -> Option<&str> {
+        // As the card itself is drawn: a finished game the player was in, not put away.
+        let live = self.live.as_ref().filter(|_| !self.card_closed)?;
+        let answers = live.me.is_some() && outcome_of(&live.snapshot).is_some();
+        answers.then_some(live.snapshot.id.as_str())
     }
 
     /// The server's latest word on a game: board, sounds and clock follow, and a premove goes.
@@ -272,6 +442,10 @@ impl OnlineView {
         let new_game = previous.is_none();
         if new_game {
             self.card_closed = false;
+            self.rematch = Rematch::None;
+            self._rematch_gone = None;
+            self.asked_rematch_of = None;
+            self.accepting_rematch = false;
         }
         let clock_warning = previous.map_or_else(ClockWarning::default, |live| live.clock_warning);
         let finished = snapshot.status != LiveStatus::Ongoing;
@@ -420,10 +594,6 @@ impl OnlineView {
             .then(|| "Connection lost, reconnecting…".to_owned())
     }
 
-    fn game_id(&self) -> Option<String> {
-        self.live.as_ref().map(|live| live.snapshot.id.clone())
-    }
-
     fn resign(&mut self, cx: &mut Context<Self>) {
         if let Some(game_id) = self.game_id() {
             self.send(ClientMessage::Resign { game_id }, cx);
@@ -436,13 +606,13 @@ impl OnlineView {
         }
     }
 
-    /// Hands the game to the analysis board, at the position being looked at.
-    fn analyze(&mut self, review: bool, cx: &mut Context<Self>) {
+    /// Hands the game to Game Review, at the position being looked at.
+    fn review(&mut self, cx: &mut Context<Self>) {
         if let Some(live) = &self.live {
             cx.emit(AnalyzeGame {
                 game: live.history.game().clone(),
                 viewing: live.history.viewing(),
-                review,
+                review: true,
                 outcome: outcome_of(&live.snapshot),
             });
         }
@@ -491,40 +661,44 @@ impl OnlineView {
         Some(card)
     }
 
-    /// Game Review, a look without a review, back to the lobby, or a rematch at the same time.
+    /// Game Review, then the lobby or a rematch.
     fn game_over_actions(&self, live: &LiveBoard, cx: &mut Context<Self>) -> GameOverActions {
-        let control = TimeControl {
-            initial: Duration::from_secs(live.snapshot.initial_s.into()),
-            increment: Duration::from_secs(live.snapshot.increment_s.into()),
-        };
         let page = cx.entity().downgrade();
-        let (review, fresh, again) = (page.clone(), page.clone(), page);
-        let look = review.clone();
+        let (review, fresh, rematch) = (page.clone(), page.clone(), page);
         GameOverActions::new(move |_, cx| {
-            let _ = review.update(cx, |view, cx| view.analyze(true, cx));
+            let _ = review.update(cx, |view, cx| view.review(cx));
         })
-        .choice("Analyze", IconName::Microscope, move |_, cx| {
-            let _ = look.update(cx, |view, cx| view.analyze(false, cx));
-        })
-        .choice("New game", IconName::Plus, move |_, cx| {
+        .choice(("new-game", "New game"), IconName::Plus, move |_, cx| {
             let _ = fresh.update(cx, |view, cx| view.leave_game(cx));
         })
         .when(live.me.is_some(), |actions| {
-            // Another opponent at the same time control, rated as this game was.
-            let rated = live.snapshot.rated;
-            actions.choice(control.label(), IconName::RotateCcw, move |_, cx| {
-                let _ = again.update(cx, |view, cx| {
-                    view.leave_game(cx);
-                    view.choice = control;
-                    view.rated = rated;
-                    view.seek(cx);
-                });
-            })
+            actions.choice(
+                (
+                    "rematch",
+                    rematch_label(&self.rematch, (self.asked_here(), self.accepting_rematch)),
+                ),
+                IconName::RotateCcw,
+                move |_, cx| {
+                    let _ = rematch.update(cx, |view, cx| view.rematch_pressed(cx));
+                },
+            )
         })
     }
 
     /// From a finished game back to the lobby.
     fn leave_game(&mut self, cx: &mut Context<Self>) {
+        // The player went on to something else: their ask is withdrawn, the opponent's declined.
+        if let Some(game_id) = self.game_id()
+            && self.asked_here()
+        {
+            self.send(ClientMessage::CancelRematch { game_id }, cx);
+        }
+        if let Rematch::Received(challenge_id) = std::mem::take(&mut self.rematch) {
+            self.send(ClientMessage::DeclineChallenge { challenge_id }, cx);
+        }
+        self.asked_rematch_of = None;
+        self.accepting_rematch = false;
+        self.ask_unsure = false;
         self.live = None;
         self._ticker = None;
         // The lobby's waiting board faces White, whichever side the game had the player on.
@@ -543,8 +717,8 @@ impl OnlineView {
         self.awaiting = true;
         self.send(
             ClientMessage::Seek {
-                initial_s: seconds(self.choice.initial),
-                increment_s: seconds(self.choice.increment),
+                initial_s: whole_seconds(self.choice.initial),
+                increment_s: whole_seconds(self.choice.increment),
                 rated: self.rated && can_rate,
             },
             cx,
@@ -596,15 +770,18 @@ impl OnlineView {
                 let _ = cancel.update(cx, |view, cx| view.cancel_seek(cx));
             }),
         });
-        let me = (self.session)(cx).map_or_else(String::new, |session| session.user.username);
+        let face = my_face(&self.session, cx);
+        let me_name = face
+            .as_ref()
+            .map_or_else(String::new, |face| face.name.clone());
         let me = match self.my_rating() {
-            Some(rating) => format!("{me} ({rating})"),
-            None => me,
+            Some(rating) => format!("{me_name} ({rating})"),
+            None => me_name,
         };
         let clock = Some(self.choice.initial);
         let column = BoardColumn::new(self.board.clone())
             .top(WaitingBar::new("Opponent").clock(clock))
-            .bottom(WaitingBar::new(me).clock(clock));
+            .bottom(WaitingBar::new(me).person(face).clock(clock));
         let on_mode = self.on_mode.clone();
         let panel = PlayPanel::new(PlayMode::Online, move |mode, window, cx| {
             if let Some(on_mode) = &on_mode {
@@ -620,8 +797,8 @@ impl OnlineView {
         let bottom = self.board.read(cx).bottom_side();
         let card = self.game_over_card(live, cx);
         let column = BoardColumn::new(with_card(self.board.clone(), card))
-            .top(self.player_bar(live, bottom.opponent()))
-            .bottom(self.player_bar(live, bottom))
+            .top(self.player_bar(live, bottom.opponent(), cx))
+            .bottom(self.player_bar(live, bottom, cx))
             .tool(flip_button("online-flip-board", cx, OnlineView::flip))
             .tool(copy_fen(live.history.shown()));
         let side = SidePanel::new()
@@ -692,10 +869,6 @@ impl OnlineView {
         let snapshot = &live.snapshot;
         if snapshot.status != LiveStatus::Ongoing {
             return vec![
-                game_tile(("online-analyze", "Analyze"), false, cx, |view, cx| {
-                    view.analyze(false, cx);
-                })
-                .icon(IconName::Microscope),
                 game_tile(
                     ("online-new-game", "New game"),
                     false,
@@ -744,7 +917,7 @@ impl OnlineView {
     }
 
     /// A player's name and rating, what they have taken, and their clock.
-    fn player_bar(&self, live: &LiveBoard, side: Side) -> Div {
+    fn player_bar(&self, live: &LiveBoard, side: Side, cx: &App) -> Div {
         let snapshot = &live.snapshot;
         let player = match side {
             Side::White => &snapshot.white,
@@ -765,6 +938,10 @@ impl OnlineView {
             .child(
                 h_flex()
                     .gap_3()
+                    .child(strip_avatar(
+                        &face_of(&player.id, &player.username, player.avatar.as_deref()),
+                        cx,
+                    ))
                     .child(Label::new(name))
                     .child(CapturedRow::for_side(live.history.shown().board(), side)),
             )
@@ -827,13 +1004,22 @@ impl Render for OnlineView {
     }
 }
 
-fn seconds(duration: Duration) -> u32 {
-    u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
+/// The rematch button's word, short to fit the card: Rematch, Asking…, Cancel or Accept.
+fn rematch_label(rematch: &Rematch, (asked_here, accepting): (bool, bool)) -> &'static str {
+    match rematch {
+        Rematch::None => "Rematch",
+        Rematch::Asking => "Asking…",
+        // Only the device that asked can cancel; another shows it waiting.
+        Rematch::Sent if !asked_here => "Asking…",
+        Rematch::Sent => "Cancel",
+        Rematch::Received(_) if accepting => "Accepting…",
+        Rematch::Received(_) => "Accept",
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
+    use std::{cell::Cell, rc::Rc, sync::Arc};
 
     use axum::{
         Router,
@@ -845,13 +1031,12 @@ mod tests {
 
     use chess_domain::TimeControl;
 
-    use super::OnlineView;
+    use super::{OnlineView, REMATCH_SETTLES, Rematch, rematch_label};
     use crate::{
         clients::server::ServerClient,
         enums::sound::Sound,
-        models::account::{Session, User},
-        models::play::AnalyzeGame,
-        testing::{click, wait_until},
+        models::play::{AnalyzeGame, LiveEvent, ServerMessage},
+        testing::{Heard, ann, click, record_socket, wait_until, was_heard},
         views::live::{LiveConnection, SessionSource},
         views::sound::{played_sounds, record_sounds},
     };
@@ -920,16 +1105,7 @@ mod tests {
             get(|upgrade: WebSocketUpgrade| async move { upgrade.on_upgrade(bob) }),
         );
         let client = ServerClient::serving(app);
-        let session = Session {
-            token: "abc".to_owned(),
-            user: User {
-                id: "ann".to_owned(),
-                email: "ann@example.com".to_owned(),
-                username: "Ann".to_owned(),
-                guest: false,
-                avatar: None,
-            },
-        };
+        let session = ann(false);
         cx.add_window_view(|_, cx| {
             let session: SessionSource = Rc::new(move |_| Some(session.clone()));
             let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
@@ -1061,7 +1237,315 @@ mod tests {
             cx.subscribe(&view, move |_, _: &AnalyzeGame, _| heard.set(true))
                 .detach();
         });
-        view.update(cx, |view, cx| view.analyze(false, cx));
-        assert!(analyzed.get(), "the game went to the analysis board");
+        view.update(cx, |view, cx| view.review(cx));
+        assert!(analyzed.get(), "the game went to Game Review");
+    }
+
+    #[test]
+    fn the_rematch_button_says_where_the_rematch_stands() {
+        let sent = Rematch::Sent;
+        let received = Rematch::Received("r".to_owned());
+        assert_eq!(rematch_label(&Rematch::None, (false, false)), "Rematch");
+        assert_eq!(rematch_label(&Rematch::Asking, (true, false)), "Asking…");
+        assert_eq!(
+            rematch_label(&sent, (false, false)),
+            "Asking…",
+            "another device asked"
+        );
+        assert_eq!(rematch_label(&sent, (true, false)), "Cancel");
+        assert_eq!(rematch_label(&received, (false, false)), "Accept");
+        assert_eq!(rematch_label(&received, (false, true)), "Accepting…");
+    }
+
+    /// Ann's online view, connected to a server that only listens, with the game `g1` over.
+    fn after_a_game(
+        cx: &mut TestAppContext,
+    ) -> (Entity<OnlineView>, Heard, &mut VisualTestContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            record_sounds(cx);
+        });
+        let sent = Heard::default();
+        let heard = Arc::clone(&sent);
+        let app = Router::new().route(
+            "/api/ws",
+            get(move |upgrade: WebSocketUpgrade| async move {
+                upgrade.on_upgrade(move |socket| record_socket(socket, None, heard))
+            }),
+        );
+        let client = ServerClient::serving(app);
+        let session = ann(false);
+        let connected = Rc::new(Cell::new(false));
+        let told = Rc::clone(&connected);
+        let (view, cx) = cx.add_window_view(move |_, cx| {
+            let session: SessionSource = Rc::new(move |_| Some(session.clone()));
+            let connection = cx.new(|_| LiveConnection::new(client, Rc::clone(&session)));
+            cx.subscribe(&connection, move |_, _, event: &LiveEvent, _| {
+                if matches!(event, LiveEvent::Connected) {
+                    told.set(true);
+                }
+            })
+            .detach();
+            connection.update(cx, |live, cx| live.connect(cx));
+            OnlineView::new(connection, session, cx)
+        });
+        wait_until(cx, |_| connected.get());
+        hear(&view, cx, &finished_g1());
+        (view, sent, cx)
+    }
+
+    /// The game `g1`, which Ann resigned.
+    fn finished_g1() -> String {
+        game(&["e2e4", "e7e5"], Some(("resignation", "black")))
+    }
+
+    /// The view hears `message` from the server.
+    fn hear(view: &Entity<OnlineView>, cx: &mut VisualTestContext, message: &str) {
+        let message: ServerMessage = serde_json::from_str(message).expect("a server message");
+        view.update(cx, |view, cx| view.on_message(message, cx));
+    }
+
+    /// The challenges message with `sent` and `received` holding rematches of `g1` by id.
+    fn rematches(sent: &[&str], received: &[&str]) -> String {
+        let rematch = |id: &&str| {
+            json!({
+                "id": id, "from": { "id": "ann", "username": "Ann" },
+                "to": { "id": "bob", "username": "Bob" },
+                "initial_s": 180, "increment_s": 2, "rated": true, "rematch_of": "g1",
+                "wait_s": 60, "seconds_left": 60
+            })
+        };
+        json!({
+            "type": "challenges",
+            "sent": sent.iter().map(rematch).collect::<Vec<_>>(),
+            "received": received.iter().map(rematch).collect::<Vec<_>>(),
+        })
+        .to_string()
+    }
+
+    /// The server's refusal of the rematch of `game`.
+    fn refused(game: &str, message: &str) -> String {
+        json!({ "type": "rematch_refused", "game_id": game, "message": message }).to_string()
+    }
+
+    fn label(view: &Entity<OnlineView>, cx: &mut VisualTestContext) -> &'static str {
+        view.read_with(cx, |view, _| {
+            rematch_label(&view.rematch, (view.asked_here(), view.accepting_rematch))
+        })
+    }
+
+    #[gpui_kit::test]
+    fn a_rematch_asked_here_is_withdrawn_from_here(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        assert_eq!(label(&view, cx), "Asking…");
+        wait_until(cx, |_| was_heard(&sent, "offer_rematch g1"));
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        assert_eq!(label(&view, cx), "Cancel");
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        wait_until(cx, |_| was_heard(&sent, "cancel_rematch g1"));
+        hear(&view, cx, &rematches(&[], &[]));
+        assert!(
+            !view.read_with(cx, |view, _| view._rematch_gone.is_some()),
+            "withdrawn by the player: nothing to tell"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_rematch_gone_unplayed_says_so_only_after_a_moment(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        hear(&view, cx, &rematches(&[], &[]));
+        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+        cx.executor().advance_clock(REMATCH_SETTLES);
+        cx.run_until_parked();
+        assert_eq!(
+            view.read_with(cx, |view, _| view.problem.clone())
+                .as_deref(),
+            Some("No rematch this time")
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_rematch_accepted_in_time_says_nothing(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        hear(&view, cx, &rematches(&[], &[]));
+        let mut next: Value = serde_json::from_str(&game(&[], None)).expect("json");
+        next["game"]["id"] = json!("g2");
+        hear(&view, cx, &next.to_string());
+        cx.executor().advance_clock(REMATCH_SETTLES);
+        cx.run_until_parked();
+        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+    }
+
+    #[gpui_kit::test]
+    fn another_devices_rematch_waits_here_and_cannot_be_withdrawn(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        assert_eq!(label(&view, cx), "Asking…");
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &rematches(&[], &[]));
+        assert!(
+            !view.read_with(cx, |view, _| view._rematch_gone.is_some()),
+            "only the device that asked says no rematch"
+        );
+        assert!(!was_heard(&sent, "cancel_rematch g1"));
+    }
+
+    #[gpui_kit::test]
+    fn the_cards_accept_goes_by_game_and_a_refusal_leaves_theirs_waiting(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        hear(&view, cx, &rematches(&[], &["r1"]));
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        assert_eq!(label(&view, cx), "Accepting…");
+        wait_until(cx, |_| was_heard(&sent, "accept_rematch g1"));
+        hear(&view, cx, &refused("g1", "Bob is playing a game"));
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.rematch,
+                Rematch::Received("r1".to_owned()),
+                "still theirs to accept"
+            );
+            assert_eq!(view.problem.as_deref(), Some("Bob is playing a game"));
+        });
+        assert_eq!(label(&view, cx), "Accept");
+        // A game that failed to start takes theirs too: the lists after say so, the reason stays.
+        hear(&view, cx, &rematches(&[], &[]));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.problem.clone())
+                .as_deref(),
+            Some("Bob is playing a game")
+        );
+    }
+
+    #[gpui_kit::test]
+    fn leaving_withdraws_this_apps_ask_and_declines_theirs(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        view.update(cx, |view, cx| view.leave_game(cx));
+        wait_until(cx, |_| was_heard(&sent, "cancel_rematch g1"));
+
+        hear(&view, cx, &finished_g1());
+        hear(&view, cx, &rematches(&[], &["r2"]));
+        view.update(cx, |view, cx| view.leave_game(cx));
+        wait_until(cx, |_| was_heard(&sent, "decline_challenge r2"));
+    }
+
+    #[gpui_kit::test]
+    fn a_refused_rematch_says_why_and_can_be_asked_again(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &refused("g1", "Bob is not taking a rematch"));
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.rematch, Rematch::None);
+            assert_eq!(view.problem.as_deref(), Some("Bob is not taking a rematch"));
+        });
+        // A refusal of another game's rematch changes nothing here.
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &refused("g9", "no"));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.rematch.clone()),
+            Rematch::Asking
+        );
+    }
+
+    #[gpui_kit::test]
+    fn an_accept_whose_rematch_goes_settles_back_to_rematch(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        hear(&view, cx, &rematches(&[], &["r1"]));
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &rematches(&[], &[]));
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.rematch, Rematch::None);
+            assert!(!view.accepting_rematch);
+            assert!(
+                view.asked_rematch_of.is_none(),
+                "not turned into an ask of the player's own"
+            );
+        });
+        assert_eq!(label(&view, cx), "Rematch");
+    }
+
+    #[gpui_kit::test]
+    fn a_dropped_connection_keeps_a_rematch_the_server_still_holds(cx: &mut TestAppContext) {
+        let (view, sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        view.update(cx, |view, cx| view.on_event(LiveEvent::Disconnected, cx));
+        // Another device kept the account online, so the lists sent again still hold it.
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        assert_eq!(label(&view, cx), "Cancel", "still the device that asked");
+        view.update(cx, |view, cx| view.leave_game(cx));
+        wait_until(cx, |_| was_heard(&sent, "cancel_rematch g1"));
+    }
+
+    #[gpui_kit::test]
+    fn an_ask_in_flight_as_the_connection_drops_is_settled_by_the_next_lists(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        view.update(cx, |view, cx| view.on_event(LiveEvent::Disconnected, cx));
+        hear(&view, cx, &rematches(&[], &[]));
+        assert_eq!(
+            label(&view, cx),
+            "Rematch",
+            "never posted: it can be asked again"
+        );
+
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        view.update(cx, |view, cx| view.on_event(LiveEvent::Disconnected, cx));
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        assert_eq!(
+            label(&view, cx),
+            "Cancel",
+            "posted, and still this device's to withdraw"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn a_refusal_for_another_devices_rematch_is_not_shown_here(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        hear(&view, cx, &rematches(&[], &["r1"]));
+        hear(&view, cx, &refused("g1", "Bob is playing a game"));
+        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+    }
+
+    #[gpui_kit::test]
+    fn the_card_answers_a_rematch_only_while_it_is_shown(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        assert!(view.read_with(cx, |view, _| view.answering_game() == Some("g1")));
+        assert!(!view.read_with(cx, |view, _| view.answering_game() == Some("g9")));
+        view.update(cx, |view, _| view.card_closed = true);
+        assert!(
+            !view.read_with(cx, |view, _| view.answering_game() == Some("g1")),
+            "put away, the toast answers instead"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn asking_after_another_device_did_leaves_that_ask_to_it(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        hear(
+            &view,
+            cx,
+            &refused("g1", "You asked for this rematch on another device"),
+        );
+        hear(&view, cx, &rematches(&["r1"], &[]));
+        assert_eq!(label(&view, cx), "Asking…", "that device's to withdraw");
+    }
+
+    #[gpui_kit::test]
+    fn leaving_forgets_an_ask_lost_in_a_dropped_connection(cx: &mut TestAppContext) {
+        let (view, _sent, cx) = after_a_game(cx);
+        view.update(cx, |view, cx| view.rematch_pressed(cx));
+        view.update(cx, |view, cx| view.on_event(LiveEvent::Disconnected, cx));
+        view.update(cx, |view, cx| view.leave_game(cx));
+        assert!(!view.read_with(cx, |view, _| view.ask_unsure));
     }
 }

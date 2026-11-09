@@ -1,7 +1,10 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::{enums::play::ChallengeStatus, models::play::challenge::NewChallenge};
+use crate::{
+    enums::play::{ChallengeStatus, Color},
+    models::play::challenge::NewChallenge,
+};
 
 pub async fn insert(db: impl PgExecutor<'_>, challenge: &NewChallenge) -> Result<(), sqlx::Error> {
     sqlx::query_file!(
@@ -12,6 +15,8 @@ pub async fn insert(db: impl PgExecutor<'_>, challenge: &NewChallenge) -> Result
         challenge.initial_s,
         challenge.increment_s,
         challenge.rated,
+        challenge.challenger_colour.map_or("random", Color::key),
+        challenge.rematch_of,
         f64::from(challenge.expires_in_s),
     )
     .execute(db)

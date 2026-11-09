@@ -266,18 +266,22 @@ impl BattleView {
             }
             ServerMessage::FriendsChanged => self.fetch_friends(cx),
             // Only a refusal of this panel's own request is its to show.
-            ServerMessage::Error { message } if self.awaiting => {
+            ServerMessage::Error { message } | ServerMessage::InviteRefused { message, .. }
+                if self.awaiting =>
+            {
                 self.awaiting = false;
                 self.problem = Some(message.clone());
             }
             ServerMessage::Error { .. }
+            | ServerMessage::InviteRefused { .. }
             | ServerMessage::Seeking { .. }
             | ServerMessage::SeekCancelled
             | ServerMessage::Game { .. }
             | ServerMessage::Challenges { .. }
             | ServerMessage::ChatMessage { .. }
             | ServerMessage::ConversationsChanged
-            | ServerMessage::ProfileChanged => return,
+            | ServerMessage::ProfileChanged
+            | ServerMessage::RematchRefused { .. } => return,
         }
         cx.notify();
     }

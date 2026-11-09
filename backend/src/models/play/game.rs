@@ -70,3 +70,13 @@ pub struct FinishedGame {
     pub white_ms: i32,
     pub black_ms: i32,
 }
+
+/// A finished game as a rematch replays it: who had which colour, and its terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RematchTerms {
+    pub white_id: Uuid,
+    pub black_id: Uuid,
+    pub initial_s: i32,
+    pub increment_s: i32,
+    pub rated: bool,
+}

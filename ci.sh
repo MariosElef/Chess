@@ -5,7 +5,9 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 # The backend's database tests make their own throwaway databases on this server.
 export DATABASE_URL="${DATABASE_URL:-postgres://chess:change-me@localhost:5433/chess}"
-cargo test --workspace --locked
+cargo test --workspace --locked --exclude chess-backend
+# sqlx lends every test's pool, of up to 5, from one shared pool of 20: four at once always fit.
+cargo test -p chess-backend --locked -- --test-threads=4
 cargo deny check
 
 # The domain stays pure.

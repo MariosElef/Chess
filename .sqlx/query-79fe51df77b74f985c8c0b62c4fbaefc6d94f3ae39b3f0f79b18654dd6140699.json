@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The game $1, if $2 played in it and it finished in the last ten minutes: a rematch replays it.\nSELECT\n    games.white_id,\n    games.black_id,\n    games.initial_s,\n    games.increment_s,\n    games.rated\nFROM play.games\nWHERE\n    games.id = $1\n    AND (games.white_id = $2 OR games.black_id = $2)\n    AND games.status = 'finished'\n    AND games.finished_at > now() - interval '10 minutes'\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "white_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "white_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "black_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "black_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "initial_s",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "initial_s"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "increment_s",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "increment_s"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "play.games",
+            "name": "rated"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "79fe51df77b74f985c8c0b62c4fbaefc6d94f3ae39b3f0f79b18654dd6140699"
+}

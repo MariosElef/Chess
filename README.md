@@ -101,6 +101,27 @@ costs at least a second, so a premove is never free: 5:02 becomes 5:01. Local ga
 premove the same second. Games left unfinished when the server stops
 are marked aborted when it starts again.
 
+When a game ends, Rematch on its card asks your opponent to play again at the same time control,
+rated as before, with the colours swapped. Your opponent hears it and sees a toast in the corner
+of whatever page they are on, with Accept, Decline and a bar running down the minute it waits;
+the X only puts the toast away, leaving the rematch to their card or to run out. While their
+card for that game is open, its button says Accept instead (then Accepting… until the game
+starts), and the toast leaves that rematch to the card, though it still rings, showing any other
+waiting; an accept refused from the toast shows on it even over the card. If both of you press
+Rematch, the game starts at once. Your card says Asking… and then Cancel while it waits, and No
+rematch this time if it ends unplayed: declined, run out, your opponent gone, or replaced by a
+rematch of another game you asked for. If they cannot take one at all it says so at once:
+playing a game, or simply not taking a rematch when offline or blocked. Asking for a rematch of
+another recent game replaces your earlier one. Signed in on several devices, the device you
+asked from can cancel and the others show Asking…; asking from a second device too keeps the
+first rematch and says so. Leaving the card for a new game declines their rematch for all your
+devices, and withdraws yours if you asked from that device. A rematch can be asked for up to ten
+minutes after the game, between any two players but those who blocked each other (unfriending
+leaves a waiting rematch alone, and a friend's challenge replaces only your earlier friend's
+challenge), while both accounts are still signed in somewhere from before it ended: if every
+sign-in since is newer, as a shared guest account handed to someone new, it means starting a new
+game instead.
+
 A guest is free again once no app signed in as it is connected, so Continue as guest always
 gives the lowest-numbered guest nobody is using.
 
@@ -151,11 +172,14 @@ The Social page is a Friends page, as chess.com's: your friends with who is onli
 the others last were, sorted by the most recently online or by name, and a Friends Leaderboard
 beside them: the best three among your friends and you in bullet, blitz, rapid, classical and
 puzzles, with your own place under them when you are lower. Search by name to find players and
-add them; Friend Requests opens the requests each way. A friend who is online can be challenged
-to a game with the time control and rating you pick. A challenge waits a minute for an answer,
-and accepting it opens the game on Play for both. Challenges and requests waiting for you show
-as a count on Social in the rail. Guests have friends too; a guest's friends stay with that
-guest account, so the next person to get it has them.
+add them; Friend Requests opens the requests each way. A friend who is online can be challenged:
+Challenge opens a window with their picture, where you pick the time control and whether it is
+rated, as in the Play lobby. A challenge waits a minute for an answer, and accepting it opens
+the game on Play for both. On any other page a challenge shows as a toast in the corner, with
+Accept, Decline, the minute it has left, and an X that only puts it away; Social keeps it in its
+list. Challenges and requests waiting for you show as a count on Social in the rail. Guests have
+friends too; a guest's friends stay with that guest account, so the next person to get it has
+them.
 
 Block a player from a friend's "…" menu or from the search: the friendship, any request and any
 challenge or battle invitation between you end, and they can no longer ask to be friends (their
@@ -170,12 +194,12 @@ in a seek.
 Puzzles → Puzzle Battle races another player through the same puzzles for three minutes,
 starting easy and getting harder; three mistakes end your run, the most solved wins, and a tie
 goes to whoever reached that score first. Play a random opponent, or pick a friend who is online
-to invite them; their invitation shows on your panel to accept or decline. Both scores update
-live over the WebSocket, and either player can resign. Rated battles between two signed-up
-players move a Puzzle Battle rating of its own; turn Rated off for one that does not count, and
-a guest's battles never do. The panel shows the rating with your wins this month. Invitations
-waiting for you show as a count on Puzzles in the rail. Battles need the puzzle database
-imported.
+to invite them; their invitation shows on your panel to accept or decline, and as a toast on any
+other page. Both scores update live over the WebSocket, and either player can resign. Rated
+battles between two signed-up players move a Puzzle Battle rating of its own; turn Rated off for
+one that does not count, and a guest's battles never do. The panel shows the rating with your
+wins this month. Invitations waiting for you show as a count on Puzzles in the rail. Battles
+need the puzzle database imported.
 
 ## Stats
 
@@ -196,10 +220,11 @@ Change picture on the Account card picks a JPEG, PNG, WebP or GIF of up to 5 MB,
 back to your initial. The server cuts the middle square out of it, scales it to 256 by 256, lays
 any see-through parts on white and keeps only that, as a JPEG of about 20 KB; the original is
 never stored. Your picture shows in the header's menu, your friends' lists, search, the
-leaderboard, chats and groups, everywhere your initial did. Each picture's address carries a
-hash of its bytes, so the app loads it once per run and a new picture always has a new address.
-Guests cannot set one, since their accounts are shared, and closing an account deletes its
-picture.
+leaderboard, chats and groups, the challenge window, the bars beside the board in online games,
+against a bot and in Puzzle Battle, everywhere your initial did. Each picture's address carries
+a hash of its bytes, so the app loads it once per run and a new picture always has a new
+address. Guests cannot set one, since their accounts are shared, and closing an account deletes
+its picture.
 
 Under the stats, History has three tabs, each newest first, ten at a time with Load more. Games
 lists your finished online games: the speed, your opponent, the time control and length, whether
@@ -234,8 +259,10 @@ sending each move and judging it against the solution there.
 
 Some of what the server stores is written but not read back yet: the live mirror of each game
 (its position, clocks, last move time and any draw offer), the clock after each move, and the
-record of every challenge. Nothing in the app shows them today, and a game still going when the
-server restarts is aborted rather than resumed.
+record of every challenge and rematch (with the game a rematch replays and the colours it fixed;
+when two rematches cross, the second is recorded as cancelled and the first as accepted).
+Nothing in the app shows them today, and a game still going when the server restarts is aborted
+rather than resumed.
 
 ## Contributing
 

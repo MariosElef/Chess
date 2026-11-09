@@ -67,6 +67,15 @@ pub fn result_line(snapshot: &GameSnapshot, me: Option<Side>) -> Option<String> 
 }
 
 /// What a challenge asks for: `5 | 3 · rated`, `3 min · casual`.
+/// Friends' challenges only: a rematch belongs to the game's card and the rematch toast.
+pub fn friend_challenges(challenges: &[Challenge]) -> Vec<Challenge> {
+    challenges
+        .iter()
+        .filter(|challenge| !challenge.is_rematch())
+        .cloned()
+        .collect()
+}
+
 pub fn challenge_terms(challenge: &Challenge) -> String {
     let control = TimeControl {
         initial: Duration::from_secs(challenge.initial_s.into()),
@@ -142,11 +151,13 @@ mod tests {
             white: PlayerAtBoard {
                 id: "ann".to_owned(),
                 username: "Ann".to_owned(),
+                avatar: None,
                 rating: Some(1500),
             },
             black: PlayerAtBoard {
                 id: "bob".to_owned(),
                 username: "Bob".to_owned(),
+                avatar: None,
                 rating: Some(1500),
             },
             rated: true,
@@ -266,6 +277,9 @@ mod tests {
             initial_s: 300,
             increment_s: 3,
             rated: true,
+            rematch_of: None,
+            wait_s: 60,
+            seconds_left: 60,
         };
         assert_eq!(challenge_terms(&challenge), "5 | 3 · rated");
         let casual = Challenge {

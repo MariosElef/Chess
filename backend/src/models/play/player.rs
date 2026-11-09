@@ -1,6 +1,8 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::models::account::GetUserModel;
+
 /// Someone connected to play: who they are, as their opponent sees them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Player {
@@ -12,10 +14,23 @@ pub struct Player {
     pub avatar: Option<String>,
 }
 
+impl From<GetUserModel> for Player {
+    fn from(user: GetUserModel) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            guest: user.guest,
+            avatar: user.avatar,
+        }
+    }
+}
+
 /// A player at the board, with their rating in the game's category; none for a guest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlayerModel {
     pub id: Uuid,
     pub username: String,
+    /// Their picture's hash, for the bar beside the board; none shows their initial.
+    pub avatar: Option<String>,
     pub rating: Option<i32>,
 }

@@ -14,14 +14,12 @@ use gpui_kit::{
     *,
 };
 
+use super::challenge_form::ChallengeForm;
 use crate::{
     clients::server::ServerClient,
     components::{
         shell::SOCIAL_PICTURE,
-        social::{
-            ActionTile, ChallengePicker, EmptyState, FriendRow, Leaderboard, PeopleList, PersonRow,
-            SortMenu,
-        },
+        social::{ActionTile, EmptyState, FriendRow, Leaderboard, PeopleList, PersonRow, SortMenu},
     },
     enums::{
         social::{FriendSort, LeaderBoard, Relation, SocialStage},
@@ -33,13 +31,13 @@ use crate::{
         social::{FoundUser, Friend, Friends, UserRef},
     },
     services::{
-        play::{DEFAULT_TIME_CONTROL, challenge_terms},
+        play::{DEFAULT_TIME_CONTROL, challenge_terms, friend_challenges, whole_seconds},
         server::error_message,
         social::{avatar_path, last_online_text, leaderboard, sorted_friends},
     },
     views::{
         chat::ChatsView,
-        live::{LiveConnection, SessionSource},
+        live::{LiveConnection, SessionSource, my_face},
         sound::play_sound,
     },
 };
@@ -69,9 +67,9 @@ pub struct SocialView {
     _search_task: Option<Task<()>>,
     sent: Vec<Challenge>,
     received: Vec<Challenge>,
-    /// The friend whose challenge picker is open.
-    picking_for: Option<String>,
+    /// The time control the last challenge used, which the modal starts from.
     choice: TimeControl,
+    /// Whether the player last wanted a challenge rated; a guest's is sent unrated all the same.
     rated: bool,
     /// A challenge went out or was answered, and the server's word on it is still to come.
     awaiting: bool,
@@ -116,7 +114,6 @@ impl SocialView {
             _search_task: None,
             sent: Vec::new(),
             received: Vec::new(),
-            picking_for: None,
             choice: DEFAULT_TIME_CONTROL.unwrap_or(TimeControl::new(3, 2)),
             rated: true,
             awaiting: false,
@@ -281,28 +278,33 @@ impl SocialView {
                 self.search_changed(cx);
             }
             ServerMessage::Challenges { sent, received } => {
+                let received = friend_challenges(received);
                 let new_one = received
                     .iter()
                     .any(|challenge| !self.received.iter().any(|old| old.id == challenge.id));
                 if new_one {
                     play_sound(Sound::Notify, cx);
                 }
-                self.sent = sent.clone();
-                self.received = received.clone();
+                self.sent = friend_challenges(sent);
+                self.received = received;
                 self.awaiting = false;
             }
             ServerMessage::Game { .. } => self.awaiting = false,
             // Only a refusal of this page's own challenge or answer is its to show.
-            ServerMessage::Error { message } if self.awaiting => {
+            ServerMessage::Error { message } | ServerMessage::InviteRefused { message, .. }
+                if self.awaiting =>
+            {
                 self.awaiting = false;
                 self.problem = Some(message.clone());
             }
             ServerMessage::Error { .. }
+            | ServerMessage::InviteRefused { .. }
             | ServerMessage::Seeking { .. }
             | ServerMessage::SeekCancelled
             | ServerMessage::ChatMessage { .. }
             | ServerMessage::ConversationsChanged
             | ServerMessage::ProfileChanged
+            | ServerMessage::RematchRefused { .. }
             | ServerMessage::BattleSeeking
             | ServerMessage::BattleSeekCancelled
             | ServerMessage::Battle { .. }
@@ -320,20 +322,43 @@ impl SocialView {
         cx.notify();
     }
 
-    fn send_challenge(&mut self, friend_id: String, cx: &mut Context<Self>) {
-        self.picking_for = None;
+    /// Opens the challenge modal for `friend`, starting from the last time control picked.
+    fn open_challenge(&mut self, friend: Friend, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity().downgrade();
+        let friend_id = friend.id.clone();
+        ChallengeForm::open(
+            friend,
+            (self.choice, self.rated, self.can_rate(cx)),
+            move |choice, rated, _, cx| {
+                // The view outlives the modal unless the window is closing.
+                let _ = view.update(cx, |view, cx| {
+                    view.send_challenge((friend_id.clone(), choice, rated), cx);
+                });
+            },
+            window,
+            cx,
+        );
+    }
+
+    /// Sends the challenge, rated only for an account, and keeps the choices for the next one.
+    fn send_challenge(
+        &mut self,
+        (friend_id, choice, rated): (String, TimeControl, bool),
+        cx: &mut Context<Self>,
+    ) {
+        self.choice = choice;
+        self.rated = rated;
         let message = ClientMessage::Challenge {
             user_id: friend_id,
-            initial_s: seconds(self.choice.initial),
-            increment_s: seconds(self.choice.increment),
-            rated: self.rated && self.can_rate(cx),
+            initial_s: whole_seconds(choice.initial),
+            increment_s: whole_seconds(choice.increment),
+            rated: rated && self.can_rate(cx),
         };
         self.send_live(message, cx);
     }
 
     fn pick_stage(&mut self, stage: SocialStage, cx: &mut Context<Self>) {
         self.stage = stage;
-        self.picking_for = None;
         cx.notify();
     }
 
@@ -489,34 +514,32 @@ impl SocialView {
                 "Search for players by name above and add them as friends.",
             ));
         }
-        let rows: Vec<Div> = sorted_friends(&self.friends.friends, self.sort)
+        let rows: Vec<FriendRow> = sorted_friends(&self.friends.friends, self.sort)
             .into_iter()
             .map(|friend| self.friend_row(friend, cx))
             .collect();
         v_flex().gap_2().child(heading).children(rows)
     }
 
-    /// A friend, and the challenge picker under them once Challenge is pressed.
-    fn friend_row(&self, friend: &Friend, cx: &mut Context<Self>) -> Div {
-        let picking = self.picking_for.as_deref() == Some(friend.id.as_str());
+    /// A friend: Challenge opens the challenge modal, Message their chat.
+    fn friend_row(&self, friend: &Friend, cx: &mut Context<Self>) -> FriendRow {
         let view = cx.entity().downgrade();
         let (challenge, message, remove, block) = (view.clone(), view.clone(), view.clone(), view);
         let (to_challenge, to_message, to_remove, to_block) = (
-            friend.id.clone(),
+            friend.clone(),
             friend.id.clone(),
             friend.id.clone(),
             friend.id.clone(),
         );
-        let row = FriendRow::new(
+        FriendRow::new(
             (friend.id.clone(), friend.username.clone()),
             (
                 friend.online,
                 last_online_text(friend.online, friend.away_s),
             ),
-            move |_, cx| {
+            move |window, cx| {
                 let _ = challenge.update(cx, |view, cx| {
-                    view.picking_for = Some(to_challenge.clone());
-                    cx.notify();
+                    view.open_challenge(to_challenge.clone(), window, cx);
                 });
             },
             (
@@ -531,46 +554,7 @@ impl SocialView {
                 },
             ),
         )
-        .picture(avatar_path(&friend.id, friend.avatar.as_deref()));
-        v_flex().child(row).when(picking, |this| {
-            this.child(
-                div()
-                    .pl(px(88.))
-                    .pb_2()
-                    .child(self.picker(friend.id.clone(), cx)),
-            )
-        })
-    }
-
-    fn picker(&self, friend_id: String, cx: &mut Context<Self>) -> ChallengePicker {
-        let view = cx.entity().downgrade();
-        let (choose, rated, send, close) = (view.clone(), view.clone(), view.clone(), view);
-        ChallengePicker::new(
-            (self.choice, self.rated, self.can_rate(cx)),
-            move |choice, _, cx| {
-                let _ = choose.update(cx, |view, cx| {
-                    view.choice = choice;
-                    cx.notify();
-                });
-            },
-            move |on, _, cx| {
-                let _ = rated.update(cx, |view, cx| {
-                    view.rated = on;
-                    cx.notify();
-                });
-            },
-            (
-                move |_, cx: &mut App| {
-                    let _ = send.update(cx, |view, cx| view.send_challenge(friend_id.clone(), cx));
-                },
-                move |_, cx: &mut App| {
-                    let _ = close.update(cx, |view, cx| {
-                        view.picking_for = None;
-                        cx.notify();
-                    });
-                },
-            ),
-        )
+        .picture(avatar_path(&friend.id, friend.avatar.as_deref()))
     }
 
     /// Requests to accept or decline, and ones the player sent, to call off; with a way back.
@@ -753,8 +737,7 @@ impl SocialView {
     /// The friends' leaderboard: each board's best three among them and the player.
     fn leaderboard(&self, cx: &App) -> Leaderboard {
         let name = self.my_name(cx);
-        let mine = (self.session)(cx)
-            .and_then(|session| avatar_path(&session.user.id, session.user.avatar.as_deref()));
+        let mine = my_face(&self.session, cx).and_then(|face| face.picture);
         let boards = LeaderBoard::ALL
             .into_iter()
             .map(|board| {
@@ -849,10 +832,6 @@ fn muted_line(text: &'static str, cx: &App) -> Div {
         .child(text)
 }
 
-fn seconds(duration: Duration) -> u32 {
-    u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
-}
-
 /// The person's picture, as an asset path; none shows their initial.
 fn picture_of(person: &UserRef) -> Option<String> {
     avatar_path(&person.id, person.avatar.as_deref())
@@ -860,29 +839,24 @@ fn picture_of(person: &UserRef) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        rc::Rc,
-        sync::{Arc, Mutex},
-    };
+    use std::{rc::Rc, sync::Arc};
 
     use axum::{
         Json, Router,
-        extract::{
-            Path,
-            ws::{Message, WebSocket, WebSocketUpgrade},
-        },
+        extract::{Path, ws::WebSocketUpgrade},
         http::StatusCode,
         routing::{get, post},
     };
     use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext};
     use serde_json::{Value, json};
 
+    use chess_domain::TimeControl;
+
     use super::{OpenMessages, SocialStage, SocialView};
     use crate::{
         clients::server::ServerClient,
         enums::sound::Sound,
-        models::account::{Session, User},
-        testing::{click, wait_until},
+        testing::{Heard, ann, click, heard_message, record_socket, wait_until, was_heard},
         views::{
             chat::ChatsView,
             live::{LiveConnection, SessionSource},
@@ -890,11 +864,8 @@ mod tests {
         },
     };
 
-    /// What the fake server was asked, in order.
-    type Asked = Arc<Mutex<Vec<String>>>;
-
     /// Ann has Bob online and a request from Cat; Bob challenges her, and accepting is recorded.
-    fn server(asked: Asked) -> ServerClient {
+    fn server(asked: Heard) -> ServerClient {
         let accepted = Arc::clone(&asked);
         let blocked = Arc::clone(&asked);
         let unblocked = Arc::clone(&asked);
@@ -940,61 +911,39 @@ mod tests {
                 .route(
                     "/api/ws",
                     get(move |upgrade: WebSocketUpgrade| async move {
-                        upgrade.on_upgrade(move |socket| bob_challenges(socket, socket_asked))
+                        upgrade.on_upgrade(move |socket| {
+                            record_socket(socket, Some(bob_challenge_lists()), socket_asked)
+                        })
                     }),
                 ),
         )
     }
 
-    async fn bob_challenges(mut socket: WebSocket, asked: Asked) {
-        let challenge = json!({ "type": "challenges", "sent": [], "received": [{
+    /// Bob's challenge, waiting for Ann as she connects.
+    fn bob_challenge_lists() -> Value {
+        json!({ "type": "challenges", "sent": [], "received": [{
             "id": "c1",
             "from": { "id": "bob", "username": "bob" },
             "to": { "id": "ann", "username": "ann" },
-            "initial_s": 300, "increment_s": 3, "rated": true
-        }]});
-        if socket
-            .send(Message::Text(challenge.to_string().into()))
-            .await
-            .is_err()
-        {
-            return;
-        }
-        while let Some(Ok(Message::Text(text))) = socket.recv().await {
-            let message: Value = serde_json::from_str(text.as_str()).expect("json");
-            let kind = message["type"].as_str().unwrap_or_default().to_owned();
-            let id = message["challenge_id"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            asked.lock().expect("the list").push(format!("{kind} {id}"));
-        }
+            "initial_s": 300, "increment_s": 3, "rated": true, "wait_s": 60, "seconds_left": 60
+        }]})
     }
 
     fn signed_in(guest: bool) -> SessionSource {
-        let session = Session {
-            token: "abc".to_owned(),
-            user: User {
-                id: "ann".to_owned(),
-                email: "ann@example.com".to_owned(),
-                username: "ann".to_owned(),
-                guest,
-                avatar: None,
-            },
-        };
+        let session = ann(guest);
         Rc::new(move |_| Some(session.clone()))
     }
 
     fn social(
         cx: &mut TestAppContext,
         guest: bool,
-    ) -> (Entity<SocialView>, Asked, &mut VisualTestContext) {
+    ) -> (Entity<SocialView>, Heard, &mut VisualTestContext) {
         cx.executor().allow_parking();
         cx.update(|cx| {
             gpui_kit::init(cx);
             record_sounds(cx);
         });
-        let asked = Asked::default();
+        let asked = Heard::default();
         let client = server(Arc::clone(&asked));
         let (view, cx) = cx.add_window_view(|window, cx| {
             let session = signed_in(guest);
@@ -1004,14 +953,6 @@ mod tests {
             SocialView::new(client, (session, live), chats, window, cx)
         });
         (view, asked, cx)
-    }
-
-    fn asked_for(asked: &Asked, what: &str) -> bool {
-        asked
-            .lock()
-            .expect("the list")
-            .iter()
-            .any(|line| line == what)
     }
 
     #[gpui_kit::test]
@@ -1025,7 +966,7 @@ mod tests {
             assert_eq!(view.waiting_for_me(), 1, "Cat's request waits");
         });
         view.update(cx, |view, cx| view.accept_friend("cat", cx));
-        wait_until(cx, |_| asked_for(&asked, "accept cat"));
+        wait_until(cx, |_| was_heard(&asked, "accept cat"));
     }
 
     #[gpui_kit::test]
@@ -1047,7 +988,7 @@ mod tests {
             };
             view.send_live(message, cx);
         });
-        wait_until(cx, |_| asked_for(&asked, "accept_challenge c1"));
+        wait_until(cx, |_| was_heard(&asked, "accept_challenge c1"));
     }
 
     #[gpui_kit::test]
@@ -1099,8 +1040,48 @@ mod tests {
             "dan"
         );
         view.update(cx, |view, cx| view.block("bob", cx));
-        wait_until(cx, |_| asked_for(&asked, "block bob"));
+        wait_until(cx, |_| was_heard(&asked, "block bob"));
         view.update(cx, |view, cx| view.unblock("dan", cx));
-        wait_until(cx, |_| asked_for(&asked, "unblock dan"));
+        wait_until(cx, |_| was_heard(&asked, "unblock dan"));
+    }
+
+    #[test]
+    fn rematches_stay_out_of_the_friends_challenges() {
+        let challenge = |id: &str, rematch_of: Option<&str>| -> super::Challenge {
+            serde_json::from_value(serde_json::json!({
+                "id": id, "from": { "id": "bob", "username": "Bob" },
+                "to": { "id": "ann", "username": "Ann" },
+                "initial_s": 300, "increment_s": 0, "rated": false, "rematch_of": rematch_of,
+                "wait_s": 60, "seconds_left": 60,
+            }))
+            .expect("a challenge")
+        };
+        let both = [challenge("c1", None), challenge("r1", Some("g1"))];
+        let kept = crate::services::play::friend_challenges(&both);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].id, "c1");
+    }
+
+    #[gpui_kit::test]
+    fn the_last_challenge_sets_the_next_and_a_guest_asks_unrated(cx: &mut TestAppContext) {
+        let (view, asked, cx) = social(cx, true);
+        view.update(cx, |view, cx| {
+            view.connection.update(cx, |live, cx| live.connect(cx));
+        });
+        let blitz = TimeControl::new(5, 0);
+        view.update(cx, |view, cx| {
+            view.send_challenge(("bob".to_owned(), blitz, true), cx)
+        });
+        wait_until(cx, |_| heard_message(&asked, "challenge").is_some());
+        let sent = heard_message(&asked, "challenge").expect("the challenge");
+        assert_eq!(sent["rated"], false, "a guest's goes unrated all the same");
+        assert_eq!(sent["initial_s"], 300);
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                (view.choice, view.rated),
+                (blitz, true),
+                "kept for the next modal"
+            );
+        });
     }
 }

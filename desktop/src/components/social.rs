@@ -9,7 +9,7 @@ mod person_row;
 mod sort_menu;
 
 pub use action_tile::ActionTile;
-pub use avatar::avatar;
+pub use avatar::{avatar, strip_avatar};
 pub use challenge_picker::ChallengePicker;
 pub use empty_state::EmptyState;
 pub use friend_row::FriendRow;

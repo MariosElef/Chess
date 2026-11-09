@@ -17,6 +17,7 @@ pub struct StartButton {
     picture: Option<&'static str>,
     busy: bool,
     disabled: bool,
+    small: bool,
     on_click: OnClick,
 }
 
@@ -32,6 +33,7 @@ impl StartButton {
             picture: None,
             busy: false,
             disabled: false,
+            small: false,
             on_click: Rc::new(on_click),
         }
     }
@@ -45,6 +47,12 @@ impl StartButton {
     /// Dimmed and taking no clicks, while what it started is on its way.
     pub fn busy(mut self, busy: bool) -> Self {
         self.busy = busy;
+        self
+    }
+
+    /// As wide as its label and short, for a toast's answer, with the same green edge.
+    pub fn small(mut self) -> Self {
+        self.small = true;
         self
     }
 
@@ -63,19 +71,28 @@ impl RenderOnce for StartButton {
         div()
             .id(self.id)
             .debug_selector(move || selector.clone())
-            .w_full()
-            .h(px(48.))
+            .when(self.small, |this| {
+                this.h(px(32.))
+                    .px_4()
+                    .rounded(px(6.))
+                    .border_b_2()
+                    .text_sm()
+            })
+            .when(!self.small, |this| {
+                this.w_full()
+                    .h(px(48.))
+                    .rounded(px(8.))
+                    .border_b_4()
+                    .text_lg()
+            })
             .flex_shrink_0()
             .flex()
             .items_center()
             .justify_center()
             .gap_2p5()
-            .rounded(px(8.))
             .bg(rgb(START_GREEN))
-            .border_b_4()
             .border_color(rgb(START_GREEN_EDGE))
             .text_color(white())
-            .text_lg()
             .font_weight(FontWeight::EXTRA_BOLD)
             .when(inert, |this| this.opacity(0.7))
             .when(!inert, |this| {

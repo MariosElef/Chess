@@ -5,4 +5,4 @@ mod play_page;
 
 pub use bot_player::{BotEvent, BotPlayer};
 pub use online_view::OnlineView;
-pub use play_page::PlayPage;
+pub use play_page::{PlayPage, RematchCardChanged};

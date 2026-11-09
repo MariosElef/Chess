@@ -1,5 +1,7 @@
 use gpui_kit::{component::ActiveTheme as _, prelude::FluentBuilder as _, *};
 
+use crate::models::account::Face;
+
 /// A circle with the person's picture, or their initial on the primary colour's tint.
 pub fn avatar(name: &str, picture: Option<&str>, size: Pixels, cx: &App) -> Div {
     pictured(initial_tile(name, size, cx), picture, (size, size / 2.))
@@ -8,6 +10,11 @@ pub fn avatar(name: &str, picture: Option<&str>, size: Pixels, cx: &App) -> Div 
 /// A square with the person's picture or initial, as `avatar`: a friend's, as chess.com's.
 pub fn square_avatar(name: &str, picture: Option<&str>, size: Pixels, cx: &App) -> Div {
     pictured(initial_tile(name, size, cx), picture, (size, SQUARE_CORNER))
+}
+
+/// A player's picture or initial on a board strip, beside their name.
+pub fn strip_avatar(face: &Face, cx: &App) -> Div {
+    square_avatar(&face.name, face.picture.as_deref(), px(32.), cx)
 }
 
 /// A square avatar's corners, as chess.com rounds a friend's picture.

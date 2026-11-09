@@ -167,6 +167,11 @@ impl PuzzlesView {
         }
     }
 
+    /// Whether the battle screen, which lists battle invitations, is the one on show.
+    pub fn shows_battles(&self) -> bool {
+        self.stage == Stage::Battle
+    }
+
     /// Battle invitations waiting for the player, for the rail's count.
     pub fn invitations(&self, cx: &App) -> usize {
         self.battle.read(cx).invitations()

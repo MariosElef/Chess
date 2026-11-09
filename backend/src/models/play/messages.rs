@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{challenge::ChallengeModel, game::GameSnapshot};
+use super::{challenge::ListedChallenge, game::GameSnapshot};
 use crate::models::{
     chat::message::ChatMessageModel,
     puzzles::battle::{BattleChallengeModel, BattleSnapshot},
@@ -51,6 +51,18 @@ pub enum ClientMessage {
     },
     AcceptChallenge {
         challenge_id: Uuid,
+    },
+    /// Play the game just finished again, colours swapped; if they asked already, it starts.
+    OfferRematch {
+        game_id: Uuid,
+    },
+    /// Accept the opponent's rematch of that game; refused as that game's if it is gone.
+    AcceptRematch {
+        game_id: Uuid,
+    },
+    /// Withdraw the rematch of that game the player asked for, if it is still waiting.
+    CancelRematch {
+        game_id: Uuid,
     },
     DeclineChallenge {
         challenge_id: Uuid,
@@ -107,8 +119,8 @@ pub enum ServerMessage {
     FriendsChanged,
     /// The challenges waiting, each way, whenever they change.
     Challenges {
-        sent: Vec<ChallengeModel>,
-        received: Vec<ChallengeModel>,
+        sent: Vec<ListedChallenge>,
+        received: Vec<ListedChallenge>,
     },
     /// A message in one of the player's conversations.
     ChatMessage {
@@ -118,6 +130,16 @@ pub enum ServerMessage {
     ConversationsChanged,
     /// The player's own account changed on another device, as its picture: fetch it again.
     ProfileChanged,
+    /// A rematch of the game asked for or accepted was refused, in a sentence.
+    RematchRefused {
+        game_id: Uuid,
+        message: String,
+    },
+    /// Accepting a friend's challenge or a battle invitation was refused, in a sentence.
+    InviteRefused {
+        challenge_id: Uuid,
+        message: String,
+    },
     /// Waiting for a Puzzle Battle opponent.
     BattleSeeking,
     BattleSeekCancelled,

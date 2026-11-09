@@ -4,7 +4,7 @@ use chess_domain::Rating;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::{PlayHub, lock};
+use super::{PlayHub, lock, reserve};
 use crate::{
     models::{
         play::{messages::ServerMessage, player::Player},
@@ -171,7 +171,11 @@ impl PlayHub {
             pending.model.id == challenge_id && pending.to.id == player.id
         });
         let Some(pending) = taken else {
-            return self.refuse(player.id, "That invitation is no longer open");
+            return self.refuse_invite(
+                player.id,
+                challenge_id,
+                "That invitation is no longer open",
+            );
         };
         self.send_battle_challenges(pending.from.id);
         self.send_battle_challenges(pending.to.id);
@@ -180,13 +184,30 @@ impl PlayHub {
             .await
             .unwrap_or(false)
         {
-            return self.refuse(player.id, "That invitation is no longer open");
+            return self.refuse_invite(
+                player.id,
+                challenge_id,
+                "That invitation is no longer open",
+            );
         }
         if self.is_battling(pending.from.id) || self.is_battling(pending.to.id) {
-            return self.refuse(player.id, "One of you is already in a battle");
+            return self.refuse_invite(
+                player.id,
+                challenge_id,
+                "One of you is already in a battle",
+            );
         }
         self.start_battle([pending.from, pending.to], pending.model.rated)
             .await;
+    }
+
+    /// Refuses accepting the invitation, as that invitation's, to whoever pressed it.
+    fn refuse_invite(&self, player: Uuid, challenge_id: Uuid, message: &str) {
+        let refused = ServerMessage::InviteRefused {
+            challenge_id,
+            message: message.to_owned(),
+        };
+        self.reply(player, refused);
     }
 
     /// Either player calls it off: the invited one declining, or the one who sent it.
@@ -231,20 +252,13 @@ impl PlayHub {
         // Checked and reserved in one step: two requests at once cannot both take a player.
         let refusal = {
             let mut starting = lock(&self.inner.battles_starting);
-            let refusal = if ids.iter().any(|id| self.is_closed(*id)) {
+            if ids.iter().any(|id| self.is_closed(*id)) {
                 Some("That battle could not start: your opponent has left")
-            } else if ids
-                .iter()
-                .any(|id| starting.contains(id) || self.battle_of(*id).is_some())
-            {
+            } else if !reserve(&mut starting, ids, |id| self.battle_of(id).is_some()) {
                 Some("That battle could not start: one of you is already in one")
             } else {
                 None
-            };
-            if refusal.is_none() {
-                starting.extend(ids);
             }
-            refusal
         };
         if let Some(refusal) = refusal {
             for id in ids {
@@ -377,9 +391,11 @@ impl PlayHub {
             }
         };
         let at_start = stored.map_or(Rating::NEW, from_row);
+        let avatar = self.picture_of(&player);
         BattlePlayer {
             id: player.id,
             username: player.username,
+            avatar,
             rating: rated.then(|| whole(at_start.rating)),
             at_start,
         }

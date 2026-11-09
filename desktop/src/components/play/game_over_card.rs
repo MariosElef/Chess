@@ -18,13 +18,13 @@ use crate::components::{
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// What to do once a game is over: Game Review, large and green, then Analyze, New game, Rematch.
+/// What to do once a game is over: Game Review, large and green, then New game and Rematch.
 #[derive(IntoElement, Clone)]
 pub struct GameOverActions {
     /// Ids are prefixed, so the card's and the panel's buttons are told apart.
     prefix: &'static str,
     on_review: OnClick,
-    choices: Vec<(SharedString, IconName, OnClick)>,
+    choices: Vec<(&'static str, SharedString, IconName, OnClick)>,
     /// The smaller buttons' icons over their labels, as on the narrow card.
     stacked: bool,
 }
@@ -39,14 +39,15 @@ impl GameOverActions {
         }
     }
 
-    /// A smaller button under Game Review, its label fixed or made at the time, such as "3 | 2".
+    /// A smaller button under Game Review; its id stays as its label changes, as Rematch's does.
     pub fn choice(
         mut self,
-        label: impl Into<SharedString>,
+        (id, label): (&'static str, impl Into<SharedString>),
         icon: IconName,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
-        self.choices.push((label.into(), icon, Rc::new(on_click)));
+        self.choices
+            .push((id, label.into(), icon, Rc::new(on_click)));
         self
     }
 
@@ -68,15 +69,10 @@ impl RenderOnce for GameOverActions {
         let choices = self
             .choices
             .into_iter()
-            .map(|(label, icon, on_click)| {
-                ChoiceTile::new(
-                    format!("{prefix}{label}"),
-                    label,
-                    false,
-                    move |window, cx| {
-                        on_click(window, cx);
-                    },
-                )
+            .map(|(id, label, icon, on_click)| {
+                ChoiceTile::new(format!("{prefix}{id}"), label, false, move |window, cx| {
+                    on_click(window, cx);
+                })
                 .icon(icon)
                 .map(|tile| if stacked { tile.stacked() } else { tile })
             })

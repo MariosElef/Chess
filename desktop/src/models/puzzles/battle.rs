@@ -23,7 +23,11 @@ pub struct BattleSnapshot {
 /// One side of a battle: who, and how they are doing.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct BattleSide {
+    pub id: String,
     pub username: String,
+    /// Their picture's hash; none shows their initial.
+    #[serde(default)]
+    pub avatar: Option<String>,
     pub rating: Option<i32>,
     pub score: u32,
     pub mistakes: u32,

@@ -33,6 +33,7 @@ const COMMANDS_AHEAD: usize = 32;
 pub struct BattlePlayer {
     pub id: Uuid,
     pub username: String,
+    pub avatar: Option<String>,
     pub rating: Option<i32>,
     /// Their battle rating as the battle began, for rating it if they close meanwhile.
     pub at_start: Rating,
@@ -234,6 +235,7 @@ impl LiveBattle {
         BattleSideModel {
             id: player.id,
             username: player.username.clone(),
+            avatar: player.avatar.clone(),
             rating: player.rating,
             score: self.progress[place].score,
             mistakes: self.progress[place].mistakes,

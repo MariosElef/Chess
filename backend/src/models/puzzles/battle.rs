@@ -29,6 +29,8 @@ pub struct BattleSnapshot {
 pub struct BattleSideModel {
     pub id: Uuid,
     pub username: String,
+    /// Their picture's hash; none shows their initial.
+    pub avatar: Option<String>,
     /// The battle rating from before it; `None` in an unrated battle.
     pub rating: Option<i32>,
     pub score: u32,

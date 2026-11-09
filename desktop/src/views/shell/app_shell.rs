@@ -2,9 +2,14 @@ use std::rc::Rc;
 
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex, v_flex},
+    prelude::FluentBuilder as _,
     *,
 };
 
+use super::{
+    invite_toast::{InviteChanged, InviteKind, InviteToast},
+    rematch_toast::{RematchToast, ToastChanged},
+};
 use crate::{
     assets::{load_pictures_from, retry_missed_pictures},
     clients::{
@@ -39,7 +44,7 @@ use crate::{
         analysis::AnalysisPage,
         chat::ChatsView,
         live::{LiveConnection, SessionSource},
-        play::{OnlineView, PlayPage},
+        play::{OnlineView, PlayPage, RematchCardChanged},
         puzzles::PuzzlesView,
         settings::apply_appearance,
         social::{OpenMessages, SocialView},
@@ -82,6 +87,12 @@ pub struct AppShell {
     social: Entity<SocialView>,
     /// The player's chats: the Messages page.
     messages: Entity<ChatsView>,
+    /// An opponent's rematch, over every page, unless Play shows that game's card to answer it.
+    rematch_toast: Entity<RematchToast>,
+    _rematch_changes: [Subscription; 2],
+    /// A friend's challenge or battle invitation, over every page but the one listing it.
+    invite_toast: Entity<InviteToast>,
+    _invite_changes: Subscription,
     /// A challenge's game opens Play, a battle Puzzles; Social's waiting count redraws the rail.
     _live_events: Subscription,
     _social_changes: Subscription,
@@ -98,7 +109,7 @@ pub struct AppShell {
     /// Stockfish's threads, memory and depth, shared by Settings and the analysis board.
     engine_settings: EngineSettings,
     _appearance_changes: Subscription,
-    /// Play's Game Review and Analyze hand their game over here.
+    /// Play's Game Review hands its game over here.
     _play_events: Subscription,
 }
 
@@ -144,6 +155,10 @@ impl AppShell {
             live: pages.live,
             social: pages.social,
             messages: pages.messages,
+            rematch_toast: pages.rematch_toast,
+            _rematch_changes: pages.rematch_changes,
+            invite_toast: pages.invite_toast,
+            _invite_changes: pages.invite_changes,
             _message_changes: pages.message_changes,
             _message_asks: pages.message_asks,
             _live_events: pages.live_events,
@@ -241,6 +256,10 @@ impl AppShell {
         self.live = pages.live;
         self.social = pages.social;
         self.messages = pages.messages;
+        self.rematch_toast = pages.rematch_toast;
+        self._rematch_changes = pages.rematch_changes;
+        self.invite_toast = pages.invite_toast;
+        self._invite_changes = pages.invite_changes;
         self._message_changes = pages.message_changes;
         self._message_asks = pages.message_asks;
         self._live_events = pages.live_events;
@@ -291,7 +310,14 @@ impl Render for AppShell {
         });
         // The header and the rail are one L of the chrome's colour; the page is a panel set
         // into it, rounded where it meets the corner.
+        let rematch = self.shows_rematch_toast(cx);
+        let listing = (
+            self.page == Page::Social,
+            self.page == Page::Puzzles && self.puzzles.read(cx).shows_battles(),
+        );
+        let invite = invite_toast_shows(self.invite_toast.read(cx).shown_kind(), listing);
         v_flex()
+            .relative()
             .size_full()
             .bg(cx.theme().sidebar)
             .child(header)
@@ -321,11 +347,27 @@ impl Render for AppShell {
                             .child(self.content(shell)),
                     ),
             )
+            .when(rematch || invite, |this| {
+                this.child(
+                    v_flex()
+                        .absolute()
+                        .bottom_4()
+                        .right_4()
+                        .gap_3()
+                        .when(rematch, |toasts| toasts.child(self.rematch_toast.clone()))
+                        .when(invite, |toasts| toasts.child(self.invite_toast.clone())),
+                )
+            })
             .into_any_element()
     }
 }
 
 impl AppShell {
+    /// A rematch is waiting and no game card on screen already offers to answer it.
+    fn shows_rematch_toast(&self, cx: &App) -> bool {
+        self.rematch_toast.read(cx).shown().is_some()
+    }
+
     /// The avatar's menu: Account and Settings open here, signing out goes to the account.
     fn account_menu(&self, person: MenuPerson, cx: &mut Context<Self>) -> AccountMenu {
         let shell = cx.entity().downgrade();
@@ -463,6 +505,12 @@ struct Pages {
     live: Entity<LiveConnection>,
     social: Entity<SocialView>,
     messages: Entity<ChatsView>,
+    rematch_toast: Entity<RematchToast>,
+    /// The toast and the Play page change whether the toast shows.
+    rematch_changes: [Subscription; 2],
+    invite_toast: Entity<InviteToast>,
+    /// The invitation shown changes whether the toast shows.
+    invite_changes: Subscription,
     live_events: Subscription,
     /// Unread messages change the rail's count.
     message_changes: Subscription,
@@ -470,7 +518,7 @@ struct Pages {
     message_asks: Subscription,
     social_changes: Subscription,
     puzzle_changes: Subscription,
-    /// Play's Game Review and Analyze hand their game over to the shell.
+    /// Play's Game Review hands its game over to the shell.
     play_events: Subscription,
 }
 
@@ -508,6 +556,21 @@ impl Pages {
         let message_asks = cx.subscribe_in(&social, window, open_messages);
         let social_changes = cx.observe(&social, |_, _, cx| cx.notify());
         let puzzle_changes = cx.observe(&puzzles, |_, _, cx| cx.notify());
+        let rematch_toast = cx.new(|cx| RematchToast::new(live.clone(), cx));
+        // Whether the toast shows follows the toast and the Play page's game card both.
+        let rematch_changes = [
+            // The toast's bar ticks redraw the toast alone; this hears only what it shows.
+            cx.subscribe(&rematch_toast, |_, _, _: &ToastChanged, cx| cx.notify()),
+            cx.subscribe(&play, |shell, play, _: &RematchCardChanged, cx| {
+                let game_id = play.read(cx).answering().map(str::to_owned);
+                shell
+                    .rematch_toast
+                    .update(cx, |toast, cx| toast.set_card_game(game_id, cx));
+                cx.notify();
+            }),
+        ];
+        let invite_toast = cx.new(|cx| InviteToast::new(live.clone(), cx));
+        let invite_changes = cx.subscribe(&invite_toast, |_, _, _: &InviteChanged, cx| cx.notify());
         Self {
             play,
             analyze: cx.new(|cx| AnalysisPage::new(engine_settings, window, cx)),
@@ -515,6 +578,10 @@ impl Pages {
             live,
             social,
             messages,
+            rematch_toast,
+            rematch_changes,
+            invite_toast,
+            invite_changes,
             live_events,
             message_changes,
             message_asks,
@@ -532,8 +599,8 @@ fn new_play_page(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) -> Entity<PlayPage> {
-    let online = cx.new(|cx| OnlineView::new(live.clone(), session, cx));
-    let play = cx.new(|cx| PlayPage::new(online, cx));
+    let online = cx.new(|cx| OnlineView::new(live.clone(), Rc::clone(&session), cx));
+    let play = cx.new(|cx| PlayPage::new(online, session, cx));
     let focus = play.read(cx).focus_handle();
     focus.focus(window, cx);
     play
@@ -618,7 +685,9 @@ fn follow_live(
         | ServerMessage::BattleSeeking
         | ServerMessage::BattleSeekCancelled
         | ServerMessage::Battle { .. }
-        | ServerMessage::BattleChallenges { .. } => {}
+        | ServerMessage::BattleChallenges { .. }
+        | ServerMessage::RematchRefused { .. }
+        | ServerMessage::InviteRefused { .. } => {}
     }
     if let ServerMessage::Game { game } = message.as_ref()
         && game.status == LiveStatus::Ongoing
@@ -666,6 +735,15 @@ fn new_puzzles_view(
             cx,
         )
     })
+}
+
+/// An invitation shows as a toast unless the screen listing its kind is open: Social, or battles.
+fn invite_toast_shows(kind: Option<InviteKind>, (social, battles): (bool, bool)) -> bool {
+    match kind {
+        Some(InviteKind::Game) => !social,
+        Some(InviteKind::Battle) => !battles,
+        None => false,
+    }
 }
 
 #[cfg(test)]
@@ -894,5 +972,16 @@ mod tests {
         });
         let in_game = shell.update(cx, |shell, cx| shell.play.read(cx).shows_online(cx));
         assert!(in_game, "Play shows the online game");
+    }
+
+    #[test]
+    fn an_invite_toast_steps_aside_on_the_screen_listing_its_kind() {
+        use super::{InviteKind, invite_toast_shows};
+        let (on_social, on_battles, elsewhere) = ((true, false), (false, true), (false, false));
+        assert!(invite_toast_shows(Some(InviteKind::Game), elsewhere));
+        assert!(!invite_toast_shows(Some(InviteKind::Game), on_social));
+        assert!(invite_toast_shows(Some(InviteKind::Battle), on_social));
+        assert!(!invite_toast_shows(Some(InviteKind::Battle), on_battles));
+        assert!(!invite_toast_shows(None, elsewhere));
     }
 }

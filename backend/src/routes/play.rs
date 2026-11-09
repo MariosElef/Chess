@@ -34,12 +34,7 @@ async fn connect(
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, AppError> {
     let user = state.users.get(signed_in.user_id).await?;
-    let player = Player {
-        id: user.id,
-        username: user.username,
-        guest: user.guest,
-        avatar: user.avatar,
-    };
+    let player = Player::from(user);
     let session = signed_in.session_id;
     Ok(upgrade.on_upgrade(move |socket| serve(socket, state, (player, session))))
 }
@@ -57,7 +52,7 @@ async fn serve(mut socket: WebSocket, state: AppState, (player, session): (Playe
         tokio::select! {
             incoming = socket.recv() => match incoming {
                 Some(Ok(Message::Text(text))) => match serde_json::from_str::<ClientMessage>(&text) {
-                    Ok(message) => hub.handle(&player, message).await,
+                    Ok(message) => hub.handle(&player, connection.id, message).await,
                     Err(error) => {
                         let refusal = ServerMessage::Error {
                             message: format!("That message could not be read: {error}"),

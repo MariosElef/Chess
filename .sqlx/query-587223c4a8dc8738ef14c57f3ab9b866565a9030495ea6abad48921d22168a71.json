@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Whether $2 has been signed in since the game $1 ended, on a session from before then: a\n-- shared guest account handed to someone new since has only a newer one.\nSELECT EXISTS (\n    SELECT 1\n    FROM account.sessions\n    WHERE\n        sessions.user_id = $2\n        AND sessions.revoked_at IS NULL\n        AND sessions.expires_at > now()\n        AND sessions.created_at <= (\n            SELECT games.finished_at\n            FROM play.games\n            WHERE games.id = $1\n        )\n) AS \"seated!\"\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seated!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "587223c4a8dc8738ef14c57f3ab9b866565a9030495ea6abad48921d22168a71"
+}

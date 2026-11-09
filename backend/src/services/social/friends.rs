@@ -168,7 +168,8 @@ impl FriendService {
     /// Unfriends `other`, declines their request, or withdraws one sent to them.
     pub async fn remove(&self, user_id: Uuid, other: Uuid) -> Result<(), AppError> {
         if friendship::remove(&self.db, pair(user_id, other)).await? {
-            self.play.drop_challenges_between(user_id, other);
+            // A rematch is between two who just played, friends or not: it stays.
+            self.play.drop_friend_challenges_between(user_id, other);
             self.play.drop_battle_invitations_between(user_id, other);
             self.tell_both(user_id, other);
         }

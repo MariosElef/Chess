@@ -1,8 +1,9 @@
 use sqlx::PgExecutor;
+use uuid::Uuid;
 
 use crate::{
     enums::play::Color,
-    models::play::game::{FinishedGame, NewGame, PlayedMove},
+    models::play::game::{FinishedGame, NewGame, PlayedMove, RematchTerms},
 };
 
 pub async fn insert(db: impl PgExecutor<'_>, game: &NewGame) -> Result<(), sqlx::Error> {
@@ -41,7 +42,7 @@ pub async fn record_move(db: impl PgExecutor<'_>, played: &PlayedMove) -> Result
 /// The side whose draw offer is open, or `None` once it is answered.
 pub async fn set_draw_offer(
     db: impl PgExecutor<'_>,
-    game_id: uuid::Uuid,
+    game_id: Uuid,
     offered_by: Option<Color>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query_file!(
@@ -69,7 +70,7 @@ pub async fn finish(db: impl PgExecutor<'_>, finished: &FinishedGame) -> Result<
 }
 
 /// Calls a game off before both sides moved.
-pub async fn abort(db: impl PgExecutor<'_>, game_id: uuid::Uuid) -> Result<(), sqlx::Error> {
+pub async fn abort(db: impl PgExecutor<'_>, game_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query_file!("src/repositories/sql/play/game/abort.sql", game_id)
         .execute(db)
         .await?;
@@ -82,4 +83,35 @@ pub async fn abort_unfinished(db: impl PgExecutor<'_>) -> Result<u64, sqlx::Erro
         .execute(db)
         .await?;
     Ok(result.rows_affected())
+}
+
+/// The game a rematch would replay, if the player was in it and it ended in the last ten minutes.
+pub async fn rematch_terms(
+    db: impl PgExecutor<'_>,
+    game_id: Uuid,
+    player: Uuid,
+) -> Result<Option<RematchTerms>, sqlx::Error> {
+    sqlx::query_file_as!(
+        RematchTerms,
+        "src/repositories/sql/play/game/rematch_terms.sql",
+        game_id,
+        player
+    )
+    .fetch_optional(db)
+    .await
+}
+
+/// Whether the player is still who played the game: signed in on a session from before it ended.
+pub async fn seated_since(
+    db: impl PgExecutor<'_>,
+    game_id: Uuid,
+    player: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_file_scalar!(
+        "src/repositories/sql/play/game/seated_since.sql",
+        game_id,
+        player
+    )
+    .fetch_one(db)
+    .await
 }

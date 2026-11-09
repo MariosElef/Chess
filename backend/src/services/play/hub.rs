@@ -10,6 +10,7 @@ use std::{
 mod battles;
 mod challenges;
 mod presence;
+mod rematches;
 
 use chess_domain::{Position, Rating, TimeControl};
 use tokio::sync::mpsc;
@@ -22,6 +23,7 @@ use self::{
 use super::{
     live_game::{GameCommand, GameStart, spawn_game},
     pairing::{Seek, cancel, queue, take_match},
+    whole_seconds::{whole_seconds, whole_seconds_up},
 };
 use crate::{
     enums::chat::ConversationKind,
@@ -62,10 +64,18 @@ struct HubInner {
     battles: Mutex<HashMap<Uuid, BattleEntry>>,
     /// Players whose battle is being set up: its puzzles picked, its row stored.
     battles_starting: Mutex<HashSet<Uuid>>,
+    /// Players whose game is being set up: a second can start for neither meanwhile.
+    games_starting: Mutex<HashSet<Uuid>>,
     /// Closed accounts: anything still on its way from one of their sockets is ignored.
     closed: Mutex<HashSet<Uuid>>,
     /// Pictures changed since their players' sockets opened, which carry the old ones.
     pictures: Mutex<HashMap<Uuid, Option<String>>>,
+}
+
+/// The two players of a game about to start: either way round, or White then Black.
+enum Players<'a> {
+    EitherWay(&'a Player, &'a Player),
+    Fixed(&'a Player, &'a Player),
 }
 
 /// One open socket's queue of messages to send, and the session that opened it.
@@ -101,6 +111,7 @@ impl PlayHub {
                 battle_challenges: Mutex::new(Vec::new()),
                 battles: Mutex::new(HashMap::new()),
                 battles_starting: Mutex::new(HashSet::new()),
+                games_starting: Mutex::new(HashSet::new()),
                 closed: Mutex::new(HashSet::new()),
                 pictures: Mutex::new(HashMap::new()),
             }),
@@ -200,7 +211,14 @@ impl PlayHub {
         });
     }
 
-    pub async fn handle(&self, player: &Player, message: ClientMessage) {
+    /// Handles a message from one of the player's sockets; a refusal answers that socket alone.
+    pub async fn handle(&self, player: &Player, socket: u64, message: ClientMessage) {
+        ASKING_SOCKET
+            .scope((player.id, socket), self.dispatch(player, message))
+            .await;
+    }
+
+    async fn dispatch(&self, player: &Player, message: ClientMessage) {
         if self.is_closed(player.id) {
             return;
         }
@@ -241,6 +259,13 @@ impl PlayHub {
                 let command = GameCommand::DeclineDraw { player: player.id };
                 self.command(player, game_id, command).await;
             }
+            ClientMessage::OfferRematch { game_id } => {
+                self.offer_rematch(player, game_id).await;
+            }
+            ClientMessage::AcceptRematch { game_id } => {
+                self.accept_rematch(player, game_id).await;
+            }
+            ClientMessage::CancelRematch { game_id } => self.cancel_rematch(player, game_id),
             ClientMessage::Challenge {
                 user_id,
                 initial_s,
@@ -286,6 +311,24 @@ impl PlayHub {
         }
     }
 
+    /// A paired game did not start: the seeker waits again, hears why, or was seated elsewhere.
+    fn seek_again_or_refuse(&self, seek: &Seek, refusal: StartRefusal) {
+        let free = !self.is_playing(seek.player.id) && self.is_online(seek.player.id);
+        match after_failed_start(refusal, free) {
+            AfterFailedStart::Nothing => {}
+            // Sought again from the start: another waiting seeker may take them now.
+            AfterFailedStart::SeekAgain => {
+                let (hub, seek) = (self.clone(), seek.clone());
+                let control = (
+                    whole_seconds(seek.control.initial),
+                    whole_seconds(seek.control.increment),
+                );
+                tokio::spawn(async move { hub.seek(&seek.player, control, seek.rated).await });
+            }
+            AfterFailedStart::Refuse(reason) => self.refuse(seek.player.id, reason),
+        }
+    }
+
     /// The game is over: it takes no more commands.
     pub fn game_over(&self, game_id: Uuid) {
         lock(&self.inner.games).remove(&game_id);
@@ -296,7 +339,7 @@ impl PlayHub {
         if let Err(reason) = seek_refusal(player, (initial_s, increment_s), rated) {
             return self.refuse(player.id, reason);
         }
-        if !self.games_of(player.id).is_empty() {
+        if self.is_playing(player.id) {
             return self.refuse(player.id, "Finish your game first");
         }
         let new = Seek {
@@ -317,49 +360,71 @@ impl PlayHub {
         };
         match opponent {
             Some(opponent) => {
-                self.start_game((&opponent.player, &new.player), new.control, rated)
-                    .await;
+                let players = Players::EitherWay(&opponent.player, &new.player);
+                if let Err(refusal) = self.start_game(players, new.control, rated).await {
+                    self.seek_again_or_refuse(&opponent, refusal);
+                    self.seek_again_or_refuse(&new, refusal);
+                }
             }
-            None => self.send(
-                player.id,
-                ServerMessage::Seeking {
-                    initial_s,
-                    increment_s,
-                    rated,
-                },
-            ),
+            None => self.send(player.id, seeking_message(&new)),
         }
     }
 
-    /// Two players meet: colours are drawn, the game is stored and starts; its id, if it did.
+    /// Two players meet: colours drawn or fixed, the game is stored and starts; its id, or why not.
     async fn start_game(
         &self,
-        (first, second): (&Player, &Player),
+        players: Players<'_>,
         control: TimeControl,
         rated: bool,
-    ) -> Option<Uuid> {
-        let (white, black) = if rand::random() {
-            (first, second)
-        } else {
-            (second, first)
+    ) -> Result<Uuid, StartRefusal> {
+        let (white, black) = match players {
+            Players::EitherWay(first, second) if rand::random() => (first, second),
+            Players::EitherWay(first, second) => (second, first),
+            Players::Fixed(white, black) => (white, black),
         };
+        // Two games accepted at once, as from two devices, cannot both seat the same player.
+        if !self.take_seats([white.id, black.id]) {
+            return Err(StartRefusal::SeatsTaken);
+        }
+        let started = self
+            .seat_and_start((white, black), control, rated)
+            .await
+            .map_err(StartRefusal::Failed);
+        let mut starting = lock(&self.inner.games_starting);
+        starting.remove(&white.id);
+        starting.remove(&black.id);
+        started
+    }
+
+    /// Reserves both players for a game being set up, unless either is playing or being seated.
+    fn take_seats(&self, players: [Uuid; 2]) -> bool {
+        let in_game = |player: Uuid| !self.games_of(player).is_empty();
+        reserve(&mut lock(&self.inner.games_starting), players, in_game)
+    }
+
+    /// Whether the player is in a game, or one is being set up for them.
+    fn is_playing(&self, player: Uuid) -> bool {
+        !self.games_of(player).is_empty() || lock(&self.inner.games_starting).contains(&player)
+    }
+
+    /// Stores the game and its chat, and starts it; its id, or why not.
+    async fn seat_and_start(
+        &self,
+        (white, black): (&Player, &Player),
+        control: TimeControl,
+        rated: bool,
+    ) -> Result<Uuid, &'static str> {
         {
             let mut seeks = lock(&self.inner.seeks);
             cancel(&mut seeks, white);
             cancel(&mut seeks, black);
         }
         if [white.id, black.id].iter().any(|id| self.is_closed(*id)) {
-            for player in [white.id, black.id] {
-                self.refuse(player, "The game could not start: your opponent has left");
-            }
-            return None;
+            return Err("The game could not start: your opponent has left");
         }
         let category = control.category().name().to_lowercase();
         let Some(chat_id) = self.start_game_chat([white.id, black.id]).await else {
-            for player in [white.id, black.id] {
-                self.refuse(player, "The game could not start: try again");
-            }
-            return None;
+            return Err("The game could not start: try again");
         };
         let (white_model, white_rating) = self.at_board(white, &category).await;
         let (black_model, black_rating) = self.at_board(black, &category).await;
@@ -386,10 +451,7 @@ impl PlayHub {
         };
         if let Err(error) = game::insert(&self.inner.db, &new_game).await {
             tracing::error!(?error, "starting a game failed");
-            for player in [white.id, black.id] {
-                self.refuse(player, "The game could not start: try again");
-            }
-            return None;
+            return Err("The game could not start: try again");
         }
         let players = [white.id, black.id];
         let commands = spawn_game(start, self.clone(), self.inner.db.clone());
@@ -407,7 +469,7 @@ impl PlayHub {
         // Both are playing now, so nothing else they had waiting can start.
         self.drop_challenges_of(white.id);
         self.drop_challenges_of(black.id);
-        Some(new_game.id)
+        Ok(new_game.id)
     }
 
     /// The two players' chat for a game about to start; `None` if it could not be stored.
@@ -444,6 +506,7 @@ impl PlayHub {
         let model = PlayerModel {
             id: player.id,
             username: player.username.clone(),
+            avatar: self.picture_of(player),
             rating: (!player.guest).then(|| whole(current.rating)),
         };
         (model, current)
@@ -473,12 +536,17 @@ impl PlayHub {
 
     /// The player as a challenge or invitation names them, with their picture as it is now.
     fn user_ref(&self, player: &Player) -> UserRef {
-        let changed = lock(&self.inner.pictures).get(&player.id).cloned();
         UserRef {
             id: player.id,
             username: player.username.clone(),
-            avatar: changed.unwrap_or_else(|| player.avatar.clone()),
+            avatar: self.picture_of(player),
         }
+    }
+
+    /// The player's picture as it is now: changed since their socket opened, or as it was then.
+    fn picture_of(&self, player: &Player) -> Option<String> {
+        let changed = lock(&self.inner.pictures).get(&player.id).cloned();
+        changed.unwrap_or_else(|| player.avatar.clone())
     }
 
     /// A closed account's last word: its seeks go, its games are resigned and its sockets shut.
@@ -512,12 +580,27 @@ impl PlayHub {
     }
 
     fn refuse(&self, player: Uuid, message: &str) {
-        self.send(
+        self.reply(
             player,
             ServerMessage::Error {
                 message: message.to_owned(),
             },
         );
+    }
+
+    /// Sends to the asking socket when the player is who asked, else to all of the player's.
+    fn reply(&self, player: Uuid, message: ServerMessage) {
+        let asking = ASKING_SOCKET
+            .try_with(|(asker, socket)| (*asker == player).then_some(*socket))
+            .ok()
+            .flatten();
+        if let Some(outboxes) = lock(&self.inner.connections).get_mut(&player) {
+            // The player's other devices did not ask: they hear nothing, even once it has closed.
+            outboxes.retain(|outbox| {
+                asking.is_some_and(|id| outbox.id != id)
+                    || outbox.sender.try_send(message.clone()).is_ok()
+            });
+        }
     }
 }
 
@@ -539,4 +622,109 @@ fn seek_refusal(
 /// Takes the lock even if a panic poisoned it, as its entries do not depend on each other.
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+tokio::task_local! {
+    /// The player and socket whose message is being handled, so a refusal answers it alone.
+    static ASKING_SOCKET: (Uuid, u64);
+}
+
+/// Why a game did not start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartRefusal {
+    /// One of the two is already playing, or being seated in another game.
+    SeatsTaken,
+    /// It failed for both, in a sentence.
+    Failed(&'static str),
+}
+
+impl StartRefusal {
+    /// The refusal in a sentence, as the players hear it.
+    fn message(self) -> &'static str {
+        match self {
+            StartRefusal::SeatsTaken => "The game could not start: one of you is already playing",
+            StartRefusal::Failed(message) => message,
+        }
+    }
+}
+
+/// What becomes of a seeker whose paired game did not start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AfterFailedStart {
+    /// Seated in another game meanwhile, or gone: nothing more to do.
+    Nothing,
+    /// Free, and only the other player was taken: seeking again.
+    SeekAgain,
+    /// The game failed for both: told why.
+    Refuse(&'static str),
+}
+
+/// What a seeker's failed game means for them, by why it failed and whether they are still free.
+fn after_failed_start(refusal: StartRefusal, free: bool) -> AfterFailedStart {
+    match (refusal, free) {
+        (_, false) => AfterFailedStart::Nothing,
+        (StartRefusal::SeatsTaken, true) => AfterFailedStart::SeekAgain,
+        (StartRefusal::Failed(message), true) => AfterFailedStart::Refuse(message),
+    }
+}
+
+/// The word that the player is waiting for a game like `seek`.
+fn seeking_message(seek: &Seek) -> ServerMessage {
+    ServerMessage::Seeking {
+        initial_s: whole_seconds(seek.control.initial),
+        increment_s: whole_seconds(seek.control.increment),
+        rated: seek.rated,
+    }
+}
+
+/// Reserves both players in `starting`, unless either is busy or already being seated.
+fn reserve(starting: &mut HashSet<Uuid>, players: [Uuid; 2], busy: impl Fn(Uuid) -> bool) -> bool {
+    let free = players
+        .iter()
+        .all(|player| !starting.contains(player) && !busy(*player));
+    if free {
+        starting.extend(players);
+    }
+    free
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use uuid::Uuid;
+
+    use super::{AfterFailedStart, StartRefusal, after_failed_start, reserve};
+
+    #[test]
+    fn a_player_is_reserved_for_one_game_at_a_time() {
+        let (ann, bob, cat) = (Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3));
+        let mut starting = HashSet::new();
+        assert!(reserve(&mut starting, [ann, bob], |_| false));
+        assert!(
+            !reserve(&mut starting, [ann, cat], |_| false),
+            "Ann is being seated"
+        );
+        assert!(
+            !reserve(&mut starting, [bob, cat], |_| false),
+            "Bob is being seated"
+        );
+        assert!(
+            !reserve(&mut HashSet::new(), [cat, ann], |player| player == cat),
+            "in a game"
+        );
+        assert_eq!(starting.len(), 2, "a refused pair reserves nobody");
+    }
+
+    #[test]
+    fn a_seeker_whose_game_failed_waits_again_only_if_the_other_was_taken() {
+        let failed = StartRefusal::Failed("The game could not start: try again");
+        let taken = StartRefusal::SeatsTaken;
+        assert_eq!(after_failed_start(taken, true), AfterFailedStart::SeekAgain);
+        assert_eq!(after_failed_start(taken, false), AfterFailedStart::Nothing);
+        assert_eq!(
+            after_failed_start(failed, true),
+            AfterFailedStart::Refuse("The game could not start: try again")
+        );
+    }
 }

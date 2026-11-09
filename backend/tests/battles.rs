@@ -253,3 +253,24 @@ async fn closing_an_account_mid_battle_resigns_it(db: Db) {
     .await;
     assert_eq!(over["battle"]["result"], "won");
 }
+
+#[sqlx::test]
+async fn the_opponents_picture_reaches_the_battle(db: Db) {
+    let server = server(db.clone(), "picture").await;
+    let (ann, _) = account(&server, "ann").await;
+    let (bob, bob_id) = account(&server, "bob").await;
+    sqlx::query("UPDATE account.users SET avatar_hash = 'h1' WHERE id = $1::uuid")
+        .bind(&bob_id)
+        .execute(&db)
+        .await
+        .expect("a picture");
+    let mut ann_socket = connect(&server, &ann).await;
+    let mut bob_socket = connect(&server, &bob).await;
+    for socket in [&mut ann_socket, &mut bob_socket] {
+        socket
+            .send_json(&json!({ "type": "seek_battle", "rated": false }))
+            .await;
+    }
+    let started = next_where(&mut ann_socket, "battle", |_| true).await["battle"].clone();
+    assert_eq!(started["opponent"]["avatar"], "h1");
+}

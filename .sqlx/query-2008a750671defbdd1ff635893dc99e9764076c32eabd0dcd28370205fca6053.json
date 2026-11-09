@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- A challenge as it is sent: who asks whom, its terms, the challenger's colour ('random' for a\n-- friend's challenge), the game a rematch replays, and when it lapses.\nINSERT INTO play.challenges (\n    id, challenger_id, challenged_id, initial_s, increment_s, rated, challenger_colour,\n    rematch_of, expires_at\n)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(secs => $9))\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Text",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2008a750671defbdd1ff635893dc99e9764076c32eabd0dcd28370205fca6053"
+}

@@ -50,6 +50,18 @@ pub enum ClientMessage {
     AcceptChallenge {
         challenge_id: String,
     },
+    /// Play the game just finished again, colours swapped; if they asked already, it starts.
+    OfferRematch {
+        game_id: String,
+    },
+    /// Accept the opponent's rematch of that game; refused as that game's if it is gone.
+    AcceptRematch {
+        game_id: String,
+    },
+    /// Withdraw the rematch of that game the player asked for, if it is still waiting.
+    CancelRematch {
+        game_id: String,
+    },
     DeclineChallenge {
         challenge_id: String,
     },
@@ -112,6 +124,11 @@ pub enum ServerMessage {
     ConversationsChanged,
     /// The player's own account changed on another device, as its picture: fetch it again.
     ProfileChanged,
+    /// A rematch of the game asked for or accepted was refused, in a sentence.
+    RematchRefused {
+        game_id: String,
+        message: String,
+    },
     /// Waiting for a Puzzle Battle opponent.
     BattleSeeking,
     BattleSeekCancelled,
@@ -123,6 +140,11 @@ pub enum ServerMessage {
     BattleChallenges {
         sent: Vec<BattleChallenge>,
         received: Vec<BattleChallenge>,
+    },
+    /// Accepting a friend's challenge or a battle invitation was refused, in a sentence.
+    InviteRefused {
+        challenge_id: String,
+        message: String,
     },
 }
 

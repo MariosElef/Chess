@@ -7,7 +7,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use super::{game_rating::rate_game, hub::PlayHub};
+use super::{game_rating::rate_game, hub::PlayHub, whole_seconds::whole_seconds};
 use crate::{
     enums::play::{Color, GameResult, GameStatus},
     models::play::{
@@ -199,14 +199,15 @@ impl LiveGame {
             .then(|| self.first_move_since + FIRST_MOVE_WAIT)
     }
 
-    /// Stores the game as called off, tells both players, and lets the hub forget it.
+    /// Stores the game as called off, lets the hub forget it, and tells both players.
     async fn abort(&mut self) {
         self.stop_clock();
         if let Err(error) = game::abort(&self.db, self.start.id).await {
             tracing::error!(?error, game = %self.start.id, "storing the abort failed");
         }
-        self.broadcast();
+        // Forgotten first, so a seek or challenge sent as the news arrives finds both free.
         self.hub.game_over(self.start.id);
+        self.broadcast();
     }
 
     fn resign(&mut self, player: Uuid) {
@@ -259,7 +260,7 @@ impl LiveGame {
         let _ = self.game.flag(side);
     }
 
-    /// Rates a rated game, stores how it ended, tells both players, and lets the hub forget it.
+    /// Rates a rated game, stores how it ended, lets the hub forget it, and tells both.
     async fn finish(&mut self) {
         self.stop_clock();
         let Some(outcome) = self.game.outcome() else {
@@ -293,8 +294,9 @@ impl LiveGame {
         if let Err(error) = game::finish(&self.db, &finished).await {
             tracing::error!(?error, game = %self.start.id, "storing the end failed");
         }
-        self.broadcast();
+        // Forgotten first, so a rematch asked as the result arrives finds both free.
         self.hub.game_over(self.start.id);
+        self.broadcast();
     }
 
     /// The player's side, or `None` and a refusal for someone not in this game.
@@ -390,8 +392,8 @@ impl LiveGame {
             white: self.start.white.clone(),
             black: self.start.black.clone(),
             rated: self.start.rated,
-            initial_s: seconds(self.start.control.initial),
-            increment_s: seconds(self.start.control.increment),
+            initial_s: whole_seconds(self.start.control.initial),
+            increment_s: whole_seconds(self.start.control.increment),
             moves: self.game.moves().iter().map(ToString::to_string).collect(),
             white_ms: self
                 .remaining(Side::White)
@@ -435,8 +437,4 @@ impl LiveGame {
 
 fn millis(duration: Duration) -> i32 {
     i32::try_from(duration.as_millis()).unwrap_or(i32::MAX)
-}
-
-fn seconds(duration: Duration) -> u32 {
-    u32::try_from(duration.as_secs()).unwrap_or(u32::MAX)
 }
