@@ -16,6 +16,7 @@ Icons from gpui-kit's [Lucide](https://lucide.dev) set | the Lucide contributors
 desktop/assets/pieces/staunty: the "staunty" set, via [lila](https://github.com/lichess-org/lila) | sadsnake1 | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 desktop/assets/pieces/california: the "california" set, via [lila](https://github.com/lichess-org/lila) | [Jerry S.](https://sites.google.com/view/jerrychess/home) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 desktop/assets/sounds/lisp: the "lisp" set, via [lila](https://github.com/lichess-org/lila) | [EdinburghCollective](https://lichess.org/@/EdinburghCollective) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+desktop/assets/social/challenge.svg: the crossed swords, from [Twemoji](https://github.com/jdecked/twemoji) | Twitter, Inc. and other contributors | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 ## To be replaced before the app is shared
 
@@ -32,6 +33,9 @@ desktop/assets/review/*.png (the move icons) | [chess.com](https://www.chess.com
 desktop/assets/nav/*.png and nav/unused/learn.png (the page pictures, Messages' included) | [chess.com](https://www.chess.com) | chess.com's own pictures, not licensed for reuse
 desktop/assets/speed/bullet.png, blitz.png, rapid.png | [chess.com](https://www.chess.com) | chess.com's own pictures, not licensed for reuse
 desktop/assets/end/*.png (the end-of-game badges) | [chess.com](https://www.chess.com) | chess.com's own pictures, not licensed for reuse
+desktop/assets/nav/leaderboard.svg and nav/settings.svg (the Leaderboard and Settings pictures) | [chess.com](https://www.chess.com) | chess.com's own pictures, not licensed for reuse
+desktop/assets/shell/logo.svg and shell/app_icon.png (the header's pawn and the Dock icon made from it) | [chess.com](https://www.chess.com) | chess.com's logo, not licensed for reuse
+desktop/assets/nav/account.svg (the Account picture) | unknown, via [SVG Repo](https://www.svgrepo.com) | licence not recorded
 desktop/assets/bots | unknown | source and licence not recorded
 docs/screenshots | the project, showing the app | they show chess.com's pictures above, and so carry the same caveat
 

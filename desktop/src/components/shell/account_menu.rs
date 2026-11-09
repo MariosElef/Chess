@@ -12,7 +12,7 @@ use gpui_kit::{
     *,
 };
 
-use super::page_icons::page_icon;
+use super::nav_pictures::{ACCOUNT_PICTURE, SETTINGS_PICTURE};
 use crate::{
     components::social::avatar,
     enums::{account::AccountForm, shell::Page},
@@ -84,14 +84,15 @@ impl RenderOnce for AccountMenu {
             .content(move |_, _, cx| {
                 let close = closer(cx);
                 let mut items = v_flex().p_1();
-                for page in [Page::Account, Page::Settings] {
+                for (page, picture) in [
+                    (Page::Account, ACCOUNT_PICTURE),
+                    (Page::Settings, SETTINGS_PICTURE),
+                ] {
                     let (on_page, close) = (Rc::clone(&on_page), Rc::clone(&close));
-                    items = items.child(item(page.label(), page_icon(page)).on_click(
-                        move |_, window, cx| {
-                            on_page(page, window, cx);
-                            close(window, cx);
-                        },
-                    ));
+                    items = items.child(page_item(page, picture).on_click(move |_, window, cx| {
+                        on_page(page, window, cx);
+                        close(window, cx);
+                    }));
                 }
                 let ending: Vec<Button> = if person.guest {
                     [
@@ -152,6 +153,20 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
                         .text_color(cx.theme().muted_foreground)
                         .child(detail),
                 ),
+        )
+}
+
+/// A page's item, with the page's own picture.
+fn page_item(page: Page, picture: &'static str) -> Button {
+    Button::new(page.label())
+        .ghost()
+        .w_full()
+        .justify_start()
+        .child(
+            h_flex()
+                .gap_2()
+                .child(img(picture).size_4())
+                .child(page.label()),
         )
 }
 

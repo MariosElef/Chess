@@ -11,7 +11,7 @@ use super::{
     option_tile::OptionTile,
 };
 use crate::{
-    components::{board::BoardStyle, panel::ChoiceTile},
+    components::{board::BoardStyle, panel::ChoiceTile, shell::SETTINGS_PICTURE},
     enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
     models::engine::{DEPTH_CHOICES, EngineSettings, HASH_CHOICES, depth_label, thread_choices},
 };
@@ -75,7 +75,7 @@ impl RenderOnce for SettingsPage {
             .child(
                 h_flex()
                     .gap_3()
-                    .child(Icon::from(IconName::Settings).size_7())
+                    .child(img(SETTINGS_PICTURE).size_10())
                     .child(
                         div()
                             .text_3xl()

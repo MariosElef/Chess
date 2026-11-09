@@ -1,4 +1,5 @@
 //! The world outside the app: the Stockfish process, this computer, the settings files.
+pub mod dock_icon;
 pub mod engine;
 pub mod files;
 pub mod http;

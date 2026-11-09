@@ -7,6 +7,7 @@ pub enum Page {
     Analyze,
     Social,
     Messages,
+    Leaderboard,
     Settings,
     Account,
 }
@@ -18,16 +19,16 @@ impl Page {
     /// The pages a rail item opens onto when hovered; empty for an item that is one page.
     pub fn menu(self) -> &'static [Self] {
         match self {
-            Self::Social => &[Self::Social, Self::Messages],
-            Self::Play | Self::Puzzles | Self::Analyze | Self::Messages => &[],
+            Self::Social => &[Self::Social, Self::Messages, Self::Leaderboard],
+            Self::Play | Self::Puzzles | Self::Analyze | Self::Messages | Self::Leaderboard => &[],
             Self::Settings | Self::Account => &[],
         }
     }
 
-    /// The rail item a page is under: Messages is under Social.
+    /// The rail item a page is under: Messages and Leaderboard are under Social.
     pub fn rail_item(self) -> Self {
         match self {
-            Self::Messages => Self::Social,
+            Self::Messages | Self::Leaderboard => Self::Social,
             Self::Play | Self::Puzzles | Self::Analyze | Self::Social => self,
             Self::Settings | Self::Account => self,
         }
@@ -41,6 +42,7 @@ impl Page {
             | Self::Puzzles
             | Self::Analyze
             | Self::Messages
+            | Self::Leaderboard
             | Self::Settings
             | Self::Account => self.label(),
         }
@@ -53,6 +55,7 @@ impl Page {
             Self::Analyze => "Analyze",
             Self::Social => "Social",
             Self::Messages => "Messages",
+            Self::Leaderboard => "Leaderboard",
             Self::Settings => "Settings",
             Self::Account => "Account",
         }

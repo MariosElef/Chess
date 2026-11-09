@@ -1,8 +1,9 @@
 use gpui_kit::{
-    assets::IconName,
-    component::{ActiveTheme as _, Icon, Sizable as _, h_flex},
+    component::{ActiveTheme as _, h_flex},
     *,
 };
+
+use super::app_logo::APP_LOGO;
 
 /// The bar across the top: the app's mark on the left, its actions on the right.
 #[derive(IntoElement)]
@@ -58,7 +59,8 @@ impl RenderOnce for AppHeader {
                     .gap_2p5()
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(Icon::from(IconName::ChessKnight).with_size(px(26.)))
+                    // The pawn is taller than wide: 290 by 400.
+                    .child(img(APP_LOGO).h(px(26.)).w(px(19.)))
                     .child("Chess"),
             )
             .child(h_flex().items_center().gap_5().children(self.actions))

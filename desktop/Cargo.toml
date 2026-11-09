@@ -18,6 +18,12 @@ serde_json = "1.0.154"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "macros"] }
 tokio-tungstenite = "0.30.0"
 
+# The Dock's icon is set through AppKit, as the app runs unbundled.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData"] }
+
 [lints]
 workspace = true
 

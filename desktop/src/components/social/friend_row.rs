@@ -13,7 +13,8 @@ use gpui_kit::{
     *,
 };
 
-use super::avatar::square_avatar;
+use super::{avatar::square_avatar, social_pictures::CHALLENGE_PICTURE};
+use crate::components::shell::MESSAGES_PICTURE;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -117,7 +118,7 @@ impl RenderOnce for FriendRow {
                     .child(
                         Button::new(SharedString::from(format!("challenge-{}", self.id)))
                             .ghost()
-                            .icon(IconName::Swords)
+                            .child(img(CHALLENGE_PICTURE).size_5())
                             .tooltip("Challenge")
                             .disabled(!self.online)
                             .on_click(move |_, window, cx| challenge(window, cx)),
@@ -125,7 +126,7 @@ impl RenderOnce for FriendRow {
                     .child(
                         Button::new(SharedString::from(format!("message-{}", self.id)))
                             .ghost()
-                            .icon(IconName::Mail)
+                            .child(img(MESSAGES_PICTURE).size_5())
                             .tooltip("Message")
                             .on_click(move |_, window, cx| message(window, cx)),
                     )

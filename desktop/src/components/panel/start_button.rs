@@ -19,7 +19,7 @@ const WHITE: u32 = 0x00ff_ffff;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// The big green button that starts a game or a puzzle; dimmed and deaf to clicks while it waits.
+/// The app's 3D button, green, red or white in three sizes; dimmed and deaf to clicks while busy.
 #[derive(IntoElement)]
 pub struct StartButton {
     id: SharedString,
@@ -28,7 +28,7 @@ pub struct StartButton {
     icon: Option<IconName>,
     busy: bool,
     disabled: bool,
-    small: bool,
+    size: Size,
     /// Green to start something, red to end it, white for anything else.
     tone: Tone,
     on_click: OnClick,
@@ -47,7 +47,7 @@ impl StartButton {
             icon: None,
             busy: false,
             disabled: false,
-            small: false,
+            size: Size::Full,
             tone: Tone::Start,
             on_click: Rc::new(on_click),
         }
@@ -83,9 +83,15 @@ impl StartButton {
         self
     }
 
-    /// As wide as its label and short, for a toast's answer, with the same green edge.
+    /// As wide as its label and short.
     pub fn small(mut self) -> Self {
-        self.small = true;
+        self.size = Size::Small;
+        self
+    }
+
+    /// As wide as its label, taller than small and with larger text.
+    pub fn medium(mut self) -> Self {
+        self.size = Size::Medium;
         self
     }
 
@@ -105,19 +111,25 @@ impl RenderOnce for StartButton {
         div()
             .id(self.id)
             .debug_selector(move || selector.clone())
-            .when(self.small, |this| {
-                this.h(px(32.))
+            .map(|this| match self.size {
+                Size::Small => this
+                    .h(px(32.))
                     .px_4()
                     .rounded(px(6.))
                     .border_b_2()
-                    .text_sm()
-            })
-            .when(!self.small, |this| {
-                this.w_full()
+                    .text_sm(),
+                Size::Medium => this
+                    .h(px(42.))
+                    .px_5()
+                    .rounded(px(8.))
+                    .border_b_4()
+                    .text_base(),
+                Size::Full => this
+                    .w_full()
                     .h(px(48.))
                     .rounded(px(8.))
                     .border_b_4()
-                    .text_lg()
+                    .text_lg(),
             })
             .flex_shrink_0()
             .flex()
@@ -139,6 +151,14 @@ impl RenderOnce for StartButton {
                 this.on_click(move |_, window, cx| on_click(window, cx))
             })
     }
+}
+
+/// How big a 3D button is: short, a little taller, or the full width of its panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Size {
+    Small,
+    Medium,
+    Full,
 }
 
 /// What a 3D button does, which sets its colour.

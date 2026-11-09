@@ -1,0 +1,109 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The players rated in category $1, best first, $2 of them from place $3 on: open accounts, not\n-- guests, that have a rated result in it. Equal ratings as shown share a place, listed by name.\nWITH ranked AS (\n    SELECT\n        ratings.user_id,\n        users.username,\n        users.avatar_hash AS avatar,\n        ratings.rating,\n        ratings.deviation,\n        ratings.volatility,\n        ratings.games_played,\n        rank() OVER (ORDER BY round(ratings.rating) DESC) AS place\n    FROM play.ratings\n    INNER JOIN account.users ON users.id = ratings.user_id\n    WHERE\n        ratings.category_id = $1\n        AND ratings.games_played > 0\n        AND users.deleted_at IS NULL\n        AND users.guest_number IS NULL\n)\nSELECT\n    ranked.user_id AS \"user_id!\",\n    ranked.username AS \"username!\",\n    ranked.avatar,\n    ranked.rating AS \"rating!\",\n    ranked.deviation AS \"deviation!\",\n    ranked.volatility AS \"volatility!\",\n    ranked.games_played AS \"games_played!\",\n    ranked.place AS \"place!\"\nFROM ranked\nORDER BY ranked.place, ranked.username\nLIMIT $2 OFFSET $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "rating!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "rating"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "deviation!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "deviation"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "volatility!",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "volatility"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "games_played!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "games_played"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "place!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c0deae3466fdc9add9cca325f97b7a3e7cc791fb1b98f31768b81a874e22942f"
+}

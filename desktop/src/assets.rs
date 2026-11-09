@@ -15,7 +15,8 @@ use crate::{
         board::{PIECE_IMAGES, end_picture, end_picture_paths},
         play::{bot_picture, bot_picture_paths, speed_picture_bytes, speed_picture_paths},
         puzzles::{puzzle_picture, puzzle_picture_paths},
-        shell::{nav_picture, nav_picture_paths},
+        shell::{APP_LOGO, app_logo, nav_picture, nav_picture_paths},
+        social::{social_picture, social_picture_paths},
     },
     services::social::avatar_of_path,
 };
@@ -80,6 +81,8 @@ impl AssetSource for AppAssets {
             .or_else(|| bot_picture(path))
             .or_else(|| end_picture(path))
             .or_else(|| puzzle_picture(path))
+            .or_else(|| social_picture(path))
+            .or_else(|| app_logo(path))
         {
             return Ok(Some(Cow::Borrowed(icon)));
         }
@@ -102,6 +105,8 @@ impl AssetSource for AppAssets {
                 .chain(bot_picture_paths())
                 .chain(end_picture_paths())
                 .chain(puzzle_picture_paths())
+                .chain(social_picture_paths())
+                .chain([APP_LOGO])
                 .filter(|icon| icon.starts_with(path))
                 .map(SharedString::from),
         );

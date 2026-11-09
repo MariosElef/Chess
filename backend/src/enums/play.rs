@@ -1,4 +1,4 @@
-use chess_domain::{Outcome, Side};
+use chess_domain::{Category, Outcome, Side};
 use serde::{Deserialize, Serialize};
 
 /// A side, as it travels the wire and sits in `play.games`.
@@ -137,5 +137,67 @@ impl ChallengeStatus {
             Self::Cancelled => "cancelled",
             Self::Expired => "expired",
         }
+    }
+}
+
+/// Puzzle ratings are kept in this category of `play.ratings`.
+pub const PUZZLE_CATEGORY: &str = "puzzle";
+/// The category Puzzle Battle's rating moves in.
+pub const BATTLE_CATEGORY: &str = "puzzle_battle";
+
+/// A leaderboard: one per rating category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RatingBoard {
+    Speed(Category),
+    Puzzles,
+    PuzzleBattle,
+}
+
+impl RatingBoard {
+    pub const ALL: [Self; 6] = [
+        Self::Speed(Category::Bullet),
+        Self::Speed(Category::Blitz),
+        Self::Speed(Category::Rapid),
+        Self::Speed(Category::Classical),
+        Self::Puzzles,
+        Self::PuzzleBattle,
+    ];
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|board| board.key() == key)
+    }
+
+    /// The board's name in the address, which is also its rating category's id.
+    pub fn key(self) -> String {
+        match self {
+            Self::Speed(category) => category.name().to_lowercase(),
+            Self::Puzzles => PUZZLE_CATEGORY.to_owned(),
+            Self::PuzzleBattle => BATTLE_CATEGORY.to_owned(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RatingBoard;
+
+    #[test]
+    fn every_board_is_found_again_by_its_key() {
+        for board in RatingBoard::ALL {
+            assert_eq!(RatingBoard::from_key(&board.key()), Some(board));
+        }
+        let keys: Vec<String> = RatingBoard::ALL.into_iter().map(RatingBoard::key).collect();
+        assert_eq!(
+            keys,
+            [
+                "bullet",
+                "blitz",
+                "rapid",
+                "classical",
+                "puzzle",
+                "puzzle_battle"
+            ],
+            "the ids `play.rating_categories` holds"
+        );
     }
 }

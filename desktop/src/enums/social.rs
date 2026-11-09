@@ -65,3 +65,58 @@ impl LeaderBoard {
         }
     }
 }
+
+/// A leaderboard of everyone's ratings: one per rating category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RankingBoard {
+    Bullet,
+    #[default]
+    Blitz,
+    Rapid,
+    Classical,
+    Puzzles,
+    PuzzleBattle,
+}
+
+impl RankingBoard {
+    pub const ALL: [Self; 6] = [
+        Self::Bullet,
+        Self::Blitz,
+        Self::Rapid,
+        Self::Classical,
+        Self::Puzzles,
+        Self::PuzzleBattle,
+    ];
+
+    /// The board's name in the server's address.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Bullet => "bullet",
+            Self::Blitz => "blitz",
+            Self::Rapid => "rapid",
+            Self::Classical => "classical",
+            Self::Puzzles => "puzzle",
+            Self::PuzzleBattle => "puzzle_battle",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bullet => "Bullet",
+            Self::Blitz => "Blitz",
+            Self::Rapid => "Rapid",
+            Self::Classical => "Classical",
+            Self::Puzzles => "Puzzles",
+            Self::PuzzleBattle => "Puzzle Battle",
+        }
+    }
+
+    /// What a player's count of rated results on this board counts.
+    pub fn played_noun(self) -> &'static str {
+        match self {
+            Self::Bullet | Self::Blitz | Self::Rapid | Self::Classical => "games",
+            Self::Puzzles => "puzzles",
+            Self::PuzzleBattle => "battles",
+        }
+    }
+}

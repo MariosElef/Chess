@@ -229,13 +229,13 @@ impl RenderOnce for SignedInCard {
             );
         let actions = h_flex()
             .flex_shrink_0()
-            .gap_2()
+            .gap_3()
             .child(
-                Button::new("delete-account")
-                    .ghost()
-                    .text_color(theme.danger)
-                    .label("Delete account")
-                    .on_click(move |_, window, cx| on_delete(window, cx)),
+                StartButton::new("delete-account", "Delete account", move |window, cx| {
+                    on_delete(window, cx);
+                })
+                .danger()
+                .medium(),
             )
             .child(
                 StartButton::new("sign-out", "Sign out", move |window, cx| {
@@ -243,7 +243,7 @@ impl RenderOnce for SignedInCard {
                 })
                 .icon(IconName::LogOut)
                 .danger()
-                .small(),
+                .medium(),
             );
         h_flex()
             .w_full()
@@ -274,15 +274,15 @@ fn picture_column(
     v_flex()
         .flex_shrink_0()
         .items_center()
-        .gap_1()
+        .gap_3()
         .child(avatar(name, picture, px(72.), cx))
         .child(
-            Button::new("change-picture")
-                .ghost()
-                .xsmall()
-                .label("Change picture")
-                .loading(uploading)
-                .on_click(move |_, window, cx| on_change(window, cx)),
+            StartButton::new("change-picture", "Change picture", move |window, cx| {
+                on_change(window, cx);
+            })
+            .plain()
+            .small()
+            .busy(uploading),
         )
         .when(has_picture && !uploading, |this| {
             this.child(

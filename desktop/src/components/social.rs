@@ -6,6 +6,8 @@ mod friend_row;
 mod leaderboard;
 mod people_list;
 mod person_row;
+mod ranking_panel;
+mod social_pictures;
 mod sort_menu;
 
 pub use action_tile::ActionTile;
@@ -16,4 +18,6 @@ pub use friend_row::FriendRow;
 pub use leaderboard::Leaderboard;
 pub use people_list::PeopleList;
 pub use person_row::PersonRow;
+pub use ranking_panel::RankingPanel;
+pub use social_pictures::{social_picture, social_picture_paths};
 pub use sort_menu::SortMenu;

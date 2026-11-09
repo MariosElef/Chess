@@ -21,8 +21,8 @@ a commercial one. See [License](#license).
   Survival) and Puzzle Battle against another player, each with its own rating.
 - **Analysis**: paste a FEN or PGN, explore with Stockfish, and get a Game Review that labels
   every move the way chess.com does, with accuracy and an evaluation graph.
-- **Social**: friends with who is online and when they last were, a friends' leaderboard,
-  challenges, and chats with friends and groups.
+- **Social**: friends with who is online and when they last were, a friends' leaderboard and a
+  leaderboard of everyone, challenges, and chats with friends and groups.
 - **Account**: your rating in every mode, each with its graph, your history of games (to look at
   again or review), battles and puzzles, your profile picture, the devices signed in, and
   account deletion.
@@ -187,6 +187,14 @@ listed under Friend Requests, where Unblock lifts your block; a block they made 
 theirs. Random pairing does not look at blocks, so a blocked player can still be paired with you
 in a seek.
 
+The Leaderboard, under Social in the rail, ranks everyone by rating, a board each for bullet,
+blitz, rapid, classical, puzzles and Puzzle Battle: fifty places at a time, best first, with
+Load more for the next fifty, in the middle of the page. Players with the same rating as shown
+share a place. Each place shows the player's picture, name, rating and how many rated games,
+puzzles or battles they have played there; a rating still provisional carries a "?", and the
+first three places are in gold, silver and bronze. Your own place is pinned above the list. Only
+accounts with a rated result on a board are on it: guests and closed accounts never are.
+
 ## Puzzle Battle
 
 Puzzles → Puzzle Battle races another player through the same puzzles for three minutes,
@@ -241,16 +249,16 @@ page.
 
 ## Chat
 
-Your chats have a page of their own, Messages: hover Social in the rail and pick Friends or
-Messages. Messages has the chats on the left and the one open on the right. A friend's Message
-button opens theirs, or make a group of friends with a name; a group's members button opens it:
-whoever made the group owns it and can rename it and remove members, anyone in it can add their
-own friends and leave, and when the owner leaves, or closes their account, the longest-standing
-member owns it. A direct chat only takes messages while the two are friends. Messages arrive at
-once while you are online, and unread ones count on Social in the rail and on Messages in its
-menu. During an online game the two players have a chat of their own beside the moves. Each
-message shows its sender's picture, and a chat keeps to its newest message as messages come;
-scroll up to read older ones.
+Your chats have a page of their own, Messages: hover Social in the rail and pick Friends,
+Messages or Leaderboard. Messages has the chats on the left and the one open on the right. A
+friend's Message button opens theirs, or make a group of friends with a name; a group's members
+button opens it: whoever made the group owns it and can rename it and remove members, anyone in
+it can add their own friends and leave, and when the owner leaves, or closes their account, the
+longest-standing member owns it. A direct chat only takes messages while the two are friends.
+Messages arrive at once while you are online, and unread ones count on Social in the rail and on
+Messages in its menu. During an online game the two players have a chat of their own beside the
+moves. Each message shows its sender's picture, and a chat keeps to its newest message as
+messages come; scroll up to read older ones.
 
 ## Known limits
 

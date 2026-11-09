@@ -10,11 +10,17 @@ mod views;
 
 use gpui_kit::*;
 
-use crate::{assets::AppAssets, components::shell::WINDOW_BUTTONS_AT, views::shell::AppShell};
+use crate::{
+    assets::AppAssets,
+    clients::dock_icon::set_dock_icon,
+    components::shell::{APP_ICON_PNG, WINDOW_BUTTONS_AT},
+    views::shell::AppShell,
+};
 
 fn main() {
     application().with_assets(AppAssets).run(|cx| {
         init(cx);
+        set_dock_icon(APP_ICON_PNG);
         views::history::bind_keys(cx);
         views::sound::install_speaker(cx);
 

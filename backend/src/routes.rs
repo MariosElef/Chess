@@ -1,6 +1,7 @@
 mod account;
 mod chat;
 mod health;
+mod leaderboard;
 mod play;
 mod puzzles;
 mod social;
@@ -34,6 +35,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(account::router())
         .nest("/puzzles", puzzles::router())
         .merge(play::router())
+        .merge(leaderboard::router())
         .nest("/social", social::router())
         .nest("/chat", chat::router())
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES))

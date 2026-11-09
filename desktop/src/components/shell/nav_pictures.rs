@@ -8,11 +8,17 @@ pub const PUZZLES_PICTURE: &str = "nav/puzzles.png";
 pub const SOCIAL_PICTURE: &str = "nav/social.png";
 /// The Messages page's picture: in Social's menu on the rail and over the page.
 pub const MESSAGES_PICTURE: &str = "nav/messages.png";
+/// The Leaderboard page's podium: in Social's menu on the rail and over the page.
+pub const LEADERBOARD_PICTURE: &str = "nav/leaderboard.svg";
+/// The Account page's picture, over the page.
+pub const ACCOUNT_PICTURE: &str = "nav/account.svg";
+/// The Settings page's cog, over the page.
+pub const SETTINGS_PICTURE: &str = "nav/settings.svg";
 /// The Analysis page's picture: on the rail and on its panel's title strip.
 pub const ANALYSIS_PICTURE: &str = "nav/analyse.png";
 
-/// The pages' pictures, on the rail and in its menus: each page's asset path and its bytes.
-const PICTURES: [(Page, &str, &[u8]); 5] = [
+/// The pages' pictures, on the rail, in its menus and over the pages: path and bytes.
+const PICTURES: [(Page, &str, &[u8]); 8] = [
     (
         Page::Play,
         PLAY_PICTURE,
@@ -38,9 +44,24 @@ const PICTURES: [(Page, &str, &[u8]); 5] = [
         MESSAGES_PICTURE,
         include_bytes!("../../../assets/nav/messages.png"),
     ),
+    (
+        Page::Leaderboard,
+        LEADERBOARD_PICTURE,
+        include_bytes!("../../../assets/nav/leaderboard.svg"),
+    ),
+    (
+        Page::Settings,
+        SETTINGS_PICTURE,
+        include_bytes!("../../../assets/nav/settings.svg"),
+    ),
+    (
+        Page::Account,
+        ACCOUNT_PICTURE,
+        include_bytes!("../../../assets/nav/account.svg"),
+    ),
 ];
 
-/// The page's rail picture, by asset path; pages opened from the avatar menu have none.
+/// The page's picture, by asset path; every page has one.
 pub fn page_picture(page: Page) -> Option<&'static str> {
     PICTURES
         .iter()
@@ -48,7 +69,7 @@ pub fn page_picture(page: Page) -> Option<&'static str> {
         .map(|(_, path, _)| *path)
 }
 
-/// The picture at `path`, if it is one of the rail's.
+/// The picture at `path`, if it is one of the pages'.
 pub fn nav_picture(path: &str) -> Option<&'static [u8]> {
     PICTURES
         .iter()

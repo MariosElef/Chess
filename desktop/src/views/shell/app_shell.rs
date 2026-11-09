@@ -47,7 +47,7 @@ use crate::{
         play::{OnlineView, PlayPage},
         puzzles::PuzzlesView,
         settings::apply_appearance,
-        social::{OpenMessages, SocialView},
+        social::{LeaderboardView, OpenMessages, SocialView},
         sound::{play_sound_tour, use_sound_set},
     },
 };
@@ -87,6 +87,8 @@ pub struct AppShell {
     social: Entity<SocialView>,
     /// The player's chats: the Messages page.
     messages: Entity<ChatsView>,
+    /// Everyone's ratings, ranked: the Leaderboard page under Social.
+    leaderboard: Entity<LeaderboardView>,
     /// An opponent's rematch, over every page, the game's own card included.
     rematch_toast: Entity<RematchToast>,
     _rematch_changes: Subscription,
@@ -155,6 +157,7 @@ impl AppShell {
             live: pages.live,
             social: pages.social,
             messages: pages.messages,
+            leaderboard: pages.leaderboard,
             rematch_toast: pages.rematch_toast,
             _rematch_changes: pages.rematch_changes,
             invite_toast: pages.invite_toast,
@@ -192,6 +195,10 @@ impl AppShell {
         if page == Page::Account {
             self.account.update(cx, |account, cx| account.opened(cx));
         }
+        if page == Page::Leaderboard {
+            self.leaderboard
+                .update(cx, |leaderboard, cx| leaderboard.opened(cx));
+        }
         self.analyze.update(cx, |analysis, cx| {
             analysis.set_shown(page == Page::Analyze, cx)
         });
@@ -206,7 +213,12 @@ impl AppShell {
         match page {
             Page::Play => Some(self.play.read(cx).focus_handle()),
             Page::Analyze => Some(self.analyze.read(cx).focus_handle()),
-            Page::Puzzles | Page::Social | Page::Messages | Page::Settings | Page::Account => None,
+            Page::Puzzles
+            | Page::Social
+            | Page::Messages
+            | Page::Leaderboard
+            | Page::Settings
+            | Page::Account => None,
         }
     }
 
@@ -256,6 +268,7 @@ impl AppShell {
         self.live = pages.live;
         self.social = pages.social;
         self.messages = pages.messages;
+        self.leaderboard = pages.leaderboard;
         self.rematch_toast = pages.rematch_toast;
         self._rematch_changes = pages.rematch_changes;
         self.invite_toast = pages.invite_toast;
@@ -391,6 +404,7 @@ impl AppShell {
             Page::Analyze => self.analyze.clone().into_any_element(),
             Page::Social => self.social.clone().into_any_element(),
             Page::Messages => messages_page(self.messages.clone()).into_any_element(),
+            Page::Leaderboard => self.leaderboard.clone().into_any_element(),
             Page::Account => self.account.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
                 SettingsChoices {
@@ -505,6 +519,7 @@ struct Pages {
     live: Entity<LiveConnection>,
     social: Entity<SocialView>,
     messages: Entity<ChatsView>,
+    leaderboard: Entity<LeaderboardView>,
     rematch_toast: Entity<RematchToast>,
     /// The toast's changes redraw the shell, not each tick of its bar.
     rematch_changes: Subscription,
@@ -544,6 +559,7 @@ impl Pages {
         let messages =
             cx.new(|cx| ChatsView::new(client.clone(), (Rc::clone(&session), live.clone()), cx));
         let message_changes = cx.observe(&messages, |_, _, cx| cx.notify());
+        let leaderboard = cx.new(|_| LeaderboardView::new(client.clone(), Rc::clone(&session)));
         let social = cx.new(|cx| {
             SocialView::new(
                 client.clone(),
@@ -569,6 +585,7 @@ impl Pages {
             live,
             social,
             messages,
+            leaderboard,
             rematch_toast,
             rematch_changes,
             invite_toast,
@@ -609,7 +626,7 @@ fn messages_page(chats: Entity<ChatsView>) -> Div {
                 .child(img(MESSAGES_PICTURE).size_10())
                 .child(
                     div()
-                        .text_2xl()
+                        .text_3xl()
                         .font_weight(FontWeight::BOLD)
                         .child("Messages"),
                 ),

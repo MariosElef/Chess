@@ -16,7 +16,7 @@ use crate::{
             PuzzleText, RatingRange, RushRecord,
         },
         server::{Problem, ServerError},
-        social::{FoundUser, Friends},
+        social::{FoundUser, Friends, RankingPage},
     },
 };
 
@@ -208,6 +208,26 @@ impl ServerClient {
         self.http.run(async move {
             let request = request.map_err(|_| {
                 ServerError::Unexpected("the history could not be asked".to_owned())
+            })?;
+            read_json(send(request).await?).await
+        })
+    }
+
+    /// The leaderboard `board` from place `offset` on, with the player's own place.
+    pub fn leaderboard(
+        &self,
+        token: &str,
+        (board, offset): (&str, usize),
+    ) -> impl Future<Output = Result<RankingPage, ServerError>> + use<> {
+        let offset = offset.to_string();
+        let url = reqwest::Url::parse_with_params(
+            &self.url(&format!("/api/leaderboard/{board}")),
+            [("offset", offset.as_str())],
+        );
+        let request = url.map(|url| self.http.client().get(url).bearer_auth(token));
+        self.http.run(async move {
+            let request = request.map_err(|_| {
+                ServerError::Unexpected("the leaderboard could not be asked".to_owned())
             })?;
             read_json(send(request).await?).await
         })

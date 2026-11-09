@@ -1,7 +1,6 @@
 use gpui_kit::{
-    assets::IconName,
     component::{
-        ActiveTheme as _, Icon, h_flex,
+        ActiveTheme as _, h_flex,
         input::{InputEvent, InputState},
         v_flex,
     },
@@ -21,7 +20,7 @@ use crate::{
             AccountCard, CloseAccountCard, FormField, GuestCard, SignedInCard, StatsPanel,
             WaitingCard,
         },
-        shell::PLAY_PICTURE,
+        shell::{ACCOUNT_PICTURE, PLAY_PICTURE},
     },
     enums::account::AccountForm,
     models::{
@@ -638,7 +637,7 @@ impl AccountView {
         if self.is_admitted() {
             return h_flex()
                 .gap_3()
-                .child(Icon::from(IconName::CircleUser).size_7())
+                .child(img(ACCOUNT_PICTURE).size_10())
                 .child(
                     div()
                         .text_3xl()

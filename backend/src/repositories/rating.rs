@@ -1,7 +1,7 @@
 use sqlx::{PgConnection, PgExecutor};
 use uuid::Uuid;
 
-use crate::models::rating::{RatingChangeRow, RatingRow, RatingSource, UserRatingRow};
+use crate::models::rating::{LeaderRow, RatingChangeRow, RatingRow, RatingSource, UserRatingRow};
 
 /// The player's rating in `category`, or `None` before their first result in it.
 pub async fn get(
@@ -110,5 +110,38 @@ pub async fn changes(
         sources
     )
     .fetch_all(db)
+    .await
+}
+
+/// Up to `limit` players of the category's leaderboard from place `offset` on, best first.
+pub async fn leaderboard(
+    db: impl PgExecutor<'_>,
+    category: &str,
+    (offset, limit): (i64, i64),
+) -> Result<Vec<LeaderRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        LeaderRow,
+        "src/repositories/sql/rating/leaderboard.sql",
+        category,
+        limit,
+        offset
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// The player's place on the category's leaderboard, if they are on it.
+pub async fn leaderboard_place(
+    db: impl PgExecutor<'_>,
+    category: &str,
+    player: Uuid,
+) -> Result<Option<LeaderRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        LeaderRow,
+        "src/repositories/sql/rating/leaderboard_place.sql",
+        category,
+        player
+    )
+    .fetch_optional(db)
     .await
 }
