@@ -8,6 +8,14 @@ const PASSWORD_MIN: usize = 8;
 const PASSWORD_MAX: usize = 128;
 
 /// Trimmed and lowercased, so one address is one account however it is typed.
+/// No email, or a blank one, is none; any other is checked as an email.
+pub fn checked_optional_email(email: Option<&str>) -> Result<Option<String>, FieldError> {
+    match email.map(str::trim).filter(|email| !email.is_empty()) {
+        Some(email) => checked_email(email).map(Some),
+        None => Ok(None),
+    }
+}
+
 pub fn checked_email(email: &str) -> Result<String, FieldError> {
     let email = email.trim().to_lowercase();
     if email.chars().count() > EMAIL_MAX || !looks_like_email(&email) {
@@ -63,7 +71,18 @@ fn looks_like_email(email: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{checked_email, checked_password, checked_username};
+    use super::{checked_email, checked_optional_email, checked_password, checked_username};
+
+    #[test]
+    fn no_email_or_a_blank_one_is_none_and_any_other_is_checked() {
+        assert_eq!(checked_optional_email(None), Ok(None));
+        assert_eq!(checked_optional_email(Some("   ")), Ok(None));
+        assert_eq!(
+            checked_optional_email(Some("Mario@Example.com")),
+            Ok(Some("mario@example.com".to_owned()))
+        );
+        assert!(checked_optional_email(Some("mario")).is_err());
+    }
 
     #[test]
     fn emails_are_trimmed_and_lowercased() {

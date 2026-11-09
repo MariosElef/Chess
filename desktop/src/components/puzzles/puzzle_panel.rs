@@ -79,8 +79,9 @@ impl PuzzlePanel {
         self
     }
 
-    pub fn difficulty(mut self, picker: impl IntoElement) -> Self {
-        self.difficulty = Some(picker.into_any_element());
+    /// The difficulty slider, for puzzles at a picked difficulty; rated ones have none.
+    pub fn difficulty(mut self, picker: Option<impl IntoElement>) -> Self {
+        self.difficulty = picker.map(IntoElement::into_any_element);
         self
     }
 

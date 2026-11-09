@@ -13,8 +13,8 @@ const OUTLINE: Pixels = px(3.);
 #[derive(IntoElement)]
 pub struct HeldPiece {
     picture: &'static str,
-    /// One square's width, the piece's size.
-    size: Pixels,
+    /// One square's size: the outline's, and the piece's within it.
+    cell: Size<Pixels>,
     /// The centre of the square it was picked up from, and the cursor now.
     from: Point<Pixels>,
     cursor: Point<Pixels>,
@@ -26,14 +26,14 @@ pub struct HeldPiece {
 
 impl HeldPiece {
     pub fn new(
-        (picture, size): (&'static str, Pixels),
+        (picture, cell): (&'static str, Size<Pixels>),
         (from, cursor): (Point<Pixels>, Point<Pixels>),
         over: Option<Point<Pixels>>,
         run: usize,
     ) -> Self {
         Self {
             picture,
-            size,
+            cell,
             from,
             cursor,
             over,
@@ -44,7 +44,8 @@ impl HeldPiece {
 
 impl RenderOnce for HeldPiece {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let (size, from, cursor) = (self.size, self.from, self.cursor);
+        let (cell, from, cursor) = (self.cell, self.from, self.cursor);
+        let size = cell.width.min(cell.height);
         let half = size / 2.;
         div()
             .absolute()
@@ -56,7 +57,8 @@ impl RenderOnce for HeldPiece {
                         .absolute()
                         .left(corner.x)
                         .top(corner.y)
-                        .size(size)
+                        .w(cell.width)
+                        .h(cell.height)
                         .border(OUTLINE)
                         .border_color(hsla(0., 0., 1., 0.65)),
                 )

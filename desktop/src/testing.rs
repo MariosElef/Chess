@@ -72,10 +72,15 @@ pub fn puzzle_server() -> crate::clients::server::ServerClient {
             )
             .route(
                 "/api/puzzles/{id}/attempts",
-                post(|| async {
-                    Json(json!({ "rating": {
-                        "rating": 1512, "deviation": 80, "provisional": false, "change": 12
-                    }}))
+                // As the server: a new rating after a rated attempt only.
+                post(|Json(attempt): Json<serde_json::Value>| async move {
+                    if attempt["rated"] == true {
+                        Json(json!({ "rating": {
+                            "rating": 1512, "deviation": 80, "provisional": false, "change": 12
+                        }}))
+                    } else {
+                        Json(json!({ "rating": null }))
+                    }
                 }),
             )
             .route(
@@ -181,7 +186,7 @@ pub fn ann(guest: bool) -> crate::models::account::Session {
         token: "abc".to_owned(),
         user: User {
             id: "ann".to_owned(),
-            email: "ann@example.com".to_owned(),
+            email: Some("ann@example.com".to_owned()),
             username: "ann".to_owned(),
             guest,
             avatar: None,

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Every player's average rating over the categories they have a rated result in, best first,\n-- $1 of them from place $2 on: open accounts, not guests. Equal averages as shown share a place,\n-- listed by name; the deviation and volatility are averaged alike, the results added up.\nWITH averaged AS (\n    SELECT\n        ratings.user_id,\n        avg(ratings.rating) AS rating,\n        avg(ratings.deviation) AS deviation,\n        avg(ratings.volatility) AS volatility,\n        sum(ratings.games_played)::integer AS games_played\n    FROM play.ratings\n    WHERE ratings.games_played > 0\n    GROUP BY ratings.user_id\n),\n\nranked AS (\n    SELECT\n        averaged.user_id,\n        users.username,\n        users.avatar_hash AS avatar,\n        averaged.rating,\n        averaged.deviation,\n        averaged.volatility,\n        averaged.games_played,\n        rank() OVER (ORDER BY round(averaged.rating) DESC) AS place\n    FROM averaged\n    INNER JOIN account.users ON users.id = averaged.user_id\n    WHERE\n        users.deleted_at IS NULL\n        AND users.guest_number IS NULL\n)\n\nSELECT\n    ranked.user_id AS \"user_id!\",\n    ranked.username AS \"username!\",\n    ranked.avatar,\n    ranked.rating AS \"rating!\",\n    ranked.deviation AS \"deviation!\",\n    ranked.volatility AS \"volatility!\",\n    ranked.games_played AS \"games_played!\",\n    ranked.place AS \"place!\"\nFROM ranked\nORDER BY ranked.place, ranked.username\nLIMIT $1 OFFSET $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "play.ratings",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "avatar",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "account.users",
+            "name": "avatar_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "rating!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "deviation!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "volatility!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "games_played!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "place!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7f703acb8cc826172b5db8fd4d45ff0e92ce927dd7b9953b22e00ffb2dda4b8e"
+}

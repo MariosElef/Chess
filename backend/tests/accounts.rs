@@ -97,6 +97,30 @@ async fn a_taken_email_or_username_is_a_conflict(db: Db) {
 }
 
 #[sqlx::test]
+async fn an_account_needs_only_a_username_and_a_password(db: Db) {
+    let server = server(db);
+    server
+        .post("/api/users")
+        .json(&json!({ "username": "Luigi", "password": "correct horse" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+    // A blank email is none too, and two accounts without one do not clash.
+    server
+        .post("/api/users")
+        .json(&json!({ "email": "  ", "username": "Peach", "password": "correct horse" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+    let token = sign_in(&server, "luigi").await;
+    let me: Value = server
+        .get("/api/users/me")
+        .authorization_bearer(&token)
+        .await
+        .json();
+    assert_eq!(me["username"], "Luigi");
+    assert!(me["email"].is_null(), "no email was given");
+}
+
+#[sqlx::test]
 async fn every_bad_field_is_named_in_one_answer(db: Db) {
     let server = server(db);
     let response = server

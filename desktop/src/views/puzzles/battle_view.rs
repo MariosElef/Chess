@@ -572,7 +572,7 @@ mod tests {
             token: "abc".to_owned(),
             user: User {
                 id: "ann".to_owned(),
-                email: "ann@example.com".to_owned(),
+                email: Some("ann@example.com".to_owned()),
                 username: "ann".to_owned(),
                 guest: false,
                 avatar: None,

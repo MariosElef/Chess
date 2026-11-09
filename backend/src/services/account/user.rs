@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use super::{
-    credentials::{checked_email, checked_password, checked_username},
+    credentials::{checked_optional_email, checked_password, checked_username},
     password,
 };
 use crate::{
@@ -31,14 +31,15 @@ impl UserService {
         Self { db, play }
     }
 
-    /// Checks every field, refuses a taken email or username, then stores the account.
+    /// Checks every field, refuses a taken email or username, then stores the account. The
+    /// email is optional.
     pub async fn register(&self, body: CreateUserModel) -> Result<Uuid, AppError> {
         let mut fields = Fields::default();
-        let email = fields.check(checked_email(&body.email));
+        let email = fields.check(checked_optional_email(body.email.as_deref()));
         let username = fields.check(checked_username(&body.username));
         let password = fields.check(checked_password(&body.password));
         fields.finish()?;
-        self.refuse_taken(&email, &username).await?;
+        self.refuse_taken(email.as_deref(), &username).await?;
         let new_user = NewUser {
             id: Uuid::now_v7(),
             email,
@@ -47,7 +48,7 @@ impl UserService {
         };
         if !user::insert(&self.db, &new_user).await? {
             // Another sign-up took the email or username after the check.
-            self.refuse_taken(&new_user.email, &new_user.username)
+            self.refuse_taken(new_user.email.as_deref(), &new_user.username)
                 .await?;
             return Err(ChessCode::UsernameTaken.into());
         }
@@ -121,8 +122,11 @@ impl UserService {
         Ok(())
     }
 
-    async fn refuse_taken(&self, email: &str, username: &str) -> Result<(), AppError> {
-        if user::email_taken(&self.db, email).await? {
+    /// A taken email, when one was given, or a taken username, is refused.
+    async fn refuse_taken(&self, email: Option<&str>, username: &str) -> Result<(), AppError> {
+        if let Some(email) = email
+            && user::email_taken(&self.db, email).await?
+        {
             return Err(ChessCode::EmailTaken.into());
         }
         if user::username_taken(&self.db, username).await? {

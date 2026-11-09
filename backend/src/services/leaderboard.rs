@@ -29,22 +29,49 @@ impl LeaderboardService {
         (asker, guest): (Uuid, bool),
         offset: i64,
     ) -> Result<LeaderboardModel, AppError> {
-        let category = board.key();
         // One more than a page, to tell whether another follows.
         let asked = i64::try_from(PAGE + 1).unwrap_or(i64::MAX);
-        let mut rows = rating::leaderboard(&self.db, &category, (offset.max(0), asked)).await?;
+        let mut rows = self.places(board, (offset.max(0), asked)).await?;
         let more = rows.len() > PAGE;
         rows.truncate(PAGE);
         let me = if guest {
             None
         } else {
-            rating::leaderboard_place(&self.db, &category, asker).await?
+            self.place_of(board, asker).await?
         };
         Ok(LeaderboardModel {
             rows: rows.into_iter().map(leader).collect(),
             me: me.map(leader),
             more,
         })
+    }
+}
+
+impl LeaderboardService {
+    /// Up to `limit` of the board's places from `offset` on.
+    async fn places(
+        &self,
+        board: RatingBoard,
+        window: (i64, i64),
+    ) -> Result<Vec<LeaderRow>, AppError> {
+        let rows = match board.category() {
+            Some(category) => rating::leaderboard(&self.db, &category, window).await?,
+            None => rating::average_leaderboard(&self.db, window).await?,
+        };
+        Ok(rows)
+    }
+
+    /// The player's own place on the board, if they are on it.
+    async fn place_of(
+        &self,
+        board: RatingBoard,
+        player: Uuid,
+    ) -> Result<Option<LeaderRow>, AppError> {
+        let row = match board.category() {
+            Some(category) => rating::leaderboard_place(&self.db, &category, player).await?,
+            None => rating::average_leaderboard_place(&self.db, player).await?,
+        };
+        Ok(row)
     }
 }
 

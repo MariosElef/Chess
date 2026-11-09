@@ -92,10 +92,13 @@ impl DragLayer {
         if !bounds.contains(&position) {
             return None;
         }
-        let width = bounds.size.width / 8.;
+        let cell = cell_size(bounds);
         let inside = position - bounds.origin;
         square_in_cell(
-            (cell_index(inside.x / width), cell_index(inside.y / width)),
+            (
+                cell_index(inside.x / cell.width),
+                cell_index(inside.y / cell.height),
+            ),
             flipped,
         )
     }
@@ -108,7 +111,13 @@ struct Landing {
     dragged: bool,
 }
 
-/// A column or row from a share of the board's width, 0 to 8.
+/// One square's size: an eighth of the board's width across and of its height down, so the
+/// outline sits on the squares as drawn even should the board not be exactly square.
+fn cell_size(bounds: Bounds<Pixels>) -> Size<Pixels> {
+    size(bounds.size.width / 8., bounds.size.height / 8.)
+}
+
+/// A column or row from a share of the board's width or height, 0 to 8.
 fn cell_index(share: f32) -> u8 {
     // Checked to lie on the board, so it fits.
     #[expect(
@@ -126,12 +135,12 @@ impl Render for DragLayer {
             return div().into_any_element();
         };
         let bounds = self.bounds.get();
-        let width = bounds.size.width / 8.;
+        let cell = cell_size(bounds);
         let corner = |square: Square| {
             let (column, row) = cell_of(square, held.flipped);
-            point(width * f32::from(column), width * f32::from(row))
+            point(cell.width * f32::from(column), cell.height * f32::from(row))
         };
-        let from = corner(held.from) + point(width / 2., width / 2.);
+        let from = corner(held.from) + point(cell.width / 2., cell.height / 2.);
         let over = held
             .dragging
             .then(|| self.square_under(held.cursor, held.flipped))
@@ -142,7 +151,7 @@ impl Render for DragLayer {
             .absolute()
             .inset_0()
             .child(HeldPiece::new(
-                (held.picture, width),
+                (held.picture, cell),
                 (from, held.cursor - bounds.origin),
                 over,
                 self.run,

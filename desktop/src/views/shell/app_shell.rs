@@ -311,7 +311,7 @@ impl Render for AppShell {
         let person = account.user().map(|user| MenuPerson {
             name: user.username.clone(),
             picture: avatar_path(&user.id, user.avatar.as_deref()),
-            email: (!user.guest).then(|| user.email.clone()),
+            email: user.email.clone().filter(|_| !user.guest),
             guest: user.guest,
         });
         let waiting = self.social.read(cx).waiting_for_me();

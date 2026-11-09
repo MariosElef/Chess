@@ -17,6 +17,9 @@ use crate::{
     views::shell::AppShell,
 };
 
+/// The smallest the window goes: a board of a fair size beside a narrowed panel.
+const MIN_WINDOW: Size<Pixels> = size(px(900.), px(620.));
+
 fn main() {
     application().with_assets(AppAssets).run(|cx| {
         init(cx);
@@ -30,6 +33,8 @@ fn main() {
                 size(px(1200.), px(800.)),
                 cx,
             ))),
+            // Narrower or shorter, the board and its panel no longer fit side by side.
+            window_min_size: Some(MIN_WINDOW),
             // The app's own header is the title bar, with the Mac's buttons in it.
             titlebar: Some(TitlebarOptions {
                 title: Some("Chess".into()),

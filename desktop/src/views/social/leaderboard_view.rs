@@ -264,7 +264,7 @@ mod tests {
         view.update(cx, |view, cx| view.choose(RankingBoard::Bullet, cx));
         wait_until(cx, |cx| view.read_with(cx, |view, _| view.rows.len() == 2));
         let asked = asked.lock().expect("the list").clone();
-        assert_eq!(asked, ["blitz 0", "blitz 2", "bullet 0"]);
+        assert_eq!(asked, ["average 0", "average 2", "bullet 0"]);
     }
 
     #[gpui_kit::test]

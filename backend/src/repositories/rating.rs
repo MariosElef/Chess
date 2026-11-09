@@ -145,3 +145,32 @@ pub async fn leaderboard_place(
     .fetch_optional(db)
     .await
 }
+
+/// Up to `limit` players of the average leaderboard from place `offset` on, best first.
+pub async fn average_leaderboard(
+    db: impl PgExecutor<'_>,
+    (offset, limit): (i64, i64),
+) -> Result<Vec<LeaderRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        LeaderRow,
+        "src/repositories/sql/rating/average_leaderboard.sql",
+        limit,
+        offset
+    )
+    .fetch_all(db)
+    .await
+}
+
+/// The player's place on the average leaderboard, if they are on it.
+pub async fn average_leaderboard_place(
+    db: impl PgExecutor<'_>,
+    player: Uuid,
+) -> Result<Option<LeaderRow>, sqlx::Error> {
+    sqlx::query_file_as!(
+        LeaderRow,
+        "src/repositories/sql/rating/average_leaderboard_place.sql",
+        player
+    )
+    .fetch_optional(db)
+    .await
+}

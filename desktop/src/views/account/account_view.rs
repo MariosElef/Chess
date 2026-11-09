@@ -467,10 +467,11 @@ impl AccountView {
                 FormField::new("Email or username", self.login.clone(), problems.login),
                 FormField::new("Password", self.password.clone(), problems.password).password(),
             ],
+            // A username and a password make an account; the email is only if they want one.
             AccountForm::SignUp => vec![
-                FormField::new("Email", self.email.clone(), problems.email),
                 FormField::new("Username", self.username.clone(), problems.username),
                 FormField::new("Password", self.password.clone(), problems.password).password(),
+                FormField::new("Email (optional)", self.email.clone(), problems.email),
             ],
         }
     }

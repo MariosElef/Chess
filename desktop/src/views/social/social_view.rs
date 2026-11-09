@@ -8,6 +8,7 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         h_flex,
         input::{Input, InputEvent, InputState},
+        scroll::ScrollableElement as _,
         v_flex,
     },
     prelude::FluentBuilder as _,
@@ -392,7 +393,9 @@ impl SocialView {
         let view = cx.entity().downgrade();
         let search = self.search.clone();
         let (find, requests) = (view.clone(), view);
+        // Side by side while they fit, one under the other in a narrow window.
         h_flex()
+            .flex_wrap()
             .gap_3()
             .child(ActionTile::new(
                 "find-friends",
@@ -778,10 +781,9 @@ impl Render for SocialView {
             .gap_5()
             .child(heading())
             .child(card);
+        // The page scrolls with a scrollbar, so the leaderboard's end is found in a short window.
         div()
-            .id("social-page")
             .size_full()
-            .overflow_y_scroll()
             .child(
                 h_flex()
                     .w_full()
@@ -792,6 +794,7 @@ impl Render for SocialView {
                     .child(main)
                     .child(div().pt(px(64.)).child(self.leaderboard(cx))),
             )
+            .overflow_y_scrollbar()
     }
 }
 

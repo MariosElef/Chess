@@ -17,6 +17,8 @@ desktop/assets/pieces/staunty: the "staunty" set, via [lila](https://github.com/
 desktop/assets/pieces/california: the "california" set, via [lila](https://github.com/lichess-org/lila) | [Jerry S.](https://sites.google.com/view/jerrychess/home) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 desktop/assets/sounds/lisp: the "lisp" set, via [lila](https://github.com/lichess-org/lila) | [EdinburghCollective](https://lichess.org/@/EdinburghCollective) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 desktop/assets/social/challenge.svg: the crossed swords, from [Twemoji](https://github.com/jdecked/twemoji) | Twitter, Inc. and other contributors | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+desktop/assets/puzzles/custom.svg: Custom Practice's target, from [Twemoji](https://github.com/jdecked/twemoji) | Twitter, Inc. and other contributors | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+desktop/assets/settings/*.svg (the Settings page's palette, speaker, fish, screen, sun and moon), from [Twemoji](https://github.com/jdecked/twemoji) | Twitter, Inc. and other contributors | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 ## To be replaced before the app is shared
 

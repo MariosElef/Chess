@@ -1,6 +1,7 @@
 use serde::Serialize;
 
-/// A new account. No `Debug`: it carries the password.
+/// A new account. No `Debug`: it carries the password. The email is optional: left blank, the
+/// server keeps none.
 #[derive(Clone, Serialize)]
 pub struct SignUp {
     pub email: String,

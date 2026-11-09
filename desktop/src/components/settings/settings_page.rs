@@ -1,14 +1,17 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    assets::IconName,
-    component::{ActiveTheme as _, Icon, h_flex, v_flex},
+    component::{ActiveTheme as _, h_flex, v_flex},
     *,
 };
 
 use super::{
     board_previews::{piece_set_preview, theme_preview},
     option_tile::OptionTile,
+    settings_pictures::{
+        APPEARANCE_PICTURE, BOARD_PICTURE, DARK_PICTURE, LIGHT_PICTURE, SOUNDS_PICTURE,
+        STOCKFISH_PICTURE, SYSTEM_PICTURE,
+    },
 };
 use crate::{
     components::{board::BoardStyle, panel::ChoiceTile, shell::SETTINGS_PICTURE},
@@ -108,14 +111,14 @@ impl SettingsPage {
                     appearance == self.appearance,
                     move |window, cx| on_appearance(appearance, window, cx),
                 )
-                .icon(appearance_icon(appearance))
+                .picture(appearance_picture(appearance))
                 .height(px(48.));
                 // An equal share of the row each, not the whole row each.
                 div().flex_1().child(tile)
             })
             .collect();
         card(
-            (IconName::Palette, "Appearance"),
+            (APPEARANCE_PICTURE, "Appearance"),
             "Follow the system, or keep the app light or dark.",
             h_flex().gap_3().children(tiles),
             cx,
@@ -125,7 +128,7 @@ impl SettingsPage {
     /// The squares' colours and the pieces for every board, each choice shown as it looks.
     fn board_section(&self, cx: &App) -> Div {
         card(
-            (IconName::ChessKnight, "Board"),
+            (BOARD_PICTURE, "Board"),
             "Every board in the app, in play, puzzles and analysis.",
             v_flex()
                 .gap_4()
@@ -190,13 +193,13 @@ impl SettingsPage {
                         set == self.sound_set,
                         move |window, cx| on_sound_set(set, window, cx),
                     )
-                    .icon(IconName::Volume2)
+                    .picture(SOUNDS_PICTURE)
                     .height(px(48.)),
                 )
             })
             .collect();
         card(
-            (IconName::Volume2, "Sounds"),
+            (SOUNDS_PICTURE, "Sounds"),
             "Every move, capture, check and clock warning. Pick one to hear them all.",
             h_flex().gap_3().children(tiles),
             cx,
@@ -208,7 +211,7 @@ impl SettingsPage {
         let threads = thread_choices(self.cores);
         let engine = self.engine;
         card(
-            (IconName::Fish, "Stockfish"),
+            (STOCKFISH_PICTURE, "Stockfish"),
             "Fewer threads and a depth limit keep the computer quiet; more search deeper.",
             v_flex()
                 .gap_4()
@@ -274,7 +277,7 @@ impl SettingsPage {
 /// A settings card, as the app's panels: a band with its icon and title, a line about it, and
 /// its choices under them.
 fn card(
-    (icon, title): (IconName, &'static str),
+    (picture, title): (&'static str, &'static str),
     about: &'static str,
     body: impl IntoElement,
     cx: &App,
@@ -293,7 +296,7 @@ fn card(
                 .bg(theme.muted)
                 .text_lg()
                 .font_weight(FontWeight::BOLD)
-                .child(Icon::from(icon).size_5())
+                .child(img(picture).size_5())
                 .child(title),
         )
         .child(
@@ -325,11 +328,11 @@ fn labelled(label: &'static str, choices: impl IntoElement, cx: &App) -> Div {
         .child(choices)
 }
 
-fn appearance_icon(appearance: Appearance) -> IconName {
+fn appearance_picture(appearance: Appearance) -> &'static str {
     match appearance {
-        Appearance::System => IconName::Monitor,
-        Appearance::Light => IconName::Sun,
-        Appearance::Dark => IconName::Moon,
+        Appearance::System => SYSTEM_PICTURE,
+        Appearance::Light => LIGHT_PICTURE,
+        Appearance::Dark => DARK_PICTURE,
     }
 }
 

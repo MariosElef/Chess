@@ -162,3 +162,33 @@ async fn the_leaderboard_comes_fifty_places_at_a_time(db: Db) {
         "a negative offset starts at the top"
     );
 }
+
+#[sqlx::test]
+async fn the_average_board_ranks_each_players_mean_over_what_they_have_played(db: Db) {
+    let server = server(db.clone());
+    let (ann, ann_id) = account(&server, "ann").await;
+    let (_, bob_id) = account(&server, "bob").await;
+    let (_, cat_id) = account(&server, "cat").await;
+    let (visitor, visitor_id) = guest(&server).await;
+    // Ann averages 1600 over three boards; a board she never played does not pull her down.
+    rate(&db, &ann_id, "blitz", (1800.0, 60.0, 10)).await;
+    rate(&db, &ann_id, "puzzle", (1500.0, 60.0, 20)).await;
+    rate(&db, &ann_id, "puzzle_battle", (1500.0, 60.0, 4)).await;
+    rate(&db, &ann_id, "bullet", (900.0, 350.0, 0)).await;
+    // Bob has one board only, and averages higher; Cat has never finished a rated result.
+    rate(&db, &bob_id, "rapid", (1700.0, 60.0, 3)).await;
+    rate(&db, &cat_id, "classical", (2500.0, 60.0, 0)).await;
+    rate(&db, &visitor_id, "blitz", (2000.0, 60.0, 5)).await;
+
+    let average = board(&server, &ann, "/api/leaderboard/average").await;
+    assert_eq!(names(&average), ["bob", "ann"], "no guest, no one unplayed");
+    assert_eq!(average["rows"][1]["rating"], 1600);
+    assert_eq!(
+        average["rows"][1]["played"], 34,
+        "every rated result counts"
+    );
+    assert_eq!(average["me"]["place"], 2);
+    assert_eq!(average["more"], false);
+    let as_guest = board(&server, &visitor, "/api/leaderboard/average").await;
+    assert!(as_guest["me"].is_null(), "a guest has no place");
+}

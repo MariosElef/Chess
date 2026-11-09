@@ -273,7 +273,23 @@ impl ServerClient {
             "/api/puzzles/next?min_rating={}&max_rating={}",
             range.min, range.max
         );
-        let request = self.http.client().get(self.url(&path)).bearer_auth(token);
+        self.puzzle_at(token, &path)
+    }
+
+    /// A puzzle near the puzzle rating of whoever `token` signs in, the server picking.
+    pub fn rated_puzzle(
+        &self,
+        token: &str,
+    ) -> impl Future<Output = Result<Puzzle, ServerError>> + use<> {
+        self.puzzle_at(token, "/api/puzzles/next?rated=true")
+    }
+
+    fn puzzle_at(
+        &self,
+        token: &str,
+        path: &str,
+    ) -> impl Future<Output = Result<Puzzle, ServerError>> + use<> {
+        let request = self.http.client().get(self.url(path)).bearer_auth(token);
         self.http.run(async move {
             let text: PuzzleText = read_json(send(request).await?).await?;
             text.read().map_err(ServerError::Unexpected)

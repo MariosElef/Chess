@@ -19,6 +19,8 @@ pub struct ChoiceTile {
     icon: Option<IconName>,
     /// A character in place of an icon, such as ½ for a draw.
     glyph: Option<&'static str>,
+    /// A picture in place of an icon, by its asset path.
+    picture: Option<&'static str>,
     picked: bool,
     disabled: bool,
     height: Pixels,
@@ -39,6 +41,7 @@ impl ChoiceTile {
             label: label.into(),
             icon: None,
             glyph: None,
+            picture: None,
             picked,
             disabled: false,
             height: px(42.),
@@ -54,6 +57,11 @@ impl ChoiceTile {
 
     pub fn glyph(mut self, glyph: &'static str) -> Self {
         self.glyph = Some(glyph);
+        self
+    }
+
+    pub fn picture(mut self, picture: &'static str) -> Self {
+        self.picture = Some(picture);
         self
     }
 
@@ -109,6 +117,9 @@ impl RenderOnce for ChoiceTile {
             })
             .when_some(self.icon, |this, icon| {
                 this.child(Icon::from(icon).size_4().flex_shrink_0())
+            })
+            .when_some(self.picture, |this, path| {
+                this.child(img(path).size_4().flex_shrink_0())
             })
             .when_some(self.glyph, |this, glyph| {
                 this.child(

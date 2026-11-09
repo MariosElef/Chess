@@ -66,11 +66,13 @@ impl LeaderBoard {
     }
 }
 
-/// A leaderboard of everyone's ratings: one per rating category.
+/// A leaderboard of everyone's ratings: one per rating category, and one of each player's average
+/// over every category they have played.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum RankingBoard {
-    Bullet,
     #[default]
+    Average,
+    Bullet,
     Blitz,
     Rapid,
     Classical,
@@ -79,7 +81,9 @@ pub enum RankingBoard {
 }
 
 impl RankingBoard {
-    pub const ALL: [Self; 6] = [
+    /// In the order the tabs show them, the first being where the leaderboard opens.
+    pub const ALL: [Self; 7] = [
+        Self::Average,
         Self::Bullet,
         Self::Blitz,
         Self::Rapid,
@@ -97,6 +101,7 @@ impl RankingBoard {
             Self::Classical => "classical",
             Self::Puzzles => "puzzle",
             Self::PuzzleBattle => "puzzle_battle",
+            Self::Average => "average",
         }
     }
 
@@ -108,6 +113,7 @@ impl RankingBoard {
             Self::Classical => "Classical",
             Self::Puzzles => "Puzzles",
             Self::PuzzleBattle => "Puzzle Battle",
+            Self::Average => "Average",
         }
     }
 
@@ -117,6 +123,7 @@ impl RankingBoard {
             Self::Bullet | Self::Blitz | Self::Rapid | Self::Classical => "games",
             Self::Puzzles => "puzzles",
             Self::PuzzleBattle => "battles",
+            Self::Average => "rated results",
         }
     }
 }

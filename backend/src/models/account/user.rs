@@ -2,10 +2,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// A sign-up. No `Debug`: it carries the password.
+/// A sign-up. No `Debug`: it carries the password. The email may be left out or blank.
 #[derive(Deserialize)]
 pub struct CreateUserModel {
-    pub email: String,
+    #[serde(default)]
+    pub email: Option<String>,
     pub username: String,
     pub password: String,
 }
@@ -14,7 +15,8 @@ pub struct CreateUserModel {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GetUserModel {
     pub id: Uuid,
-    pub email: String,
+    /// None for an account made without one.
+    pub email: Option<String>,
     pub username: String,
     pub created_at: DateTime<Utc>,
     /// One of the ten shared guest accounts, Guest to Guest10.
@@ -26,7 +28,7 @@ pub struct GetUserModel {
 /// A checked sign-up with its password hashed, ready to store. No `Debug`: the hash.
 pub struct NewUser {
     pub id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub username: String,
     pub password_hash: String,
 }
@@ -34,7 +36,7 @@ pub struct NewUser {
 /// The account a sign-in names, with the hash its password is checked against. No `Debug`.
 pub struct UserCredentials {
     pub id: Uuid,
-    pub email: String,
+    pub email: Option<String>,
     pub username: String,
     pub created_at: DateTime<Utc>,
     pub guest: bool,

@@ -6,6 +6,7 @@ mod interaction;
 mod move_kinds;
 mod premove;
 mod premoves;
+mod rook_drop;
 mod selection;
 mod side;
 mod slides;

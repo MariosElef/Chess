@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{
-    assets::IconName,
-    component::{ActiveTheme as _, Icon, h_flex, switch::Switch, v_flex},
+    component::{ActiveTheme as _, h_flex, switch::Switch, v_flex},
     *,
 };
 
@@ -10,6 +9,7 @@ use chess_domain::Side;
 
 use super::side_chip::side_chip;
 use crate::{
+    components::settings::STOCKFISH_PICTURE,
     enums::analysis::EngineStatus,
     models::analysis::LineView,
     services::analysis::{favours_black, format_nps},
@@ -60,11 +60,7 @@ impl EnginePanel {
         let on_toggle = Rc::clone(&self.on_toggle);
         h_flex()
             .gap_2()
-            .child(
-                Icon::from(IconName::Fish)
-                    .size_5()
-                    .text_color(cx.theme().blue),
-            )
+            .child(img(STOCKFISH_PICTURE).size_5())
             .child(div().font_weight(FontWeight::BOLD).child("Stockfish"))
             .child(
                 div()

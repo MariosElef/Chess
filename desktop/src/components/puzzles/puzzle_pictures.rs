@@ -1,9 +1,17 @@
 /// Puzzle Battle's shield: its asset path and bytes.
 pub const BATTLE_PICTURE: &str = "puzzles/battle.svg";
-const PICTURES: [(&str, &[u8]); 1] = [(
-    BATTLE_PICTURE,
-    include_bytes!("../../../assets/puzzles/battle.svg"),
-)];
+/// Custom Practice's target.
+pub const CUSTOM_PICTURE: &str = "puzzles/custom.svg";
+const PICTURES: [(&str, &[u8]); 2] = [
+    (
+        BATTLE_PICTURE,
+        include_bytes!("../../../assets/puzzles/battle.svg"),
+    ),
+    (
+        CUSTOM_PICTURE,
+        include_bytes!("../../../assets/puzzles/custom.svg"),
+    ),
+];
 
 /// The picture at `path`, if it is one of the Puzzles page's own.
 pub fn puzzle_picture(path: &str) -> Option<&'static [u8]> {

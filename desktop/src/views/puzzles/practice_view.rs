@@ -3,7 +3,7 @@ use std::{rc::Rc, time::Duration};
 use gpui_kit::{component::slider::SliderState, *};
 
 use super::{
-    puzzle_request::{TokenSource, report_attempt, request_puzzle},
+    puzzle_request::{TokenSource, report_attempt, request_puzzle, request_rated_puzzle},
     puzzle_solver::PuzzleSolver,
 };
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
         panel::{OnBack, SidePanel},
         puzzles::{PuzzlePanel, RangePicker},
     },
-    enums::puzzles::{PuzzleState, PuzzleVerdict},
+    enums::puzzles::{PracticeKind, PuzzleState, PuzzleVerdict},
     models::{
         puzzles::{AttemptReport, Puzzle, PuzzleRating, RatingRange},
         server::ServerError,
@@ -25,11 +25,13 @@ use crate::{
 /// How often the puzzle's timer is redrawn.
 const TICK: Duration = Duration::from_millis(500);
 
-/// One puzzle at a time in the player's difficulty range; the first try counts for the rating.
+/// One puzzle at a time: rated ones at the player's own rating, whose first try moves it, or
+/// custom ones in a difficulty range the player picks, which move nothing.
 pub struct PracticeView {
     client: ServerClient,
     token: TokenSource,
     solver: Entity<PuzzleSolver>,
+    kind: PracticeKind,
     range: RatingRange,
     /// The difficulty slider, shared with the menu.
     slider: Entity<SliderState>,
@@ -65,6 +67,7 @@ impl PracticeView {
             client,
             token,
             solver,
+            kind: PracticeKind::Rated,
             range,
             slider,
             loading: false,
@@ -78,22 +81,25 @@ impl PracticeView {
         }
     }
 
-    /// From the menu: a puzzle at `range`, with the player's rating as the menu knows it.
+    /// From the menu: rated puzzles, or custom ones at `range`, with the player's rating as the
+    /// menu knows it.
     pub fn start(
         &mut self,
-        range: RatingRange,
+        (kind, range): (PracticeKind, RatingRange),
         rating: Option<PuzzleRating>,
         cx: &mut Context<Self>,
     ) {
+        self.kind = kind;
         self.range = range;
         self.player_rating = rating;
         self.next_puzzle(cx);
     }
 
-    /// The slider moved: the label follows; letting go fetches a puzzle at the new difficulty.
+    /// The slider moved: the label follows; letting go fetches a custom puzzle at the new
+    /// difficulty. Rated puzzles have no slider, so it changes nothing for them.
     pub fn range_changed(&mut self, range: RatingRange, released: bool, cx: &mut Context<Self>) {
         self.range = range;
-        if released {
+        if released && self.kind == PracticeKind::Custom {
             self.next_puzzle(cx);
         }
         cx.notify();
@@ -115,7 +121,25 @@ impl PracticeView {
     }
 
     fn next_puzzle(&mut self, cx: &mut Context<Self>) {
-        match request_puzzle(&self.client, &self.token, self.range, cx) {
+        match self.kind {
+            PracticeKind::Rated => {
+                let request = request_rated_puzzle(&self.client, &self.token, cx);
+                self.fetch(request, cx);
+            }
+            PracticeKind::Custom => {
+                let request = request_puzzle(&self.client, &self.token, self.range, cx);
+                self.fetch(request, cx);
+            }
+        }
+    }
+
+    /// Waits for the puzzle asked for; asking while signed out shows why nothing came.
+    fn fetch(
+        &mut self,
+        request: Result<impl Future<Output = Result<Puzzle, ServerError>> + 'static, &'static str>,
+        cx: &mut Context<Self>,
+    ) {
+        match request {
             Ok(request) => {
                 self.loading = true;
                 self.problem = None;
@@ -163,7 +187,7 @@ impl PracticeView {
         };
         let report = AttemptReport {
             solved,
-            rated: true,
+            rated: self.kind == PracticeKind::Rated,
             duration_ms: solver.elapsed_ms(),
         };
         let Some(request) = report_attempt(&self.client, &self.token, &puzzle_id, report, cx)
@@ -216,7 +240,10 @@ impl PracticeView {
             .elapsed(elapsed)
             .problem(self.problem.clone())
             .player_rating(self.player_rating.map(rating_with_change))
-            .difficulty(RangePicker::new(self.slider.clone(), self.range))
+            .difficulty(
+                (self.kind == PracticeKind::Custom)
+                    .then(|| RangePicker::new(self.slider.clone(), self.range)),
+            )
             .loading(self.loading)
             .on_next(move |_, cx| {
                 let _ = view.update(cx, |view, cx| view.next_puzzle(cx));
@@ -259,7 +286,7 @@ mod tests {
     use super::PracticeView;
     use crate::views::puzzles::puzzle_solver::MISS_PAUSE;
     use crate::{
-        enums::puzzles::PuzzleState,
+        enums::puzzles::{PracticeKind, PuzzleState},
         models::puzzles::RatingRange,
         testing::{ANSWER_WAIT, click, drag, play_and_wait, puzzle_server, wait_until},
     };
@@ -274,6 +301,14 @@ mod tests {
         cx: &'a mut TestAppContext,
         token: Option<&'static str>,
     ) -> (Entity<PracticeView>, &'a mut VisualTestContext) {
+        opened_as(cx, token, PracticeKind::Rated)
+    }
+
+    fn opened_as<'a>(
+        cx: &'a mut TestAppContext,
+        token: Option<&'static str>,
+        kind: PracticeKind,
+    ) -> (Entity<PracticeView>, &'a mut VisualTestContext) {
         cx.executor().allow_parking();
         cx.update(gpui_kit::init);
         let (view, cx) = cx.add_window_view(|_, cx| {
@@ -281,8 +316,23 @@ mod tests {
             let token = Rc::new(move |_: &gpui_kit::App| token.map(str::to_owned));
             PracticeView::new(puzzle_server(), token, (slider, RatingRange::DEFAULT), cx)
         });
-        view.update(cx, |view, cx| view.start(RatingRange::DEFAULT, None, cx));
+        view.update(cx, |view, cx| {
+            view.start((kind, RatingRange::DEFAULT), None, cx);
+        });
         (view, cx)
+    }
+
+    #[gpui_kit::test]
+    fn a_custom_puzzle_solved_first_try_leaves_the_rating_alone(cx: &mut TestAppContext) {
+        let (view, cx) = opened_as(cx, Some("abc"), PracticeKind::Custom);
+        wait_until(cx, |cx| state(&view, cx).is_some());
+        play_and_wait(cx, "square-h5", "square-e8");
+        play_and_wait(cx, "square-e1", "square-e8");
+        play_and_wait(cx, "square-e8", "square-f8");
+        assert_eq!(state(&view, cx), Some(PuzzleState::Solved));
+        std::thread::sleep(ANSWER_WAIT);
+        cx.run_until_parked();
+        assert_eq!(view.update(cx, |view, _| view.player_rating()), None);
     }
 
     #[gpui_kit::test]

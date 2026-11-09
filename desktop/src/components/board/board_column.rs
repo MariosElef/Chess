@@ -6,6 +6,11 @@ use gpui_kit::{
 
 /// The player bar's height, and the slot kept above and below every board so boards match in size.
 pub const PLAYER_BAR: Pixels = px(40.);
+/// The panel beside the board, at its full width and as narrow as it goes in a small window.
+const SIDE_WIDTH: Pixels = px(420.);
+const SIDE_MIN_WIDTH: Pixels = px(300.);
+/// How much faster than the board the panel narrows.
+const SIDE_SHRINK: f32 = 4.;
 /// The space between the bars and the board, where what floats beside the board starts.
 const BAR_GAP: Pixels = px(8.);
 
@@ -55,28 +60,26 @@ impl BoardColumn {
 
 impl RenderOnce for BoardColumn {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        // The tools float just outside the board's right edge, level with its top, and the strip
-        // outside its left edge: they take no room, so every page lays its board out the same
-        // with or without them.
+        // The tools float just outside the board's right edge, level with its top, and take no
+        // room, so every page lays its board out the same with or without them. The column
+        // narrows with a narrow window, the board staying square inside it.
+        let has_strip = self.left_strip.is_some();
         v_flex()
             .relative()
             .h_full()
-            .flex_shrink_0()
+            .min_w_0()
             .gap(BAR_GAP)
+            // A strip's room is kept beside the board, so a narrow window cannot push it under
+            // the rail.
+            .when(has_strip, |this| this.ml(LEFT_STRIP_ROOM))
             .child(bar_slot(self.top))
-            .child(div().flex_1().min_h_0().child(self.board))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(board_square(self.board, self.left_strip)),
+            )
             .child(bar_slot(self.bottom))
-            .when_some(self.left_strip, |this, strip| {
-                this.child(
-                    div()
-                        .absolute()
-                        .top(PLAYER_BAR + BAR_GAP)
-                        .bottom(PLAYER_BAR + BAR_GAP)
-                        .right(relative(1.))
-                        .mr_2()
-                        .child(strip),
-                )
-            })
             .when(!self.tools.is_empty(), |this| {
                 this.child(
                     v_flex()
@@ -90,6 +93,31 @@ impl RenderOnce for BoardColumn {
             })
     }
 }
+
+/// The board in a square as tall as its slot allows and no wider than the column, with the strip
+/// just outside its left edge, exactly as tall as the board.
+fn board_square(board: AnyElement, strip: Option<AnyElement>) -> Div {
+    div()
+        .relative()
+        .h_full()
+        .max_w_full()
+        .aspect_square()
+        .child(board)
+        .when_some(strip, |this, strip| {
+            this.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .right(relative(1.))
+                    .mr_2()
+                    .child(strip),
+            )
+        })
+}
+
+/// The room a left strip takes beside the board: the eval bar's width and its gap.
+const LEFT_STRIP_ROOM: Pixels = px(32.);
 
 /// The size of a tool's place beside the board: every tool centred in one, so they line up.
 const TOOL_SLOT: Pixels = px(32.);
@@ -123,5 +151,15 @@ pub fn board_page(board_column: impl IntoElement, side: impl IntoElement) -> Div
         .gap_10()
         .p_4()
         .child(board_column)
-        .child(div().h_full().child(side))
+        .child(
+            // In a narrow window the panel gives up its width well before the board does, down
+            // to what its contents still need.
+            div()
+                .h_full()
+                .flex()
+                .flex_shrink(SIDE_SHRINK)
+                .w(SIDE_WIDTH)
+                .min_w(SIDE_MIN_WIDTH)
+                .child(side),
+        )
 }

@@ -295,3 +295,23 @@ async fn attempts_are_listed_newest_first_with_their_rating_change(db: Db) {
     assert_eq!(listed[0]["rating_change"], second["rating"]["change"]);
     assert_eq!(listed[1]["rating_change"], first["rating"]["change"]);
 }
+
+#[sqlx::test]
+async fn a_rated_ask_serves_puzzles_near_the_players_rating_and_widens_when_they_run_out(db: Db) {
+    import_three(&db, "near").await;
+    let server = server(db, &fake_lichess().await);
+    let token = account_token(&server).await;
+    // No rating yet is 1500: of 1819, 1433 and 1032, only 1433 is within 150.
+    for _ in 0..5 {
+        let puzzle: Value = next(&server, &token, "?rated=true").await.json();
+        assert_eq!(puzzle["id"], "0000D", "the one nearest 1500");
+    }
+    // Solving it lifts the rating; 1819 is the nearest left, and 1032 is out of reach.
+    attempt(&server, &token, "0000D", true).await;
+    let puzzle: Value = next(&server, &token, "?rated=true").await.json();
+    assert_eq!(puzzle["id"], "00008");
+    // With every near puzzle done, the far one still comes rather than none at all.
+    attempt(&server, &token, "00008", true).await;
+    let puzzle: Value = next(&server, &token, "?rated=true").await.json();
+    assert_eq!(puzzle["id"], "0000H");
+}

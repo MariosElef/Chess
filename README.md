@@ -17,8 +17,9 @@ a commercial one. See [License](#license).
 
 - **Play**: online games against other players, with ratings, premoves and reconnecting; bots
   from 400 to 2800 on Stockfish; or two people at one computer.
-- **Puzzles**: Practice at the difficulty you pick, Puzzle Rush (3 minutes, 5 minutes or
-  Survival) and Puzzle Battle against another player, each with its own rating.
+- **Puzzles**: rated puzzles at your own puzzle rating, Custom Practice at the difficulty you
+  pick, Puzzle Rush (3 minutes, 5 minutes or Survival) and Puzzle Battle against another player,
+  each with its own rating.
 - **Analysis**: paste a FEN or PGN, explore with Stockfish, and get a Game Review that labels
   every move the way chess.com does, with accuracy and an evaluation graph.
 - **Social**: friends with who is online and when they last were, a friends' leaderboard and a
@@ -48,8 +49,9 @@ cargo run --release -p chess-desktop       # in another terminal
 ```
 
 Play with `--release`; `cargo run -p chess-desktop` is a development build, slower to draw.
-The server applies its migrations when it starts. The app opens on sign-in: create an account,
-sign in, or continue as one of the ten guests (Guest, Guest2 … Guest10). The analysis board runs
+The server applies its migrations when it starts. The app opens on sign-in: create an account
+(a username and a password; an email is optional), sign in with your username or email, or
+continue as one of the ten guests (Guest, Guest2 … Guest10). The analysis board runs
 Stockfish (`brew install stockfish`), found at `STOCKFISH_PATH`, else in Homebrew's folders,
 else on the `PATH`.
 
@@ -82,6 +84,11 @@ DATABASE_URL=postgres://chess:change-me@localhost:5433/chess \
 
 Puzzles take premoves: while the opponent's answer is on its way, the player can queue their
 next move, played and judged the moment the answer lands.
+
+Solve Puzzles is rated, as on chess.com: the server picks each puzzle near your puzzle rating
+(within 150, looking wider only once you have done every puzzle that near), and your first try
+moves the rating up or down. Custom Practice gives puzzles in a range you set with the slider and
+moves no rating.
 
 A wrong move plays on the board with the miss icon on its square for a second, as on chess.com;
 in Practice it then goes back so you can try again. Puzzle Rush (3 minutes, 5 minutes or

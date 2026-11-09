@@ -4,7 +4,9 @@ use serde::Deserialize;
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct User {
     pub id: String,
-    pub email: String,
+    /// None for an account made without one.
+    #[serde(default)]
+    pub email: Option<String>,
     pub username: String,
     /// One of the ten shared guest accounts, Guest to Guest10.
     #[serde(default)]

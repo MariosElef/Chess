@@ -145,34 +145,42 @@ pub const PUZZLE_CATEGORY: &str = "puzzle";
 /// The category Puzzle Battle's rating moves in.
 pub const BATTLE_CATEGORY: &str = "puzzle_battle";
 
-/// A leaderboard: one per rating category.
+/// A leaderboard: one per rating category, and one of each player's average over them all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RatingBoard {
     Speed(Category),
     Puzzles,
     PuzzleBattle,
+    Average,
 }
 
 impl RatingBoard {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Speed(Category::Bullet),
         Self::Speed(Category::Blitz),
         Self::Speed(Category::Rapid),
         Self::Speed(Category::Classical),
         Self::Puzzles,
         Self::PuzzleBattle,
+        Self::Average,
     ];
 
     pub fn from_key(key: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|board| board.key() == key)
     }
 
-    /// The board's name in the address, which is also its rating category's id.
+    /// The board's name in the address: its rating category's id, or `average`.
     pub fn key(self) -> String {
+        self.category().unwrap_or_else(|| "average".to_owned())
+    }
+
+    /// The rating category the board ranks; the average board ranks them all.
+    pub fn category(self) -> Option<String> {
         match self {
-            Self::Speed(category) => category.name().to_lowercase(),
-            Self::Puzzles => PUZZLE_CATEGORY.to_owned(),
-            Self::PuzzleBattle => BATTLE_CATEGORY.to_owned(),
+            Self::Speed(category) => Some(category.name().to_lowercase()),
+            Self::Puzzles => Some(PUZZLE_CATEGORY.to_owned()),
+            Self::PuzzleBattle => Some(BATTLE_CATEGORY.to_owned()),
+            Self::Average => None,
         }
     }
 }
@@ -195,9 +203,10 @@ mod tests {
                 "rapid",
                 "classical",
                 "puzzle",
-                "puzzle_battle"
+                "puzzle_battle",
+                "average"
             ],
-            "the ids `play.rating_categories` holds"
+            "the ids `play.rating_categories` holds, then the average"
         );
     }
 }

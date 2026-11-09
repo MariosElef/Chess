@@ -115,7 +115,7 @@ impl RenderOnce for RankingPanel {
                 let mine = my_id.as_deref() == Some(player.id.as_str());
                 place_row(
                     (player, face),
-                    (mine, noun),
+                    (mine, noun, RowSlot::Listed),
                     Rc::clone(&self.on_profile),
                     cx,
                 )
@@ -144,7 +144,7 @@ impl RenderOnce for RankingPanel {
                         )
                         .child(place_row(
                             (me, face),
-                            (true, noun),
+                            (true, noun, RowSlot::Pinned),
                             Rc::clone(&self.on_profile),
                             cx,
                         )),
@@ -220,10 +220,18 @@ fn board_tab(board: RankingBoard, (chosen, on_board): (bool, OnBoard), cx: &App)
         .on_click(move |_, window, cx| on_board(board, window, cx))
 }
 
+/// The places' rows: the board's own list, or the player's place pinned above it.
+#[derive(Clone, Copy)]
+enum RowSlot {
+    Listed,
+    Pinned,
+}
+
 /// One place: its number, picture, name, how much they played, rating, and View profile.
+/// The player's own place shows twice, listed and pinned, so the slot keeps its button's id apart.
 fn place_row(
     (player, face): (&RankedPlayer, &Face),
-    (mine, noun): (bool, &'static str),
+    (mine, noun, slot): (bool, &'static str, RowSlot),
     on_profile: OnProfile,
     cx: &App,
 ) -> Div {
@@ -269,12 +277,20 @@ fn place_row(
                 .child(rating_text(Some(player.rating), player.provisional)),
         )
         .child(
-            Button::new(SharedString::from(format!("profile-{}", player.id)))
+            Button::new(profile_button_id(&player.id, slot))
                 .ghost()
                 .small()
                 .label("View profile")
                 .on_click(move |_, window, cx| on_profile(opened.clone(), window, cx)),
         )
+}
+
+/// The View profile button's id, a pinned row's apart from the same player's listed one.
+fn profile_button_id(player_id: &str, slot: RowSlot) -> SharedString {
+    match slot {
+        RowSlot::Listed => SharedString::from(format!("profile-{player_id}")),
+        RowSlot::Pinned => SharedString::from(format!("your-profile-{player_id}")),
+    }
 }
 
 /// The first three places in gold, silver and bronze; the rest muted.

@@ -3,6 +3,7 @@ use chess_domain::{Board, Move, PieceKind, Position, Side, Square};
 use super::{
     annotations::Annotations,
     premove::{premove_outcome, premove_targets},
+    rook_drop::drop_square,
     selection::{click_outcome, targets},
 };
 use crate::enums::board::ClickOutcome;
@@ -63,7 +64,8 @@ impl BoardInteraction {
         self.apply(click_outcome(position, self.selected, square))
     }
 
-    /// A drag ending on `to`; a square the piece cannot reach puts it back.
+    /// A drag ending on `to`; a square the piece cannot reach puts it back. A king dropped on its
+    /// own rook castles that way.
     pub fn drop(
         &mut self,
         position: &Position,
@@ -75,6 +77,7 @@ impl BoardInteraction {
         if !self.accepts_moves(page_allows) {
             return None;
         }
+        let to = drop_square(position.board(), from, to);
         match click_outcome(position, Some(from), to) {
             ClickOutcome::Select(_) => {
                 self.selected = None;
@@ -93,7 +96,8 @@ impl BoardInteraction {
         self.apply(premove_outcome(board, side, self.selected, square))
     }
 
-    /// A drag by the side waiting to move; a square its piece could never reach puts it back.
+    /// A drag by the side waiting to move; a square its piece could never reach puts it back. A
+    /// king dropped on its own rook premoves castling that way.
     pub fn premove_drop(
         &mut self,
         board: &Board,
@@ -105,6 +109,7 @@ impl BoardInteraction {
         if self.is_promoting() {
             return None;
         }
+        let to = drop_square(board, from, to);
         match premove_outcome(board, side, Some(from), to) {
             ClickOutcome::Select(_) => {
                 self.selected = None;
@@ -221,6 +226,50 @@ mod tests {
             Some(Move::promoting(sq("e7"), sq("e8"), PieceKind::Knight))
         );
         assert!(!interaction.is_promoting());
+    }
+
+    #[test]
+    fn a_king_dropped_on_its_rook_castles_but_a_click_on_the_rook_only_selects_it() {
+        let position: Position = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+            .parse()
+            .expect("valid");
+        let mut interaction = BoardInteraction::default();
+        assert_eq!(
+            interaction.drop(&position, sq("e1"), sq("h1"), true),
+            Some(Move::new(sq("e1"), sq("g1")))
+        );
+        assert_eq!(
+            interaction.drop(&position, sq("e1"), sq("a1"), true),
+            Some(Move::new(sq("e1"), sq("c1")))
+        );
+        interaction.click(&position, sq("e1"), true);
+        assert_eq!(interaction.click(&position, sq("h1"), true), None);
+        assert_eq!(
+            interaction.selected(),
+            Some(sq("h1")),
+            "the rook, picked up"
+        );
+    }
+
+    #[test]
+    fn a_king_dropped_on_its_rook_without_the_right_to_castle_goes_back() {
+        let position: Position = "r3k2r/8/8/8/8/8/8/R3K2R w Qkq - 0 1"
+            .parse()
+            .expect("valid");
+        let mut interaction = BoardInteraction::default();
+        assert_eq!(interaction.drop(&position, sq("e1"), sq("h1"), true), None);
+    }
+
+    #[test]
+    fn a_king_dropped_on_its_rook_premoves_castling() {
+        let position: Position = "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1"
+            .parse()
+            .expect("valid");
+        let mut interaction = BoardInteraction::default();
+        assert_eq!(
+            interaction.premove_drop(position.board(), Side::White, sq("e1"), sq("h1")),
+            Some(Move::new(sq("e1"), sq("g1")))
+        );
     }
 
     #[test]

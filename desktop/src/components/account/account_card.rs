@@ -97,12 +97,15 @@ impl RenderOnce for AccountCard {
             )
             .child(or_rule(cx))
             .child(
-                Button::new("continue-as-guest")
-                    .w_full()
-                    .large()
-                    .icon(IconName::User)
-                    .label("Continue as guest")
-                    .on_click(move |_, window, cx| on_guest(window, cx)),
+                // The app's own raised button, white, so it sits under the green one as an
+                // alternative rather than the main way in.
+                StartButton::new(
+                    "continue-as-guest",
+                    "Continue as guest",
+                    move |window, cx| on_guest(window, cx),
+                )
+                .plain()
+                .icon(IconName::User),
             );
         titled_card(self.form.title(), cx).child(body)
     }
@@ -156,11 +159,12 @@ impl RenderOnce for GuestCard {
     }
 }
 
-/// Who is signed in, across the page: their picture, name and email, Sign out and Delete.
+/// Who is signed in, across the page: their picture, name and any email, Sign out and Delete.
 #[derive(IntoElement)]
 pub struct SignedInCard {
     username: String,
-    email: String,
+    /// None for an account made without one.
+    email: Option<String>,
     /// Their picture's asset path; none shows their initial.
     picture: Option<String>,
     /// A new picture is on its way up.
@@ -175,7 +179,7 @@ pub struct SignedInCard {
 
 impl SignedInCard {
     pub fn new(
-        (username, email, picture): (String, String, Option<String>),
+        (username, email, picture): (String, Option<String>, Option<String>),
         on_sign_out: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
@@ -221,12 +225,14 @@ impl RenderOnce for SignedInCard {
                     .font_weight(FontWeight::BOLD)
                     .child(self.username.clone()),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child(self.email),
-            );
+            .when_some(self.email, |this, email| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(email),
+                )
+            });
         let actions = h_flex()
             .flex_shrink_0()
             .gap_3()

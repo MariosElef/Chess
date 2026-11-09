@@ -76,3 +76,10 @@ impl RushKind {
         }
     }
 }
+
+/// Practice at the player's own rating, which it moves, or at a difficulty they pick, unrated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PracticeKind {
+    Rated,
+    Custom,
+}

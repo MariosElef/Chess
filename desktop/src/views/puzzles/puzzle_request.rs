@@ -27,6 +27,16 @@ pub fn request_puzzle(
     Ok(client.next_puzzle(&token, range))
 }
 
+/// A puzzle at the player's own rating, the server picking; none while signed out.
+pub fn request_rated_puzzle(
+    client: &ServerClient,
+    token: &TokenSource,
+    cx: &App,
+) -> Result<impl Future<Output = Result<Puzzle, ServerError>> + use<>, &'static str> {
+    let token = token(cx).ok_or(SIGN_IN_FIRST)?;
+    Ok(client.rated_puzzle(&token))
+}
+
 /// Tells the server how a puzzle went; nothing is sent while signed out.
 pub fn report_attempt(
     client: &ServerClient,

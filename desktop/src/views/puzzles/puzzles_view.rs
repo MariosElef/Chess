@@ -18,7 +18,7 @@ use crate::{
         panel::SidePanel,
         puzzles::{PuzzleMenu, RushMenu},
     },
-    enums::puzzles::RushKind,
+    enums::puzzles::{PracticeKind, RushKind},
     models::{
         board::ShownPosition,
         puzzles::{PuzzleSummary, RatingRange},
@@ -51,9 +51,8 @@ pub struct PuzzlesView {
     client: ServerClient,
     token: TokenSource,
     summary: PuzzleSummary,
-    /// The difficulty, chosen in the menu and still adjustable while practising.
+    /// Custom Practice's difficulty, set with the slider while practising.
     range: RatingRange,
-    slider: Entity<SliderState>,
     practice: Entity<PracticeView>,
     rush: Entity<RushView>,
     _slider_changes: Subscription,
@@ -112,14 +111,8 @@ impl PuzzlesView {
         let _slider_changes = cx.subscribe(&slider, |view, _, event: &SliderEvent, cx| {
             view.slider_moved(event, cx);
         });
-        let practice = cx.new(|cx| {
-            PracticeView::new(
-                client.clone(),
-                Rc::clone(&token),
-                (slider.clone(), range),
-                cx,
-            )
-        });
+        let practice =
+            cx.new(|cx| PracticeView::new(client.clone(), Rc::clone(&token), (slider, range), cx));
         let rush = cx.new(|cx| RushView::new(client.clone(), Rc::clone(&token), cx));
         let _rush_saves = cx.subscribe(&rush, |view, _, RushSaved, cx| view.refresh_summary(cx));
         let board = cx.new(|cx| BoardView::new(|_| Some(ShownPosition::waiting()), cx));
@@ -140,7 +133,6 @@ impl PuzzlesView {
             token,
             summary: PuzzleSummary::default(),
             range,
-            slider,
             practice,
             rush,
             _slider_changes,
@@ -196,11 +188,12 @@ impl PuzzlesView {
         .detach();
     }
 
-    fn open_practice(&mut self, cx: &mut Context<Self>) {
+    /// Rated puzzles at the player's rating, or custom ones at the slider's difficulty.
+    fn open_practice(&mut self, kind: PracticeKind, cx: &mut Context<Self>) {
         self.stage = Stage::Practice;
         let (range, rating) = (self.range, self.summary.rating);
         self.practice
-            .update(cx, |practice, cx| practice.start(range, rating, cx));
+            .update(cx, |practice, cx| practice.start((kind, range), rating, cx));
         cx.notify();
     }
 
@@ -243,23 +236,28 @@ impl PuzzlesView {
 
     fn menu(&self, cx: &mut Context<Self>) -> PuzzleMenu {
         let page = cx.entity().downgrade();
-        let (practice_view, rush_view, battle_view) = (page.clone(), page.clone(), page);
-        PuzzleMenu::new(
-            rating_line(&self.summary),
-            (self.slider.clone(), self.range),
-        )
-        .on_practice(move |_, cx| {
-            let _ = practice_view.update(cx, |view, cx| view.open_practice(cx));
-        })
-        .on_rush(move |_, cx| {
-            let _ = rush_view.update(cx, |view, cx| {
-                view.stage = Stage::RushMenu;
-                cx.notify();
-            });
-        })
-        .on_battle(move |_, cx| {
-            let _ = battle_view.update(cx, |view, cx| view.open_battle(cx));
-        })
+        let (practice_view, custom_view) = (page.clone(), page.clone());
+        let (rush_view, battle_view) = (page.clone(), page);
+        PuzzleMenu::new(rating_line(&self.summary))
+            .on_practice(move |_, cx| {
+                let _ = practice_view.update(cx, |view, cx| {
+                    view.open_practice(PracticeKind::Rated, cx);
+                });
+            })
+            .on_custom(move |_, cx| {
+                let _ = custom_view.update(cx, |view, cx| {
+                    view.open_practice(PracticeKind::Custom, cx);
+                });
+            })
+            .on_rush(move |_, cx| {
+                let _ = rush_view.update(cx, |view, cx| {
+                    view.stage = Stage::RushMenu;
+                    cx.notify();
+                });
+            })
+            .on_battle(move |_, cx| {
+                let _ = battle_view.update(cx, |view, cx| view.open_battle(cx));
+            })
     }
 
     fn open_battle(&mut self, cx: &mut Context<Self>) {

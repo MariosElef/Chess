@@ -1,5 +1,5 @@
 use gpui_kit::{
-    component::{ActiveTheme as _, v_flex},
+    component::{ActiveTheme as _, scroll::ScrollableElement as _, v_flex},
     prelude::FluentBuilder as _,
     *,
 };
@@ -30,6 +30,7 @@ impl ParentElement for SidePanel {
 
 impl RenderOnce for SidePanel {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        // What does not fit a short window scrolls, with a scrollbar, rather than being cut off.
         let content = v_flex()
             .w_full()
             .flex_1()
@@ -37,11 +38,10 @@ impl RenderOnce for SidePanel {
             .px_5()
             .py_3()
             .gap_3()
-            .children(self.content);
+            .children(self.content)
+            .overflow_y_scrollbar();
         v_flex()
-            .w(px(420.))
-            .h_full()
-            .flex_shrink_0()
+            .size_full()
             .rounded(cx.theme().radius)
             .overflow_hidden()
             .bg(cx.theme().group_box)

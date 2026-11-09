@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use chess_domain::{Move, Position};
+use chess_domain::{Move, Position, Rating};
 use uuid::Uuid;
 
 use super::rating::{BATTLE_CATEGORY, PUZZLE_CATEGORY, from_row, shown};
@@ -18,11 +18,15 @@ use crate::{
         puzzles::{battle, puzzle, rush_run},
         rating,
     },
+    services::rating::whole,
 };
 
 /// The widest range a player may ask for, and what a missing end means.
 const LOWEST_RATING: i32 = 400;
 const HIGHEST_RATING: i32 = 3200;
+/// How far from the player's rating a rated puzzle is looked for: close first, then wider, should
+/// the player have done every puzzle near their rating.
+const RATED_REACH: [i32; 3] = [150, 300, 600];
 /// A battle's ladder: how many puzzles, the first one's rating, and how much harder each next.
 const LADDER_LENGTH: usize = 40;
 const LADDER_START: i32 = 600;
@@ -42,13 +46,22 @@ impl PuzzleService {
         Self { db, lichess }
     }
 
-    /// A random puzzle rated within the range asked for, one the player has not attempted.
+    /// A random puzzle the player has not attempted: rated within the range asked for, or for a
+    /// rated ask, as near the player's own puzzle rating as one is left.
     pub async fn next(
         &self,
         query: PuzzleQuery,
         user_id: Uuid,
     ) -> Result<GetPuzzleModel, AppError> {
-        let (min, max) = checked_range(query)?;
+        let (min, max) = if query.rated {
+            let rating = self.puzzle_rating(user_id).await?;
+            if let Some(row) = self.random_near(rating, user_id).await? {
+                return opened(row);
+            }
+            rated_range(rating, RATED_REACH[0])
+        } else {
+            checked_range(query)?
+        };
         if let Some(row) = self.random_in_range(min, max, user_id).await? {
             return opened(row);
         }
@@ -60,6 +73,27 @@ impl PuzzleService {
             .next_puzzle(lichess_difficulty(min, max))
             .await?;
         Ok(response)
+    }
+
+    /// The player's puzzle rating, rounded; a player without one starts where everyone does.
+    async fn puzzle_rating(&self, user_id: Uuid) -> Result<i32, AppError> {
+        let rating = rating::get(&self.db, user_id, PUZZLE_CATEGORY)
+            .await?
+            .map_or(Rating::NEW, from_row);
+        Ok(whole(rating.rating))
+    }
+
+    /// A puzzle near `rating`, looking wider each time nothing is left closer; any puzzle at all
+    /// once every reach has run dry.
+    async fn random_near(&self, rating: i32, user_id: Uuid) -> Result<Option<PuzzleRow>, AppError> {
+        for reach in RATED_REACH {
+            let (min, max) = rated_range(rating, reach);
+            if let Some(row) = self.random_in_range(min, max, user_id).await? {
+                return Ok(Some(row));
+            }
+        }
+        self.random_in_range(LOWEST_RATING, HIGHEST_RATING, user_id)
+            .await
     }
 
     /// The first puzzle after a random point in the range, wrapping round to the range's first.
@@ -113,6 +147,13 @@ impl PuzzleService {
         };
         Ok(response)
     }
+}
+
+/// The ratings within `reach` of `rating`, kept to the ones served.
+fn rated_range(rating: i32, reach: i32) -> (i32, i32) {
+    let min = (rating - reach).clamp(LOWEST_RATING, HIGHEST_RATING);
+    let max = (rating + reach).clamp(LOWEST_RATING, HIGHEST_RATING);
+    (min, max)
 }
 
 /// Each end defaults to the widest; a range that is backwards or out of bounds is refused.
@@ -232,7 +273,7 @@ fn lichess_difficulty(min: i32, max: i32) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{checked_range, lichess_difficulty, opened};
+    use super::{checked_range, lichess_difficulty, opened, rated_range};
     use crate::models::puzzles::puzzle::{PuzzleQuery, PuzzleRow};
 
     #[test]
@@ -244,13 +285,26 @@ mod tests {
         let backwards = PuzzleQuery {
             min_rating: Some(1600),
             max_rating: Some(1200),
+            rated: false,
         };
         assert!(checked_range(backwards).is_err());
         let too_low = PuzzleQuery {
             min_rating: Some(100),
             max_rating: None,
+            rated: false,
         };
         assert!(checked_range(too_low).is_err());
+    }
+
+    #[test]
+    fn a_rated_range_centres_on_the_rating_and_stays_within_what_is_served() {
+        assert_eq!(rated_range(1500, 150), (1350, 1650));
+        assert_eq!(rated_range(450, 150), (400, 600), "never below the lowest");
+        assert_eq!(
+            rated_range(3150, 300),
+            (2850, 3200),
+            "nor above the highest"
+        );
     }
 
     #[test]

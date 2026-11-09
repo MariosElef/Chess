@@ -27,7 +27,7 @@ pub struct MenuPerson {
     pub name: String,
     /// Their picture's asset path; none shows their initial.
     pub picture: Option<String>,
-    /// `None` for a guest, who has no email.
+    /// `None` for a guest, or an account made without an email.
     pub email: Option<String>,
     pub guest: bool,
 }
