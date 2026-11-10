@@ -188,7 +188,8 @@ gives the lowest-numbered guest nobody is using.
 
 ## Bots
 
-Play → Bots: pick Vasilis (400), Danis (800), Stefanos (1200), Andreas (1600) or Sporos (2000),
+Play → Bots: pick Vasilis (400), Danis (800), Stefanos (1200), Andreas (1600), Sporos (2000)
+or Ferris (2400),
 or a custom bot from 400 to 2800, the colour to play, and a time control or none. Each bot
 plays on a Stockfish of its own in the app, so it works offline. From 1400 up, Stockfish's own
 strength limit plays it; below, it looks only a few moves ahead, chooses among its best few,
@@ -204,8 +205,10 @@ and their mother, and resigns on his turn once his engine sees him two pawns dow
 mated. Stefanos is a metalhead who screams at nearly every capture and check, and talks about
 goth girls in between. Andreas gambles on everything and checks his
 kouponoui between moves; once a pawn down he now and then offers a deal, a draw you can accept
-or decline. Sporos, the strongest, is sure nobody likes him and that he gave up his happiness
-for games, and sighs about it while he beats you.
+or decline. Sporos is sure nobody likes him and that he gave up his happiness
+for games, and sighs about it while he beats you. Ferris, the Rust crab and the strongest, speaks
+in compiler errors and ownership rules, clicks his claws, and moves twice as fast as the others;
+he is also Game Review's coach.
 
 ## Game review
 
@@ -218,8 +221,10 @@ Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss
 While it runs, the board plays through the game with each move's slide and sound; when it is
 ready, it goes back to the start. Each move's icon shows beside it and on the board, where the
 move's squares take its colour; for any move but the best, a green arrow and "Best was …" show
-what the engine preferred. The panel gives each side's accuracy, counts of each kind of move,
-and a game rating: the rating a side played like in that game.
+what the engine preferred. The panel opens by naming the game's opening, from Lichess's
+[chess-openings](https://github.com/lichess-org/chess-openings) list (the last named position
+the game reached, whatever the move order), then gives each side's accuracy, counts of each kind
+of move, and a game rating: the rating a side played like in that game.
 
 Accuracy is Lichess's, computed exactly as Lichess does (each move's accuracy from the winning
 chances it kept, then the mean of a volatility-weighted mean and a harmonic mean, so one blunder

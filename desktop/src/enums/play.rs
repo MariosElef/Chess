@@ -161,8 +161,10 @@ pub enum BotCharacter {
     Stefanos,
     /// Gambles on everything, and offers deals once he is behind.
     Andreas,
-    /// The strongest, and sure nobody likes him.
+    /// Sure nobody likes him.
     Sporos,
+    /// The Rust crab, the strongest: speaks in compiler errors and moves blazingly fast.
+    Ferris,
 }
 
 /// What just happened on the board, as a bot sees it, for it to react to.

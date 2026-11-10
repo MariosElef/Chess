@@ -37,6 +37,7 @@ analysis:
   review:
     accuracy: Accuracy
     game_rating: Game Rating
+    opening: "This is the %{name}."
     verdict: "%{san} is %{verdict}"
     best_was: Best was %{best}
     progress: Reviewing %{done}/%{total}

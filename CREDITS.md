@@ -10,6 +10,8 @@ everything in the repository made by someone else, who made it, and its licence.
 Files | Author(s) | License
 --- | --- | ---
 Puzzles served from the [Lichess puzzle database](https://database.lichess.org/#puzzles) | the Lichess community | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+desktop/assets/bots/ferris.svg (a bot, and Game Review's coach): Ferris the Rustacean, from [rustacean.net](https://rustacean.net) | Karen Rustad Tölva | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+desktop/assets/review/opening_names.tsv: the openings' names, from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | the Lichess community | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 Game Review's evaluation curve and accuracy formula | [Lichess](https://github.com/lichess-org/lila) | published by Lichess; reimplemented here
 Stockfish, run as a separate program, not bundled | [the Stockfish developers](https://stockfishchess.org) | [GPLv3](https://github.com/official-stockfish/Stockfish/blob/master/Copying.txt)
 Icons from gpui-kit's [Lucide](https://lucide.dev) set | the Lucide contributors | [ISC](https://lucide.dev/license)

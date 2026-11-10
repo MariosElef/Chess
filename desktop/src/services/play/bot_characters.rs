@@ -3,6 +3,7 @@
 //! Randomness comes in as plain numbers from 0 to 1, as for the bots' moves.
 mod andreas;
 mod danis;
+mod ferris;
 mod sporos;
 mod stefanos;
 mod vasilis;
@@ -29,6 +30,7 @@ pub fn greeting(character: Option<BotCharacter>, roll: f64) -> Option<&'static s
         BotCharacter::Stefanos => Some(stefanos::greeting(roll)),
         BotCharacter::Andreas => Some(andreas::greeting(roll)),
         BotCharacter::Sporos => Some(sporos::greeting(roll)),
+        BotCharacter::Ferris => Some(ferris::greeting(roll)),
     }
 }
 
@@ -45,6 +47,7 @@ pub fn move_line(
         BotCharacter::Stefanos => stefanos::move_line(moment, rolls),
         BotCharacter::Andreas => andreas::move_line(moment, rolls),
         BotCharacter::Sporos => sporos::move_line(moment, rolls),
+        BotCharacter::Ferris => ferris::move_line(moment, rolls),
     }
 }
 
@@ -56,7 +59,8 @@ pub fn rage_quits(character: Option<BotCharacter>, score: UciScore) -> bool {
             BotCharacter::Vasilis
             | BotCharacter::Stefanos
             | BotCharacter::Andreas
-            | BotCharacter::Sporos,
+            | BotCharacter::Sporos
+            | BotCharacter::Ferris,
         )
         | None => false,
     }
@@ -69,7 +73,8 @@ pub fn quit_line(character: Option<BotCharacter>, roll: f64) -> Option<&'static 
         BotCharacter::Vasilis
         | BotCharacter::Stefanos
         | BotCharacter::Andreas
-        | BotCharacter::Sporos => None,
+        | BotCharacter::Sporos
+        | BotCharacter::Ferris => None,
     }
 }
 
@@ -88,7 +93,8 @@ pub fn deal_offer(
         BotCharacter::Vasilis
         | BotCharacter::Danis
         | BotCharacter::Stefanos
-        | BotCharacter::Sporos => None,
+        | BotCharacter::Sporos
+        | BotCharacter::Ferris => None,
     }
 }
 
@@ -103,7 +109,8 @@ pub fn deal_answer(
         BotCharacter::Vasilis
         | BotCharacter::Danis
         | BotCharacter::Stefanos
-        | BotCharacter::Sporos => None,
+        | BotCharacter::Sporos
+        | BotCharacter::Ferris => None,
     }
 }
 
@@ -111,6 +118,7 @@ pub fn deal_answer(
 pub fn think_time_for(character: Option<BotCharacter>, natural: Duration) -> Duration {
     match character {
         Some(BotCharacter::Vasilis) => vasilis::think_time(natural),
+        Some(BotCharacter::Ferris) => ferris::think_time(natural),
         Some(
             BotCharacter::Danis
             | BotCharacter::Stefanos
@@ -298,6 +306,7 @@ mod tests {
             BotCharacter::Stefanos,
             BotCharacter::Andreas,
             BotCharacter::Sporos,
+            BotCharacter::Ferris,
         ];
         for character in characters {
             let lines = every_line(character);

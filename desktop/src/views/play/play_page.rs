@@ -1269,7 +1269,7 @@ mod tests {
         page.update(cx, |page, cx| {
             let versus = page.versus.as_ref().expect("a bot game");
             assert_eq!(versus.side, Side::Black, "the player asked for White");
-            assert_eq!(versus.bot.name, "Sporos", "the strongest");
+            assert_eq!(versus.bot.name, "Sporos", "the fifth bot");
             page.play(mv("e2", "e4"), cx);
         });
         wait_for_moves(&page, cx, 2);

@@ -909,11 +909,20 @@ impl AnalysisPage {
                 let _ = page.update(cx, |page, cx| page.show_position(position, cx));
             },
         );
-        Some(ReviewPanel::new(
-            (review.accuracy, review.ratings),
-            counts,
-            (self.shown_verdict(), graph),
-        ))
+        Some(
+            ReviewPanel::new(
+                (review.accuracy, review.ratings),
+                counts,
+                (self.shown_verdict(), graph),
+            )
+            .opening(
+                review
+                    .openings
+                    .get(self.history.viewing())
+                    .cloned()
+                    .flatten(),
+            ),
+        )
     }
 
     /// What the move on the board was, and what was best when it was not.

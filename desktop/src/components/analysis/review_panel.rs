@@ -7,9 +7,13 @@ use gpui_kit::{
 
 use super::{eval_graph::EvalGraph, side_chip::side_chip};
 use crate::{
-    components::board::{BoardStyle, piece_image},
+    components::{
+        board::{BoardStyle, piece_image},
+        play::FERRIS_PICTURE,
+    },
     enums::analysis::MoveClass,
     i18n::tr,
+    models::analysis::Opening,
     services::board::side_name,
 };
 
@@ -33,6 +37,8 @@ pub struct ReviewPanel {
     counts: Vec<(MoveClass, usize, usize)>,
     shown: Option<ShownVerdict>,
     graph: EvalGraph,
+    /// The opening the game had reached at the position shown, said above the graph.
+    opening: Option<Opening>,
 }
 
 impl ReviewPanel {
@@ -47,7 +53,13 @@ impl ReviewPanel {
             counts,
             shown,
             graph,
+            opening: None,
         }
+    }
+
+    pub fn opening(mut self, opening: Option<Opening>) -> Self {
+        self.opening = opening;
+        self
     }
 }
 
@@ -65,6 +77,9 @@ impl RenderOnce for ReviewPanel {
             .rounded(px(8.))
             .bg(theme.muted)
             .text_sm()
+            .when_some(self.opening, |this, opening| {
+                this.child(opening_bubble(&opening))
+            })
             .child(self.graph)
             .when_some(self.shown, |this, shown| this.child(verdict(shown, muted)))
             .child(table_row(
@@ -97,6 +112,39 @@ impl RenderOnce for ReviewPanel {
             ))
     }
 }
+
+/// The coach, Ferris, saying the opening in a white speech bubble, in light mode and dark.
+fn opening_bubble(opening: &Opening) -> Div {
+    h_flex()
+        .w_full()
+        .gap_3()
+        .items_center()
+        .child(
+            img(FERRIS_PICTURE)
+                .w(COACH_WIDTH)
+                .h(COACH_HEIGHT)
+                .flex_none(),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .px_4()
+                .py_3()
+                .rounded(px(12.))
+                .bg(white())
+                .text_color(rgb(BUBBLE_TEXT))
+                .text_base()
+                .font_weight(FontWeight::MEDIUM)
+                .child(tr!("analysis.review.opening", name = opening.name.clone())),
+        )
+}
+
+/// Ferris's picture is half again as wide as it is tall.
+const COACH_WIDTH: Pixels = px(60.);
+const COACH_HEIGHT: Pixels = px(40.);
+/// The bubble's words: the darkest grey of the app's own, on white.
+const BUBBLE_TEXT: u32 = 0x0011_1111;
 
 /// `Nf3 is a Blunder`, with what was best below.
 fn verdict(shown: ShownVerdict, muted: Hsla) -> Div {

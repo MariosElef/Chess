@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// The named bots, weakest first.
-pub const BOTS: [Bot; 5] = [
+pub const BOTS: [Bot; 6] = [
     Bot {
         name: "Vasilis",
         rating: 400,
@@ -46,6 +46,12 @@ pub const BOTS: [Bot; 5] = [
         rating: 2000,
         picture: Some("bots/sporos.jpg"),
         character: Some(BotCharacter::Sporos),
+    },
+    Bot {
+        name: "Ferris",
+        rating: 2400,
+        picture: Some("bots/ferris.svg"),
+        character: Some(BotCharacter::Ferris),
     },
 ];
 

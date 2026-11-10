@@ -8,6 +8,7 @@ use super::{
     classify::{MoveFacts, classify},
     game_rating::{FEWEST_PLIES, estimated_rating, move_kinds},
     opening_book::{is_book, warm_up},
+    opening_names::{openings_by_position, warm_up_names},
     sacrifice::is_sacrifice,
 };
 use crate::models::analysis::{EngineLine, GameReview, MoveReview, PositionEval};
@@ -26,9 +27,10 @@ pub struct ReviewRun {
 }
 
 impl ReviewRun {
-    /// Builds the opening table the first time, which takes a moment: call it off the UI thread.
+    /// Builds the opening tables the first time, which takes a moment: call it off the UI thread.
     pub fn new(game: &Game) -> Self {
         warm_up();
+        warm_up_names();
         let evals = game.positions().iter().map(finished_eval).collect();
         Self {
             game: game.clone(),
@@ -151,6 +153,7 @@ fn review(game: &Game, evals: &[&PositionEval]) -> GameReview {
         accuracy,
         ratings,
         shares,
+        openings: openings_by_position(game),
     }
 }
 

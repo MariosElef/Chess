@@ -1,5 +1,8 @@
+/// Ferris, the Rust crab: a bot, and Game Review's coach.
+pub const FERRIS_PICTURE: &str = "bots/ferris.svg";
+
 /// The bots' pictures, by asset path.
-const PICTURES: [(&str, &[u8]); 5] = [
+const PICTURES: [(&str, &[u8]); 6] = [
     (
         "bots/sporos.jpg",
         include_bytes!("../../../assets/bots/sporos.jpg"),
@@ -19,6 +22,10 @@ const PICTURES: [(&str, &[u8]); 5] = [
     (
         "bots/andreas.jpg",
         include_bytes!("../../../assets/bots/andreas.jpg"),
+    ),
+    (
+        FERRIS_PICTURE,
+        include_bytes!("../../../assets/bots/ferris.svg"),
     ),
 ];
 

@@ -36,6 +36,7 @@ analysis:
       blunder: σοβαρό λάθος
   review:
     accuracy: Ακρίβεια
+    opening: "Το άνοιγμα της παρτίδας: %{name}."
     game_rating: Βαθμολογία παρτίδας
     verdict: "%{san}: %{verdict}"
     best_was: "Η καλύτερη ήταν %{best}"

@@ -11,7 +11,7 @@ mod speed_label;
 mod waiting_bar;
 
 pub use bot_picker::BotPicker;
-pub use bot_pictures::{bot_picture, bot_picture_paths};
+pub use bot_pictures::{FERRIS_PICTURE, bot_picture, bot_picture_paths};
 pub use bot_speech::BotSpeech;
 pub use captured_row::CapturedRow;
 pub use clock_face::{ClockFace, format_clock};

@@ -9,6 +9,7 @@ mod accuracy;
 mod classify;
 mod game_rating;
 mod opening_book;
+mod opening_names;
 mod review_engines;
 mod review_run;
 mod sacrifice;

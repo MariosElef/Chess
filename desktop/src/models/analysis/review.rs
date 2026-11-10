@@ -36,4 +36,16 @@ pub struct GameReview {
     pub ratings: [Option<u32>; 2],
     /// White's share of the evaluation at every position, from 0 to 1: the review's graph.
     pub shares: Vec<f64>,
+    /// At every position, the opening the game had reached by then: none at the start, then the
+    /// last named position's name, kept once the game leaves the opening.
+    pub openings: Vec<Option<Opening>>,
+}
+
+/// A named opening, as Lichess's opening list names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Opening {
+    /// Its Encyclopaedia of Chess Openings code, such as `B90`.
+    pub eco: String,
+    /// Such as `Sicilian Defense: Najdorf Variation`.
+    pub name: String,
 }

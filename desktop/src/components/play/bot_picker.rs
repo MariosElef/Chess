@@ -70,7 +70,8 @@ impl RenderOnce for BotPicker {
                 div()
                     .w_full()
                     .grid()
-                    .grid_cols(3)
+                    // Six bots and Custom: two rows.
+                    .grid_cols(4)
                     .gap_2()
                     .children(cards)
                     .child(self.card(None, &custom, cx)),
