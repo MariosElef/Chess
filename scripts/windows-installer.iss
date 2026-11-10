@@ -18,6 +18,7 @@ PrivilegesRequired=lowest
 DefaultDirName={autopf}\Chess
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\Chess.exe
+SetupIconFile=..\desktop\assets\shell\app_icon.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
