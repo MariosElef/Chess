@@ -25,7 +25,7 @@ use crate::{
     components::{
         board::BoardStyle,
         settings::{SettingsChoices, SettingsPage},
-        shell::{AccountMenu, AppHeader, MESSAGES_PICTURE, MenuPerson, NavRail},
+        shell::{AccountMenu, AppHeader, INTRO_TIME, Intro, MESSAGES_PICTURE, MenuPerson, NavRail},
     },
     enums::{
         play::LiveStatus,
@@ -115,6 +115,8 @@ pub struct AppShell {
     _appearance_changes: Subscription,
     /// Play's Game Review hands its game over here.
     _play_events: Subscription,
+    /// The intro still playing over the first screen, on a real launch only.
+    intro: bool,
 }
 
 impl AppShell {
@@ -123,7 +125,23 @@ impl AppShell {
         i18n::set_current(load_language().unwrap_or_default());
         // Players' pictures come from the same server as everything else.
         load_pictures_from(setup.client.clone());
-        Self::with(setup, window, cx)
+        let mut shell = Self::with(setup, window, cx);
+        shell.play_intro(cx);
+        shell
+    }
+
+    /// Opens on the intro, then drops it once it has played.
+    fn play_intro(&mut self, cx: &mut Context<Self>) {
+        self.intro = true;
+        cx.spawn(async move |shell, cx| {
+            cx.background_executor().timer(INTRO_TIME).await;
+            // Gone already only if the window is closing.
+            let _ = shell.update(cx, |shell, cx| {
+                shell.intro = false;
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub fn with(setup: ShellSetup, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -179,6 +197,7 @@ impl AppShell {
             engine_settings,
             _appearance_changes,
             _play_events: pages.play_events,
+            intro: false,
         }
     }
 
@@ -311,8 +330,20 @@ impl AppShell {
 }
 
 impl Render for AppShell {
+    /// The screen, with the intro over it while it plays.
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let screen = self.screen(window, cx);
+        div()
+            .relative()
+            .size_full()
+            .child(screen)
+            .when(self.intro, |this| this.child(Intro))
+    }
+}
+
+impl AppShell {
     /// Nothing but the account screen until the player signs in or chooses to play as a guest.
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn screen(&mut self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let account = self.account.read(cx);
         if !account.is_admitted() {
             // The header still holds the window's buttons and moves it.
