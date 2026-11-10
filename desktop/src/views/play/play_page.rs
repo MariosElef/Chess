@@ -17,7 +17,7 @@ use super::game_controls::game_tile;
 use crate::{
     clients::engine::{Engine, locate_stockfish},
     components::{
-        board::{BoardColumn, PLAYER_BAR, board_page, copy_fen},
+        board::{BoardColumn, PLAYER_BAR, board_page, copy_buttons},
         history::{MoveList, NavigationBar},
         panel::{ChoiceTile, PanelHeader, SidePanel, action_bar},
         play::{
@@ -28,9 +28,10 @@ use crate::{
         social::avatar,
     },
     enums::{
-        play::{ColourChoice, PlayMode},
+        play::{BotProblem, ColourChoice, PlayMode},
         sound::Sound,
     },
+    i18n::tr,
     models::{
         board::{MoveMade, ShownPosition},
         play::{AnalyzeGame, Bot},
@@ -40,7 +41,7 @@ use crate::{
         play::{
             BOTS, CUSTOM_STRENGTH, ClockWarning, DEFAULT_TIME_CONTROL, custom_bot, deal_answer,
             deal_offer, greeting, moment_of, move_line, outcome_reason, player_side, quit_line,
-            rage_quits, result_title, status_text, think_time, think_time_for,
+            rage_quits, result_title, side_label, status_text, think_time, think_time_for,
         },
     },
     views::{
@@ -110,7 +111,7 @@ pub struct PlayPage {
     _strength_changes: Subscription,
     colour_choice: ColourChoice,
     /// Why a bot game could not start, or why it stopped.
-    bot_problem: Option<String>,
+    bot_problem: Option<BotProblem>,
     versus: Option<BotGame>,
     /// Keyboard focus, so the arrow keys reach this page.
     focus_handle: FocusHandle,
@@ -278,12 +279,11 @@ impl PlayPage {
     /// Starts the picked bot on its own Stockfish, the board turned to the player; whether it did.
     fn start_bot(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(path) = locate_stockfish() else {
-            self.bot_problem =
-                Some("Stockfish was not found: install it (brew install stockfish)".to_owned());
+            self.bot_problem = Some(BotProblem::StockfishMissing);
             return false;
         };
         let Ok(started) = Engine::spawn(&path) else {
-            self.bot_problem = Some("Stockfish would not start".to_owned());
+            self.bot_problem = Some(BotProblem::StockfishFailed);
             return false;
         };
         let bot = self.picked_bot();
@@ -342,7 +342,7 @@ impl PlayPage {
                 }
             }
             BotEvent::Failed => {
-                self.bot_problem = Some("The bot's engine stopped".to_owned());
+                self.bot_problem = Some(BotProblem::EngineStopped);
                 cx.notify();
             }
         }
@@ -600,11 +600,11 @@ impl PlayPage {
             .filter(|_| !self.card_closed)?;
         // The side kept is the bot's; the player has the other.
         let me = self.versus.as_ref().map(|game| game.side.opponent());
-        let opponent = self.versus.as_ref().map(|game| game.bot.name);
-        let title = result_title(outcome.winner(), me, opponent);
+        let opponent = self.versus.as_ref().map(|game| game.bot.shown_name());
+        let title = result_title(outcome.winner(), me, opponent.as_deref());
         let close = cx.entity().downgrade();
         let card = GameOverCard::new(
-            (title, outcome_reason(outcome).to_owned()),
+            (title, outcome_reason(outcome)),
             self.game_over_actions(cx),
             move |_, cx| {
                 let _ = close.update(cx, |page, cx| {
@@ -619,9 +619,9 @@ impl PlayPage {
     /// Game Review, then a new game or the same one again.
     fn game_over_actions(&self, cx: &mut Context<Self>) -> GameOverActions {
         let new_label = if self.versus.is_some() {
-            "New Bot"
+            tr!("play.actions.new_bot")
         } else {
-            "New game"
+            tr!("play.actions.new_game")
         };
         let page = cx.entity().downgrade();
         let (review, fresh, again) = (page.clone(), page.clone(), page);
@@ -631,9 +631,13 @@ impl PlayPage {
         .choice(("new-game", new_label), IconName::Plus, move |_, cx| {
             let _ = fresh.update(cx, |page, cx| page.new_game(cx));
         })
-        .choice(("rematch", "Rematch"), IconName::RotateCcw, move |_, cx| {
-            let _ = again.update(cx, |page, cx| page.start_game(cx));
-        })
+        .choice(
+            ("rematch", tr!("play.rematch.ask")),
+            IconName::RotateCcw,
+            move |_, cx| {
+                let _ = again.update(cx, |page, cx| page.start_game(cx));
+            },
+        )
     }
 
     /// Back to the menu, keeping the last time control picked.
@@ -665,8 +669,13 @@ impl PlayPage {
         v_flex()
             .gap_1()
             .child(Label::new(status_text(self.history.game())).text_lg())
-            .when_some(self.bot_problem.clone(), |this, problem| {
-                this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
+            .when_some(self.bot_problem, |this, problem| {
+                this.child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().danger)
+                        .child(problem.message()),
+                )
             })
     }
 
@@ -698,9 +707,9 @@ impl PlayPage {
     /// The panel beside the board: the status, the moves, the arrows and the game's buttons.
     fn side_column(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> SidePanel {
         let title = if self.versus.is_some() {
-            "Play Bots"
+            tr!("play.panel.play_bots")
         } else {
-            "Play"
+            tr!("play.panel.play")
         };
         SidePanel::new()
             .header(PanelHeader::new(PLAY_PICTURE, title))
@@ -735,7 +744,7 @@ impl PlayPage {
             .top(self.player_bar(bottom.opponent(), cx))
             .bottom(self.player_bar(bottom, cx))
             .tool(flip_button("flip-board", cx, PlayPage::flip))
-            .tool(copy_fen(self.history.shown()))
+            .tool(copy_buttons(self.history.shown(), self.history.game()))
     }
 
     /// One side's captured pieces and, in a timed game, its clock; against a bot, who plays it.
@@ -764,7 +773,12 @@ impl PlayPage {
             // Round, as the bot's picture beside it; none while signed out.
             let face = my_face(&self.session, cx)
                 .map(|face| avatar(&face.name, face.picture.as_deref(), px(24.), cx));
-            return Some(h_flex().gap_2().children(face).child(Label::new("You")));
+            return Some(
+                h_flex()
+                    .gap_2()
+                    .children(face)
+                    .child(Label::new(tr!("play.bar.you"))),
+            );
         }
         let bot = game.bot;
         Some(
@@ -773,7 +787,7 @@ impl PlayPage {
                 .when_some(bot.picture, |this, path| {
                     this.child(img(path).size_6().rounded_full())
                 })
-                .child(Label::new(format!("{} ({})", bot.name, bot.rating))),
+                .child(Label::new(format!("{} ({})", bot.shown_name(), bot.rating))),
         )
     }
 
@@ -787,7 +801,7 @@ impl PlayPage {
         let against_bot = self.mode == PlayMode::Bots;
         let setup = if against_bot {
             setup.bot(BotOptions {
-                problem: self.bot_problem.clone(),
+                problem: self.bot_problem.map(BotProblem::message),
             })
         } else {
             setup
@@ -804,14 +818,17 @@ impl PlayPage {
         let clock = self.setup_choice.map(|control| control.initial);
         let (top, bottom) = if self.mode == PlayMode::Bots {
             let bot = self.picked_bot();
-            let top =
-                WaitingBar::new(format!("{} ({})", bot.name, bot.rating)).picture(bot.picture);
+            let top = WaitingBar::new(format!("{} ({})", bot.shown_name(), bot.rating))
+                .picture(bot.picture);
             (
                 top,
-                WaitingBar::new("You").person(my_face(&self.session, cx)),
+                WaitingBar::new(tr!("play.bar.you")).person(my_face(&self.session, cx)),
             )
         } else {
-            (WaitingBar::new("Black"), WaitingBar::new("White"))
+            (
+                WaitingBar::new(side_label(Side::Black)),
+                WaitingBar::new(side_label(Side::White)),
+            )
         };
         BoardColumn::new(self.board.clone())
             .top(top.clock(clock))
@@ -888,19 +905,30 @@ impl Render for PlayPage {
 }
 
 fn offer_draw_button(already_offered: bool, cx: &mut Context<PlayPage>) -> ChoiceTile {
-    game_tile(("offer-draw", "Draw"), false, cx, PlayPage::offer_draw)
-        .glyph("½")
-        .disabled(already_offered)
+    game_tile(
+        ("offer-draw", tr!("play.actions.draw")),
+        false,
+        cx,
+        PlayPage::offer_draw,
+    )
+    .glyph("½")
+    .disabled(already_offered)
 }
 
 fn resign_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
-    game_tile(("resign", "Resign"), false, cx, PlayPage::resign).icon(IconName::Flag)
+    game_tile(
+        ("resign", tr!("play.actions.resign")),
+        false,
+        cx,
+        PlayPage::resign,
+    )
+    .icon(IconName::Flag)
 }
 
 /// Ringed in green: the offer waits on it.
 fn accept_draw_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
     game_tile(
-        ("accept-draw", "Accept draw"),
+        ("accept-draw", tr!("play.actions.accept_draw")),
         true,
         cx,
         PlayPage::accept_draw,
@@ -910,7 +938,7 @@ fn accept_draw_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
 
 fn decline_draw_button(cx: &mut Context<PlayPage>) -> ChoiceTile {
     game_tile(
-        ("decline-draw", "Decline"),
+        ("decline-draw", tr!("play.actions.decline")),
         false,
         cx,
         PlayPage::decline_draw,

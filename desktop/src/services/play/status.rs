@@ -1,6 +1,7 @@
 use chess_domain::{Game, Outcome};
 
-use crate::services::board::side_name;
+use super::side_label;
+use crate::i18n::tr;
 
 /// The line under the title: whose turn it is, a check or draw offer, or how the game ended.
 pub fn status_text(game: &Game) -> String {
@@ -12,33 +13,43 @@ pub fn status_text(game: &Game) -> String {
 
 fn outcome_text(outcome: Outcome) -> String {
     match outcome {
-        Outcome::Checkmate { winner } => format!("Checkmate — {} wins", side_name(winner)),
-        Outcome::Resignation { winner } => format!(
-            "{} resigned — {} wins",
-            side_name(winner.opponent()),
-            side_name(winner)
+        Outcome::Checkmate { winner } => {
+            tr!("play.status.checkmate", winner = side_label(winner))
+        }
+        Outcome::Resignation { winner } => tr!(
+            "play.status.resigned",
+            loser = side_label(winner.opponent()),
+            winner = side_label(winner)
         ),
-        Outcome::Timeout { winner } => format!(
-            "{} ran out of time — {} wins",
-            side_name(winner.opponent()),
-            side_name(winner)
+        Outcome::Timeout { winner } => tr!(
+            "play.status.out_of_time",
+            loser = side_label(winner.opponent()),
+            winner = side_label(winner)
         ),
-        Outcome::Stalemate => "Stalemate".to_owned(),
-        Outcome::DrawAgreement => "Draw agreed".to_owned(),
-        Outcome::InsufficientMaterial => "Draw by insufficient material".to_owned(),
-        Outcome::Repetition => "Draw by threefold repetition".to_owned(),
-        Outcome::FiftyMoves => "Draw by the fifty-move rule".to_owned(),
+        Outcome::Stalemate => tr!("play.status.stalemate"),
+        Outcome::DrawAgreement => tr!("play.status.draw_agreed"),
+        Outcome::InsufficientMaterial => tr!("play.status.draw_insufficient_material"),
+        Outcome::Repetition => tr!("play.status.draw_repetition"),
+        Outcome::FiftyMoves => tr!("play.status.draw_fifty_moves"),
     }
 }
 
 fn turn_text(game: &Game) -> String {
     let live = game.live();
-    let side = side_name(live.side_to_move());
-    let check = if live.is_check() { " — check!" } else { "" };
-    let offer = game.draw_offer().map_or_else(String::new, |by| {
-        format!(" · {} offers a draw", side_name(by))
-    });
-    format!("{side} to move{check}{offer}")
+    let side = side_label(live.side_to_move());
+    let status = if live.is_check() {
+        tr!("play.status.to_move_check", side = side)
+    } else {
+        tr!("play.status.to_move", side = side)
+    };
+    match game.draw_offer() {
+        Some(by) => tr!(
+            "play.status.with_offer",
+            status = status,
+            offer = tr!("play.status.offers_draw", side = side_label(by))
+        ),
+        None => status,
+    }
 }
 
 #[cfg(test)]

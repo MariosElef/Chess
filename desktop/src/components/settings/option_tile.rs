@@ -16,7 +16,7 @@ pub struct OptionTile {
     id: ElementId,
     /// `group-index`, for tests to find the tile.
     selector: String,
-    label: &'static str,
+    label: String,
     preview: AnyElement,
     selected: bool,
     on_choose: OnChoose,
@@ -27,7 +27,7 @@ impl OptionTile {
     pub fn new(
         group: &'static str,
         index: usize,
-        label: &'static str,
+        label: String,
         preview: impl IntoElement,
         on_choose: OnChoose,
     ) -> Self {

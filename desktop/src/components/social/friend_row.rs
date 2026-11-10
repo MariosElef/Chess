@@ -14,7 +14,7 @@ use gpui_kit::{
 };
 
 use super::{avatar::square_avatar, social_pictures::CHALLENGE_PICTURE};
-use crate::components::shell::MESSAGES_PICTURE;
+use crate::{components::shell::MESSAGES_PICTURE, i18n::tr};
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -130,9 +130,9 @@ impl RenderOnce for FriendRow {
                                     .when(!self.online, |this| this.opacity(0.35)),
                             )
                             .tooltip(if self.online {
-                                "Challenge"
+                                tr!("social.actions.challenge")
                             } else {
-                                "Offline: a friend can be challenged once they are online"
+                                tr!("social.challenge.offline")
                             })
                             .disabled(!self.online)
                             .on_click(move |_, window, cx| challenge(window, cx)),
@@ -141,7 +141,7 @@ impl RenderOnce for FriendRow {
                         Button::new(SharedString::from(format!("message-{}", self.id)))
                             .ghost()
                             .child(img(MESSAGES_PICTURE).size_5())
-                            .tooltip("Message")
+                            .tooltip(tr!("social.actions.message"))
                             .on_click(move |_, window, cx| message(window, cx)),
                     )
                     .child(more_menu(&self.id, (self.on_remove, self.on_block))),
@@ -167,13 +167,17 @@ fn more_menu(id: &SharedString, (on_remove, on_block): (OnClick, OnClick)) -> Po
                     (
                         format!("unfriend-{id}"),
                         IconName::UserMinus,
-                        "Remove friend",
+                        tr!("social.actions.remove_friend"),
                     ),
                     Rc::clone(&on_remove),
                     menu.clone(),
                 ))
                 .child(menu_item(
-                    (format!("block-{id}"), IconName::Ban, "Block"),
+                    (
+                        format!("block-{id}"),
+                        IconName::Ban,
+                        tr!("social.actions.block"),
+                    ),
                     Rc::clone(&on_block),
                     menu,
                 ))
@@ -182,7 +186,7 @@ fn more_menu(id: &SharedString, (on_remove, on_block): (OnClick, OnClick)) -> Po
 
 /// One of the menu's choices: it acts, then the menu closes.
 fn menu_item(
-    (id, icon, label): (String, IconName, &'static str),
+    (id, icon, label): (String, IconName, String),
     action: OnClick,
     menu: WeakEntity<PopoverState>,
 ) -> Button {

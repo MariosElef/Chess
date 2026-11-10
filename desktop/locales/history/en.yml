@@ -1,0 +1,8 @@
+history:
+  nav:
+    start: First position
+    back: Previous position
+    forward: Next position
+    live: Current position
+  moves:
+    empty: No moves yet

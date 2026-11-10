@@ -13,7 +13,10 @@ use gpui_kit::{
 
 use super::speed_label::speed_label;
 use crate::components::panel::{ChoiceTile, RatedSwitch, StartButton};
-use crate::services::play::presets_in;
+use crate::{
+    i18n::tr,
+    services::play::{control_label, presets_in},
+};
 
 type OnChoose = Rc<dyn Fn(Option<TimeControl>, &mut Window, &mut App)>;
 type OnStart = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -89,7 +92,7 @@ impl RenderOnce for GameSetup {
                 this.child({
                     let on_rated = Rc::clone(&online.on_rated);
                     RatedSwitch::new(
-                        ("rated-switch", "Sign up to play rated games"),
+                        ("rated-switch", tr!("play.setup.guest_cannot_rate")),
                         (online.rated, online.can_rate),
                         move |on, window, cx| on_rated(on, window, cx),
                     )
@@ -121,13 +124,13 @@ impl GameSetup {
                     .children(presets_in(category).into_iter().map(|control| {
                         div()
                             .flex_1()
-                            .child(self.choice_tile(control.label(), Some(control)))
+                            .child(self.choice_tile(control_label(control), Some(control)))
                     })),
             )
     }
 
     fn no_clock_button(&self) -> ChoiceTile {
-        self.choice_tile("No clock".to_owned(), None)
+        self.choice_tile(tr!("play.time.no_clock"), None)
     }
 
     /// A time to pick; shorter against a bot, whose cards need the room.
@@ -149,9 +152,9 @@ impl GameSetup {
         let on_start = Rc::clone(&self.on_start);
         let seeking = self.online.as_ref().is_some_and(|online| online.seeking);
         let label = if seeking {
-            "Looking for an opponent…"
+            tr!("play.setup.looking")
         } else {
-            "Start Game"
+            tr!("play.setup.start")
         };
         StartButton::new("start-game", label, move |window, cx| on_start(window, cx)).busy(seeking)
     }
@@ -161,6 +164,6 @@ fn cancel_button(on_cancel: OnStart) -> Button {
     Button::new("cancel-seek")
         .ghost()
         .w_full()
-        .label("Cancel")
+        .label(tr!("play.setup.cancel"))
         .on_click(move |_, window, cx| on_cancel(window, cx))
 }

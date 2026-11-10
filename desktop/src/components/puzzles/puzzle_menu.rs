@@ -9,9 +9,12 @@ use super::{
     puzzle_pictures::{BATTLE_PICTURE, CUSTOM_PICTURE},
     rush_menu::RUSH_PICTURE,
 };
-use crate::components::{
-    panel::{MenuTile, StartButton},
-    shell::PUZZLES_PICTURE,
+use crate::{
+    components::{
+        panel::{MenuTile, StartButton},
+        shell::PUZZLES_PICTURE,
+    },
+    i18n::tr,
 };
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -70,25 +73,29 @@ impl RenderOnce for PuzzleMenu {
             .child(heading(self.rating_line, cx))
             .child(StartButton::new(
                 "start-practice",
-                "Solve Puzzles",
+                tr!("puzzles.menu.solve"),
                 move |window, cx| on_practice(window, cx),
             ))
             .child(
-                MenuTile::new("start-custom", "Custom Practice", move |window, cx| {
-                    on_custom(window, cx)
-                })
+                MenuTile::new(
+                    "start-custom",
+                    tr!("puzzles.menu.custom"),
+                    move |window, cx| on_custom(window, cx),
+                )
                 .picture(CUSTOM_PICTURE),
             )
             .child(
-                MenuTile::new("open-rush", "Puzzle Rush", move |window, cx| {
+                MenuTile::new("open-rush", tr!("puzzles.rush.title"), move |window, cx| {
                     on_rush(window, cx)
                 })
                 .picture(RUSH_PICTURE),
             )
             .child(
-                MenuTile::new("open-battle", "Puzzle Battle", move |window, cx| {
-                    on_battle(window, cx)
-                })
+                MenuTile::new(
+                    "open-battle",
+                    tr!("puzzles.battle.title"),
+                    move |window, cx| on_battle(window, cx),
+                )
                 .picture(BATTLE_PICTURE),
             )
     }
@@ -108,7 +115,7 @@ fn heading(rating_line: String, cx: &App) -> Div {
                     div()
                         .text_3xl()
                         .font_weight(FontWeight::EXTRA_BOLD)
-                        .child("Puzzles"),
+                        .child(tr!("puzzles.title")),
                 ),
         )
         .child(muted(rating_line, cx))

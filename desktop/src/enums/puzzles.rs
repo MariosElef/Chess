@@ -1,4 +1,5 @@
 //! How a puzzle is going, and what one move did to it.
+use crate::i18n::tr;
 
 /// Where the player stands in a puzzle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,11 +51,11 @@ pub enum RushKind {
 impl RushKind {
     pub const ALL: [Self; 3] = [Self::ThreeMinutes, Self::FiveMinutes, Self::Survival];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::ThreeMinutes => "3 minutes",
-            Self::FiveMinutes => "5 minutes",
-            Self::Survival => "Survival",
+            Self::ThreeMinutes => tr!("puzzles.rush.kind.three_minutes"),
+            Self::FiveMinutes => tr!("puzzles.rush.kind.five_minutes"),
+            Self::Survival => tr!("puzzles.rush.kind.survival"),
         }
     }
 

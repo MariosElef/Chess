@@ -5,7 +5,7 @@ use crate::components::panel::ChoiceTile;
 
 /// A game button at the bottom of the panel: a solid tile that calls `act` on the page.
 pub fn game_tile<T: 'static>(
-    (id, label): (&'static str, &'static str),
+    (id, label): (&'static str, String),
     picked: bool,
     cx: &mut Context<T>,
     act: fn(&mut T, &mut Context<T>),

@@ -8,6 +8,7 @@ use super::avatar::square_avatar;
 use crate::{
     components::{play::speed_picture, shell::PUZZLES_PICTURE},
     enums::social::LeaderBoard,
+    i18n::tr,
     services::social::{LeaderRow, PODIUM},
 };
 
@@ -42,7 +43,7 @@ impl RenderOnce for Leaderboard {
                     .py_3()
                     .text_lg()
                     .font_weight(FontWeight::BOLD)
-                    .child("Friends Leaderboard"),
+                    .child(tr!("social.leaderboard.friends_title")),
             )
             .children(sections)
     }
@@ -70,7 +71,7 @@ fn board_section(board: LeaderBoard, rows: Vec<LeaderRow>, cx: &App) -> Div {
                 .py_2()
                 .text_sm()
                 .text_color(theme.muted_foreground)
-                .child("No ratings yet"),
+                .child(tr!("social.leaderboard.no_ratings")),
         )
     })
 }

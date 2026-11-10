@@ -9,6 +9,8 @@ use super::{eval_graph::EvalGraph, side_chip::side_chip};
 use crate::{
     components::board::{BoardStyle, piece_image},
     enums::analysis::MoveClass,
+    i18n::tr,
+    services::board::side_name,
 };
 
 /// The move being looked at, as the review sees it.
@@ -68,12 +70,12 @@ impl RenderOnce for ReviewPanel {
             .child(table_row(
                 div(),
                 [
-                    player(pawn(Side::White), "White"),
-                    player(pawn(Side::Black), "Black"),
+                    player(pawn(Side::White), side_name(Side::White)),
+                    player(pawn(Side::Black), side_name(Side::Black)),
                 ],
             ))
             .child(table_row(
-                row_name("Accuracy"),
+                row_name(tr!("analysis.review.accuracy")),
                 [
                     chip(format!("{:.1}", self.accuracy[0]), Side::White),
                     chip(format!("{:.1}", self.accuracy[1]), Side::Black),
@@ -87,7 +89,7 @@ impl RenderOnce for ReviewPanel {
             )
             .child(rule(cx))
             .child(table_row(
-                row_name("Game Rating"),
+                row_name(tr!("analysis.review.game_rating")),
                 [
                     chip(white_rating, Side::White),
                     chip(black_rating, Side::Black),
@@ -98,7 +100,11 @@ impl RenderOnce for ReviewPanel {
 
 /// `Nf3 is a Blunder`, with what was best below.
 fn verdict(shown: ShownVerdict, muted: Hsla) -> Div {
-    let line = format!("{} is {}", shown.san, shown.class.verdict());
+    let line = tr!(
+        "analysis.review.verdict",
+        san = shown.san,
+        verdict = shown.class.verdict()
+    );
     v_flex()
         .gap_1()
         .py_1()
@@ -110,7 +116,11 @@ fn verdict(shown: ShownVerdict, muted: Hsla) -> Div {
                 .child(line),
         )
         .when_some(shown.best, |this, best| {
-            this.child(div().text_color(muted).child(format!("Best was {best}")))
+            this.child(
+                div()
+                    .text_color(muted)
+                    .child(tr!("analysis.review.best_was", best = best)),
+            )
         })
 }
 
@@ -139,16 +149,21 @@ fn cell(content: Div) -> Div {
         .child(content)
 }
 
-fn row_name(name: &'static str) -> Div {
-    div().font_weight(FontWeight::BOLD).child(name)
+fn row_name(name: impl Into<SharedString>) -> Div {
+    div().font_weight(FontWeight::BOLD).child(name.into())
 }
 
 /// A side's picture and name over its column.
-fn player(picture: &'static str, name: &'static str) -> Div {
+fn player(picture: &'static str, name: impl Into<SharedString>) -> Div {
     v_flex()
         .items_center()
         .gap_1()
-        .child(div().text_xs().font_weight(FontWeight::BOLD).child(name))
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::BOLD)
+                .child(name.into()),
+        )
         .child(
             div()
                 .size_10()

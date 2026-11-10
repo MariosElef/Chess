@@ -8,7 +8,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::models::puzzles::RatingRange;
+use crate::{i18n::tr, models::puzzles::RatingRange};
 
 /// The puzzle difficulty, as a rating range with a handle at each end.
 #[derive(IntoElement)]
@@ -35,7 +35,7 @@ impl RenderOnce for RangePicker {
             .child(
                 h_flex()
                     .justify_between()
-                    .child(Label::new("Difficulty").text_sm())
+                    .child(Label::new(tr!("puzzles.difficulty")).text_sm())
                     .child(
                         Label::new(format!("{} – {}", self.range.min, self.range.max))
                             .text_sm()

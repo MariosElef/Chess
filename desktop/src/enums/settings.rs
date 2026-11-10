@@ -1,4 +1,51 @@
-//! How the app looks: light, dark, or following the Mac; the board's colours and its pieces.
+//! How the app looks and speaks: its language, light or dark or following the Mac, the board's
+//! colours and its pieces.
+use crate::i18n::tr;
+
+/// The language every word of the app is shown in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Language {
+    #[default]
+    English,
+    Greek,
+}
+
+impl Language {
+    pub const ALL: [Self; 2] = [Self::English, Self::Greek];
+
+    /// Its place in `ALL`, which is the order the settings page lists the choices.
+    pub fn index(self) -> usize {
+        match self {
+            Self::English => 0,
+            Self::Greek => 1,
+        }
+    }
+
+    /// The language's own name for itself, which is never translated.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::English => "English",
+            Self::Greek => "Ελληνικά",
+        }
+    }
+
+    /// The locale the translation files are named by.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::English => "en",
+            Self::Greek => "el",
+        }
+    }
+
+    /// How the choice is written in the settings file.
+    pub fn key(self) -> &'static str {
+        self.code()
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|language| language.key() == key)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Appearance {
@@ -20,11 +67,11 @@ impl Appearance {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::System => "System",
-            Self::Light => "Light",
-            Self::Dark => "Dark",
+            Self::System => tr!("settings.appearance.system"),
+            Self::Light => tr!("settings.appearance.light"),
+            Self::Dark => tr!("settings.appearance.dark"),
         }
     }
 
@@ -68,12 +115,12 @@ impl BoardTheme {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Slate => "Slate",
-            Self::Brown => "Brown",
-            Self::Blue => "Blue",
-            Self::Green => "Green",
+            Self::Slate => tr!("settings.board.themes.slate"),
+            Self::Brown => tr!("settings.board.themes.brown"),
+            Self::Blue => tr!("settings.board.themes.blue"),
+            Self::Green => tr!("settings.board.themes.green"),
         }
     }
 
@@ -118,12 +165,12 @@ impl PieceSet {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Classic => "Classic",
-            Self::Modern => "Modern",
-            Self::Staunty => "Staunty",
-            Self::California => "California",
+            Self::Classic => tr!("settings.board.sets.classic"),
+            Self::Modern => tr!("settings.board.sets.modern"),
+            Self::Staunty => tr!("settings.board.sets.staunty"),
+            Self::California => tr!("settings.board.sets.california"),
         }
     }
 
@@ -163,10 +210,10 @@ impl SoundSet {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Standard => "Standard",
-            Self::Lisp => "Lisp",
+            Self::Standard => tr!("settings.sounds.sets.standard"),
+            Self::Lisp => tr!("settings.sounds.sets.lisp"),
         }
     }
 
@@ -185,10 +232,13 @@ impl SoundSet {
 
 #[cfg(test)]
 mod tests {
-    use super::{Appearance, BoardTheme, PieceSet, SoundSet};
+    use super::{Appearance, BoardTheme, Language, PieceSet, SoundSet};
 
     #[test]
     fn every_choice_reads_back_from_its_key() {
+        for language in Language::ALL {
+            assert_eq!(Language::from_key(language.key()), Some(language));
+        }
         for appearance in Appearance::ALL {
             assert_eq!(Appearance::from_key(appearance.key()), Some(appearance));
         }
@@ -206,6 +256,9 @@ mod tests {
 
     #[test]
     fn every_choice_sits_at_its_index() {
+        for (index, language) in Language::ALL.into_iter().enumerate() {
+            assert_eq!(language.index(), index);
+        }
         for (index, theme) in BoardTheme::ALL.into_iter().enumerate() {
             assert_eq!(theme.index(), index);
         }

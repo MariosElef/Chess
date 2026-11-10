@@ -14,6 +14,7 @@ use gpui_kit::{
 use super::puzzle_pictures::BATTLE_PICTURE;
 use crate::{
     components::panel::{ChoiceTile, PanelTitle, RatedSwitch, StartButton, StatCard},
+    i18n::tr,
     models::{
         puzzles::{BattleChallenge, BattleSummary},
         social::Friend,
@@ -75,9 +76,9 @@ impl RenderOnce for BattleMenu {
         let waiting_on = state.sent.first().map(|sent| sent.to.username.clone());
         let busy = state.seeking || waiting_on.is_some();
         let play_label = match (&waiting_on, state.seeking) {
-            (Some(friend), _) => format!("Waiting for {friend}…"),
-            (None, true) => "Looking for an opponent…".to_owned(),
-            (None, false) => "Play".to_owned(),
+            (Some(friend), _) => tr!("puzzles.battle.waiting_for", friend = friend),
+            (None, true) => tr!("puzzles.battle.looking"),
+            (None, false) => tr!("puzzles.battle.play"),
         };
         let on_play = Rc::clone(&actions.on_play);
         let on_cancel = Rc::clone(&actions.on_cancel);
@@ -85,9 +86,11 @@ impl RenderOnce for BattleMenu {
             .size_full()
             .gap_3()
             .child(
-                PanelTitle::new(BATTLE_PICTURE, "Puzzle Battle").on_back(move |window, cx| {
-                    on_back(window, cx);
-                }),
+                PanelTitle::new(BATTLE_PICTURE, tr!("puzzles.battle.title")).on_back(
+                    move |window, cx| {
+                        on_back(window, cx);
+                    },
+                ),
             )
             .child(
                 h_flex()
@@ -95,18 +98,18 @@ impl RenderOnce for BattleMenu {
                     .child(StatCard::new(
                         (IconName::Swords, theme.green),
                         state.summary.wins_this_month.to_string(),
-                        "Wins this month",
+                        tr!("puzzles.battle.wins_this_month"),
                     ))
                     .child(StatCard::new(
                         (IconName::Trophy, theme.blue),
                         score_text(rating),
-                        "Rating",
+                        tr!("puzzles.battle.rating"),
                     )),
             )
             .child({
                 let on_rated = Rc::clone(&actions.on_rated);
                 RatedSwitch::new(
-                    ("battle-rated", "Sign up to play rated battles"),
+                    ("battle-rated", tr!("puzzles.battle.sign_up_rated")),
                     (state.rated, !state.guest),
                     move |on, window, cx| on_rated(on, window, cx),
                 )
@@ -117,20 +120,28 @@ impl RenderOnce for BattleMenu {
                     .iter()
                     .map(|invitation| invitation_row(invitation, &actions, cx)),
             )
-            .child(opponent_tile(None, "vs Random", &state, &actions))
+            .child(opponent_tile(
+                None,
+                &tr!("puzzles.battle.vs_random"),
+                &state,
+                &actions,
+            ))
             .child(
                 div()
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
-                    .child(format!("Friends online · {}", state.friends.len())),
+                    .child(tr!(
+                        "puzzles.battle.friends_online",
+                        count = state.friends.len()
+                    )),
             )
             .when(state.friends.is_empty(), |this| {
                 this.child(
                     div()
                         .text_sm()
                         .text_color(theme.muted_foreground)
-                        .child("None of your friends is online right now."),
+                        .child(tr!("puzzles.battle.none_online")),
                 )
             })
             .child(
@@ -167,7 +178,7 @@ impl RenderOnce for BattleMenu {
                     Button::new("battle-cancel")
                         .ghost()
                         .w_full()
-                        .label("Cancel")
+                        .label(tr!("puzzles.battle.cancel"))
                         .on_click(move |_, window, cx| on_cancel(window, cx)),
                 )
             })
@@ -220,11 +231,17 @@ fn invitation_row(invitation: &BattleChallenge, actions: &BattleMenuActions, cx:
                 .text_ellipsis()
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(format!(
-                    "{} invites you · {}",
-                    invitation.from.username,
-                    if invitation.rated { "rated" } else { "casual" }
-                )),
+                .child(if invitation.rated {
+                    tr!(
+                        "puzzles.battle.invites_rated",
+                        name = invitation.from.username
+                    )
+                } else {
+                    tr!(
+                        "puzzles.battle.invites_casual",
+                        name = invitation.from.username
+                    )
+                }),
         )
         .child(
             h_flex()
@@ -232,7 +249,7 @@ fn invitation_row(invitation: &BattleChallenge, actions: &BattleMenuActions, cx:
                 .child(
                     StartButton::new(
                         format!("accept-battle-{accept_id}"),
-                        "Accept",
+                        tr!("puzzles.battle.accept"),
                         move |window, cx| {
                             accept(accept_id.clone(), window, cx);
                         },
@@ -243,7 +260,7 @@ fn invitation_row(invitation: &BattleChallenge, actions: &BattleMenuActions, cx:
                     Button::new(SharedString::from(format!("decline-battle-{decline_id}")))
                         .ghost()
                         .small()
-                        .label("Decline")
+                        .label(tr!("puzzles.battle.decline"))
                         .on_click(move |_, window, cx| decline(decline_id.clone(), window, cx)),
                 ),
         )

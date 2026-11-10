@@ -97,7 +97,7 @@ impl NavRail {
             .map(|entry| (*entry, self.own_count(*entry)))
             .collect();
         let (on_select, active) = (Rc::clone(&self.on_select), self.active);
-        HoverCard::new(SharedString::from(format!("rail-menu-{}", page.label())))
+        HoverCard::new(SharedString::from(format!("rail-menu-{}", page.key())))
             .anchor(Anchor::LeftCenter)
             .open_delay(MENU_DELAY)
             .appearance(false)
@@ -145,8 +145,8 @@ impl NavRail {
                 this.child(count_badge(waiting, cx))
             });
         v_flex()
-            .id(page.label())
-            .debug_selector(move || format!("rail-{}", page.label()))
+            .id(page.key())
+            .debug_selector(move || format!("rail-{}", page.key()))
             // As wide as the rail, so a menu beside it starts past the rail's edge.
             .w(RAIL_WIDTH)
             .items_center()
@@ -238,11 +238,8 @@ fn menu_row(
     let theme = cx.theme();
     let hover = theme.accent;
     h_flex()
-        .id(SharedString::from(format!(
-            "rail-menu-{}",
-            page.menu_label()
-        )))
-        .debug_selector(move || format!("rail-menu-{}", page.menu_label()))
+        .id(SharedString::from(format!("rail-menu-{}", page.menu_key())))
+        .debug_selector(move || format!("rail-menu-{}", page.menu_key()))
         .gap_3()
         .px_3()
         .py_2()

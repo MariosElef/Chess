@@ -1,0 +1,38 @@
+settings:
+  title: Settings
+  language:
+    title: Language
+    about: The language of every screen and message in the app.
+  appearance:
+    title: Appearance
+    about: Follow the system, or keep the app light or dark.
+    system: System
+    light: Light
+    dark: Dark
+  board:
+    title: Board
+    about: Every board in the app, in play, puzzles and analysis.
+    theme: Theme
+    pieces: Pieces
+    themes:
+      slate: Slate
+      brown: Brown
+      blue: Blue
+      green: Green
+    sets:
+      classic: Classic
+      modern: Modern
+      staunty: Staunty
+      california: California
+  sounds:
+    title: Sounds
+    about: Every move, capture, check and clock warning. Pick one to hear them all.
+    sets:
+      standard: Standard
+      lisp: Lisp
+  stockfish:
+    about: Fewer threads and a depth limit keep the computer quiet; more search deeper.
+    threads: Threads
+    memory: Memory (MB)
+    depth: Search depth
+    infinite: Infinite

@@ -1,4 +1,5 @@
 //! Which account form is open.
+use crate::i18n::tr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum AccountForm {
@@ -8,10 +9,10 @@ pub enum AccountForm {
 }
 
 impl AccountForm {
-    pub fn title(self) -> &'static str {
+    pub fn title(self) -> String {
         match self {
-            Self::SignIn => "Sign in",
-            Self::SignUp => "Create account",
+            Self::SignIn => tr!("account.form.sign_in"),
+            Self::SignUp => tr!("account.form.sign_up"),
         }
     }
 
@@ -24,10 +25,10 @@ impl AccountForm {
     }
 
     /// The link to the other form.
-    pub fn switch_label(self) -> &'static str {
+    pub fn switch_label(self) -> String {
         match self {
-            Self::SignIn => "New here? Create an account",
-            Self::SignUp => "Already have an account? Sign in",
+            Self::SignIn => tr!("account.form.to_sign_up"),
+            Self::SignUp => tr!("account.form.to_sign_in"),
         }
     }
 }
@@ -44,11 +45,20 @@ pub enum HistoryTab {
 impl HistoryTab {
     pub const ALL: [Self; 3] = [Self::Games, Self::Battles, Self::Puzzles];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Games => "Games",
-            Self::Battles => "Battles",
-            Self::Puzzles => "Puzzles",
+            Self::Games => tr!("account.history.tabs.games"),
+            Self::Battles => tr!("account.history.tabs.battles"),
+            Self::Puzzles => tr!("account.history.tabs.puzzles"),
+        }
+    }
+
+    /// What the tab's element is called, which never changes with the language.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Games => "games",
+            Self::Battles => "battles",
+            Self::Puzzles => "puzzles",
         }
     }
 }

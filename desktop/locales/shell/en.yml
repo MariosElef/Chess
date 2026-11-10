@@ -1,0 +1,24 @@
+shell:
+  pages:
+    play: Play
+    puzzles: Puzzles
+    analyze: Analyze
+    social: Social
+    messages: Messages
+    leaderboard: Leaderboard
+    settings: Settings
+    account: Account
+    friends: Friends
+  account_menu:
+    create_account: Create account
+    sign_in: Sign in
+    sign_out: Sign out
+    guest: Playing as a guest
+  invite:
+    challenges_you: "%{name} challenges you"
+    invites_battle: "%{name} invites you to a Puzzle Battle"
+    rated: Rated
+    casual: Casual
+  rematch:
+    wants_rematch: "%{name} wants a rematch"
+    terms: "%{terms} · colours swapped"

@@ -1,9 +1,9 @@
-use crate::clients::files::PictureFileError;
+use crate::{clients::files::PictureFileError, models::account::AccountProblem};
 
 /// What the Account page says when a picture file cannot be sent.
-pub fn picture_file_problem(error: &PictureFileError) -> &'static str {
+pub fn picture_file_problem(error: &PictureFileError) -> AccountProblem {
     match error {
-        PictureFileError::TooLarge => "Pick a picture under 5 MB",
-        PictureFileError::Unreadable => "That file could not be read",
+        PictureFileError::TooLarge => AccountProblem::PictureTooLarge,
+        PictureFileError::Unreadable => AccountProblem::PictureUnreadable,
     }
 }

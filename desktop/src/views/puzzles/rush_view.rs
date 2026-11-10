@@ -20,13 +20,14 @@ use crate::{
         puzzles::{PuzzleVerdict, RushKind},
         sound::Sound,
     },
+    i18n::tr,
     models::{
-        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, RushRecord},
+        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, PuzzleProblem, RushRecord},
         server::ServerError,
     },
     services::{
-        puzzles::RushRun,
-        server::{error_message, is_problem},
+        puzzles::{RushRun, problem_text},
+        server::is_problem,
     },
     views::{
         live::{SessionSource, my_face},
@@ -68,7 +69,7 @@ pub struct RushView {
     waiting: bool,
     /// The narrow band was empty, so the next fetch asks the wide one.
     widened: bool,
-    problem: Option<String>,
+    problem: Option<PuzzleProblem>,
     /// The server's answer to the finished rush: the best, and whether this one set it.
     record: Option<RushRecord>,
     _ticker: Option<Task<()>>,
@@ -221,7 +222,7 @@ impl RushView {
                     let _ = view.update(cx, |view, cx| view.fetched(result, cx));
                 }));
             }
-            Err(reason) => self.problem = Some(reason.to_owned()),
+            Err(reason) => self.problem = Some(reason),
         }
     }
 
@@ -244,7 +245,7 @@ impl RushView {
                 self.widened = true;
                 self.fetch_next(cx);
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(PuzzleProblem::Server(error)),
         }
         cx.notify();
     }
@@ -450,9 +451,9 @@ impl RushView {
                     .solver
                     .read(cx)
                     .status()
-                    .unwrap_or_else(|| ("Next puzzle…".to_owned(), false));
+                    .unwrap_or_else(|| (tr!("puzzles.rush.next"), false));
                 let score = RushScore::new(rush.strikes(), rush.time_left(self.elapsed()), status)
-                    .problem(self.problem.clone(), move |_, cx| {
+                    .problem(self.problem.as_ref().map(problem_text), move |_, cx| {
                         let _ = view.update(cx, |view, cx| view.retry(cx));
                     });
                 div()
@@ -500,7 +501,7 @@ fn countdown_overlay(count: u8) -> Div {
 impl Render for RushView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let on_back = Rc::clone(&self.on_back);
-        let title = PanelTitle::new(RUSH_PICTURE, "Puzzle Rush")
+        let title = PanelTitle::new(RUSH_PICTURE, tr!("puzzles.rush.title"))
             .on_back(move |window, cx| on_back(window, cx));
         let board = div()
             .relative()

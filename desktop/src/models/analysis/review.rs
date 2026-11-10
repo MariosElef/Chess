@@ -24,8 +24,6 @@ pub struct MoveReview {
     pub class: MoveClass,
     /// The engine's best move in the position the move was played from.
     pub best: Option<Move>,
-    /// How close to best, from 0 to 100.
-    pub accuracy: f64,
 }
 
 /// A whole game reviewed: every move in order, and each side's accuracy.

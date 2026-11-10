@@ -1,0 +1,20 @@
+common:
+  accept: Αποδοχή
+  decline: Απόρριψη
+  rated: Βαθμολογούμενη
+  time:
+    just_now: μόλις τώρα
+    ago: "πριν από %{span}"
+    minute_one: "%{count} λεπτό"
+    minute_other: "%{count} λεπτά"
+    hour_one: "%{count} ώρα"
+    hour_other: "%{count} ώρες"
+    day_one: "%{count} ημέρα"
+    day_other: "%{count} ημέρες"
+    month_one: "%{count} μήνα"
+    month_other: "%{count} μήνες"
+    year_one: "%{count} χρόνο"
+    year_other: "%{count} χρόνια"
+  errors:
+    unreachable: Δεν υπάρχει σύνδεση με τον διακομιστή. Έλεγξε ότι τρέχει.
+    unexpected: Κάτι πήγε στραβά. Δοκίμασε ξανά.

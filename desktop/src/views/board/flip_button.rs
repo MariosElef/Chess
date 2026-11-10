@@ -4,6 +4,8 @@ use gpui_kit::{
     *,
 };
 
+use crate::i18n::tr;
+
 /// Turns the page's board round: the small icon beside the board's top-right corner.
 pub fn flip_button<T: 'static>(
     id: &'static str,
@@ -13,6 +15,6 @@ pub fn flip_button<T: 'static>(
     Button::new(id)
         .ghost()
         .icon(IconName::ArrowUpDown)
-        .tooltip("Flip board")
+        .tooltip(tr!("board.flip_board"))
         .on_click(cx.listener(move |page, _, _, cx| flip(page, cx)))
 }

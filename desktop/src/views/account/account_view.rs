@@ -22,15 +22,17 @@ use crate::{
         },
         shell::{ACCOUNT_PICTURE, PLAY_PICTURE},
     },
-    enums::account::AccountForm,
+    enums::{account::AccountForm, settings::Language},
+    i18n::{self, tr},
     models::{
-        account::{AccountChanged, FormProblems, Session, SignIn, SignUp, Stats, User},
+        account::{
+            AccountChanged, AccountProblem, FormProblems, Session, SignIn, SignUp, Stats, User,
+        },
         play::AnalyzeGame,
         server::ServerError,
     },
     services::{
-        account::{form_problems, picture_file_problem},
-        server::error_message,
+        account::{form_problems, picture_file_problem, problem_text},
         social::avatar_path,
     },
 };
@@ -68,11 +70,18 @@ pub struct AccountView {
     _picture: Option<Task<()>>,
     uploading: bool,
     /// Why the last picture was not taken.
-    picture_problem: Option<String>,
+    picture_problem: Option<AccountProblem>,
+    /// The language the fields' placeholders are in; they are written again when it changes.
+    placeholders_in: Language,
 }
 
 impl EventEmitter<AccountChanged> for AccountView {}
 impl EventEmitter<AnalyzeGame> for AccountView {}
+
+/// The problem under a field, in the language being shown.
+fn text_of(problem: Option<AccountProblem>) -> Option<String> {
+    problem.as_ref().map(problem_text)
+}
 
 impl AccountView {
     /// Starts signed out, then signs back in with the saved token if there is one.
@@ -82,10 +91,10 @@ impl AccountView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let login = text_field("Email or username", false, window, cx);
-        let email = text_field("you@example.com", false, window, cx);
-        let username = text_field("3 to 20 letters, digits or _", false, window, cx);
-        let password = text_field("At least 8 characters", true, window, cx);
+        let login = text_field(&tr!("account.form.login_placeholder"), false, window, cx);
+        let email = text_field(&tr!("account.form.email_placeholder"), false, window, cx);
+        let username = text_field(&tr!("account.form.username_placeholder"), false, window, cx);
+        let password = text_field(&tr!("account.form.password_placeholder"), true, window, cx);
         let _enter_presses = [&login, &email, &username, &password]
             .map(|input| cx.subscribe_in(input, window, submit_on_enter))
             .into();
@@ -116,9 +125,29 @@ impl AccountView {
             _picture: None,
             uploading: false,
             picture_problem: None,
+            placeholders_in: i18n::current(),
         };
         view.restore(window, cx);
         view
+    }
+
+    /// The fields' placeholders follow a language switch made while the page is open.
+    fn refresh_placeholders(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.placeholders_in == i18n::current() {
+            return;
+        }
+        self.placeholders_in = i18n::current();
+        let placeholders = [
+            (&self.login, tr!("account.form.login_placeholder")),
+            (&self.email, tr!("account.form.email_placeholder")),
+            (&self.username, tr!("account.form.username_placeholder")),
+            (&self.password, tr!("account.form.password_placeholder")),
+        ];
+        for (input, placeholder) in placeholders {
+            input.update(cx, |input, cx| {
+                input.set_placeholder(placeholder, window, cx)
+            });
+        }
     }
 
     /// Signed in, with an account or as a guest: either way the app opens.
@@ -150,7 +179,7 @@ impl AccountView {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Use as picture".into()),
+            prompt: Some(tr!("account.card.use_as_picture").into()),
         });
         let client = self.client.clone();
         self.picture_problem = None;
@@ -206,13 +235,13 @@ impl AccountView {
                     session.user.avatar = avatar;
                 }
             }
-            Err(error) => self.picture_problem = Some(error_message(&error)),
+            Err(error) => self.picture_problem = Some(AccountProblem::Server(error)),
         }
         cx.notify();
     }
 
     fn picture_refused(&mut self, error: &PictureFileError, cx: &mut Context<Self>) {
-        self.picture_problem = Some(picture_file_problem(error).to_owned());
+        self.picture_problem = Some(picture_file_problem(error));
         cx.notify();
     }
 
@@ -416,7 +445,7 @@ impl AccountView {
             return;
         };
         self.signed_out_here(&token, cx);
-        self.problems.form = Some("You were signed out: sign in again".to_owned());
+        self.problems.form = Some(AccountProblem::SignedOut);
     }
 
     /// `token`'s session is over here: its saved copy goes, unless another app saved its own since.
@@ -464,21 +493,43 @@ impl AccountView {
         let problems = self.problems.clone();
         match self.form {
             AccountForm::SignIn => vec![
-                FormField::new("Email or username", self.login.clone(), problems.login),
-                FormField::new("Password", self.password.clone(), problems.password).password(),
+                FormField::new(
+                    tr!("account.form.login"),
+                    self.login.clone(),
+                    text_of(problems.login),
+                ),
+                FormField::new(
+                    tr!("account.form.password"),
+                    self.password.clone(),
+                    text_of(problems.password),
+                )
+                .password(),
             ],
             // A username and a password make an account; the email is only if they want one.
             AccountForm::SignUp => vec![
-                FormField::new("Username", self.username.clone(), problems.username),
-                FormField::new("Password", self.password.clone(), problems.password).password(),
-                FormField::new("Email (optional)", self.email.clone(), problems.email),
+                FormField::new(
+                    tr!("account.form.username"),
+                    self.username.clone(),
+                    text_of(problems.username),
+                ),
+                FormField::new(
+                    tr!("account.form.password"),
+                    self.password.clone(),
+                    text_of(problems.password),
+                )
+                .password(),
+                FormField::new(
+                    tr!("account.form.email"),
+                    self.email.clone(),
+                    text_of(problems.email),
+                ),
             ],
         }
     }
 
     fn card(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.restoring {
-            return WaitingCard::new("Signing you in…").into_any_element();
+            return WaitingCard::new(tr!("account.form.signing_in")).into_any_element();
         }
         let view = cx.entity().downgrade();
         if self.user().is_some_and(|user| user.guest) {
@@ -520,7 +571,10 @@ impl AccountView {
                     },
                 )
                 .picture_actions(
-                    (self.uploading, self.picture_problem.clone()),
+                    (
+                        self.uploading,
+                        self.picture_problem.as_ref().map(problem_text),
+                    ),
                     move |_, cx| {
                         // The view outlives its buttons unless the window is closing.
                         let _ = change.update(cx, |view, cx| view.change_picture(cx));
@@ -537,7 +591,7 @@ impl AccountView {
                 AccountCard::new(
                     self.form,
                     self.fields(),
-                    self.problems.form.clone(),
+                    self.problems.form.as_ref().map(problem_text),
                     self.busy,
                 )
                 .on_submit(move |window, cx| {
@@ -561,7 +615,12 @@ impl AccountView {
         let Some(token) = self.token() else {
             return;
         };
-        let password = text_field("Your password", true, window, cx);
+        let password = text_field(
+            &tr!("account.form.confirm_password_placeholder"),
+            true,
+            window,
+            cx,
+        );
         let _enter = cx.subscribe_in(&password, window, confirm_on_enter);
         self.closing = Some(Closing {
             password,
@@ -580,9 +639,9 @@ impl AccountView {
         let cancel = view.clone();
         let card = CloseAccountCard::new(
             FormField::new(
-                "Password",
+                tr!("account.form.password"),
                 closing.password.clone(),
-                closing.problem.clone(),
+                closing.problem.as_ref().map(problem_text),
             )
             .password(),
             closing.busy,
@@ -626,7 +685,7 @@ impl AccountView {
             Err(error) => {
                 if let Some(closing) = self.closing.as_mut() {
                     closing.busy = false;
-                    closing.problem = Some(error_message(&error));
+                    closing.problem = Some(AccountProblem::Server(error));
                 }
             }
         }
@@ -643,7 +702,7 @@ impl AccountView {
                     div()
                         .text_3xl()
                         .font_weight(FontWeight::BOLD)
-                        .child("Account"),
+                        .child(tr!("account.page.title")),
                 );
         }
         v_flex()
@@ -661,13 +720,14 @@ impl AccountView {
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child("Sign in, create an account, or play as a guest"),
+                    .child(tr!("account.page.welcome")),
             )
     }
 }
 
 impl Render for AccountView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.refresh_placeholders(window, cx);
         if !self.is_admitted() {
             return v_flex()
                 .size_full()
@@ -702,7 +762,7 @@ struct Closing {
     password: Entity<InputState>,
     /// The session being closed: an answer for any other is ignored.
     token: String,
-    problem: Option<String>,
+    problem: Option<AccountProblem>,
     busy: bool,
     /// Enter in the field confirms, as in the other forms.
     _enter: Subscription,
@@ -710,14 +770,14 @@ struct Closing {
 
 /// A one-line field; a password one hides what is typed.
 fn text_field(
-    placeholder: &'static str,
+    placeholder: &str,
     masked: bool,
     window: &mut Window,
     cx: &mut Context<AccountView>,
 ) -> Entity<InputState> {
     cx.new(|cx| {
         InputState::new(window, cx)
-            .placeholder(placeholder)
+            .placeholder(placeholder.to_owned())
             .masked(masked)
     })
 }
@@ -1026,8 +1086,8 @@ mod tests {
         view.read_with(cx, |view, _| {
             assert!(view.session.is_none());
             assert_eq!(
-                view.problems.form.as_deref(),
-                Some("You were signed out: sign in again")
+                view.problems.form,
+                Some(crate::models::account::AccountProblem::SignedOut)
             );
         });
         assert_eq!(

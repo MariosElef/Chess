@@ -1,0 +1,72 @@
+puzzles:
+  title: Γρίφοι
+  to_move: "Σειρά των %{side}"
+  sign_in_first: Συνδέσου για να λύσεις γρίφους.
+  difficulty: Δυσκολία
+  menu:
+    solve: Λύσε γρίφους
+    custom: Προσαρμοσμένη εξάσκηση
+  practice:
+    finding: Ψάχνω γρίφο…
+    next: Επόμενος γρίφος
+    your_rating: Η ΒΑΘΜΟΛΟΓΙΑ ΣΟΥ
+    source: Γρίφοι από το lichess.org, δωρεάν για όλους (CC0)
+  status:
+    solved: Λύθηκε!
+    solved_after_one: Λύθηκε, μετά από 1 λάθος προσπάθεια
+    solved_after_other: Λύθηκε, μετά από %{count} λάθος προσπάθειες
+    correct: Σωστά!
+    wrong: Δεν είναι αυτή η κίνηση. Ξαναδοκίμασε.
+    keep_going: "Σωστά. Συνέχισε: σειρά των %{side}."
+    find_best: Βρες την καλύτερη κίνηση για τα %{side}.
+  rating:
+    guest: "Παίζεις ως επισκέπτης: κάνε εγγραφή για να κρατάς βαθμολογία και ρεκόρ."
+    line: Βαθμολογία γρίφων %{rating}
+    none: "Δεν έχεις ακόμα βαθμολογία γρίφων: λύσε έναν γρίφο εξάσκησης για να αποκτήσεις."
+  rush:
+    title: Γρίφοι ταχύτητας
+    kind:
+      three_minutes: 3 λεπτά
+      five_minutes: 5 λεπτά
+      survival: Επιβίωση
+    short:
+      three_minutes: 3 λεπτά
+      five_minutes: 5 λεπτά
+      survival: Επιβίωση
+    time_left: Χρόνος που απομένει
+    try_again: Δοκίμασε ξανά
+    over: "Τέλος γρίφων ταχύτητας: %{kind}"
+    new_best: Νέο ρεκόρ!
+    best: Ρεκόρ %{score}
+    play_again: Παίξε ξανά
+    best_today: Ρεκόρ σήμερα
+    top_score: Υψηλότερο σκορ
+    play: Παίξε
+    next: Επόμενος γρίφος…
+  battle:
+    title: Μάχη γρίφων
+    rated_tag: ΜΕ ΒΑΘΜΟΛΟΓΙΑ
+    casual_tag: ΕΛΕΥΘΕΡΗ
+    you: Εσύ
+    opponent: Αντίπαλος
+    resign: Παραίτηση
+    won: Κέρδισες!
+    lost: Έχασες
+    drawn: Ισοπαλία
+    rating_change: Βαθμολογία μάχης %{change}
+    play_again: Παίξε ξανά
+    back: Πίσω στη μάχη γρίφων
+    waiting_for: Περιμένω τον/την %{friend}…
+    looking: Ψάχνω αντίπαλο…
+    play: Παίξε
+    wins_this_month: Νίκες αυτόν τον μήνα
+    rating: Βαθμολογία
+    sign_up_rated: Κάνε εγγραφή για μάχες με βαθμολογία
+    vs_random: Με τυχαίο αντίπαλο
+    friends_online: Φίλοι online · %{count}
+    none_online: Κανένας φίλος σου δεν είναι online τώρα.
+    cancel: Ακύρωση
+    invites_rated: "Ο/Η %{name} σε καλεί · με βαθμολογία"
+    invites_casual: "Ο/Η %{name} σε καλεί · ελεύθερη"
+    accept: Αποδοχή
+    decline: Απόρριψη

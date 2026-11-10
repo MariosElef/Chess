@@ -1,0 +1,37 @@
+chat:
+  title: Chats
+  game_title: Game chat
+  new_group: New group
+  no_chats: "No chats yet: message a friend from Social to start one."
+  pick_chat: Pick a chat to read it
+  no_messages: No messages yet
+  write_placeholder: Write a message
+  send: Send
+  members_one: "%{count} member"
+  members_other: "%{count} members"
+  group:
+    name_placeholder: Group name
+    new_title: New group
+    create: Create group
+    cancel: Cancel
+    friends_in_group: Friends in the group (%{count})
+    add_friends_first: Add friends on Social first.
+    owner: Owner
+    you: You
+    remove: Remove
+    add: Add
+    save: Save
+    gone: You are no longer in this group.
+    members: Members (%{count})
+    add_friends: Add friends
+    leave: Leave group
+    close: Close
+  errors:
+    conversation_not_found: No such conversation
+    game_not_found: No such game of yours
+    only_friends: You can only chat with friends
+    not_a_group: Only a group chat can do that
+    not_group_owner: Only the group's owner can do that
+    cannot_join_group: That player cannot be in this group
+    message_length: A message is 1 to 2000 characters
+    group_title: A group needs a name of up to 60 characters

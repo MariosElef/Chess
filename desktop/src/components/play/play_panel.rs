@@ -57,8 +57,8 @@ impl PlayPanel {
         let chosen = mode == self.mode;
         let theme = cx.theme();
         v_flex()
-            .id(SharedString::from(format!("mode-{}", mode.label())))
-            .debug_selector(move || format!("mode-{}", mode.label()))
+            .id(SharedString::from(format!("mode-{}", mode.id())))
+            .debug_selector(move || format!("mode-{}", mode.id()))
             .flex_1()
             .items_center()
             .gap_1()

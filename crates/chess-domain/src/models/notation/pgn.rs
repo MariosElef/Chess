@@ -1,6 +1,6 @@
 //! Portable Game Notation, how sites give a whole game: headers in brackets, then the moves in
 //! SAN with their numbers, perhaps with comments, variations and a result.
-use crate::{Game, Move, PgnError, Position};
+use crate::{Game, Move, Outcome, PgnError, Position, Side};
 
 impl Game {
     /// The game a PGN records, from its `[FEN "…"]` header if it has one, else the start.
@@ -23,6 +23,39 @@ impl Game {
             game.play(mv).map_err(|_| unreadable())?;
         }
         Ok(game)
+    }
+
+    /// The game as a PGN: a `[FEN "…"]` header when it did not begin at the start, the moves
+    /// with their numbers, and the result, `*` while it is still going.
+    pub fn to_pgn(&self) -> String {
+        let start = self.positions()[0];
+        let headers = if start == Position::starting() {
+            String::new()
+        } else {
+            format!("[SetUp \"1\"]\n[FEN \"{start}\"]\n\n")
+        };
+        let mut words = Vec::new();
+        for (index, (before, san)) in self.positions().iter().zip(self.sans()).enumerate() {
+            let number = before.counters().fullmove_number;
+            match before.side_to_move() {
+                Side::White => words.push(format!("{number}.")),
+                Side::Black if index == 0 => words.push(format!("{number}...")),
+                Side::Black => {}
+            }
+            words.push(san.clone());
+        }
+        words.push(result(self.outcome()).to_owned());
+        headers + &words.join(" ")
+    }
+}
+
+/// How a PGN ends: who won, a draw, or `*` for a game not over.
+fn result(outcome: Option<Outcome>) -> &'static str {
+    match outcome.map(Outcome::winner) {
+        Some(Some(Side::White)) => "1-0",
+        Some(Some(Side::Black)) => "0-1",
+        Some(None) => "1/2-1/2",
+        None => "*",
     }
 }
 
@@ -93,7 +126,7 @@ fn move_written(position: &Position, word: &str) -> Option<Move> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Game, PgnError};
+    use crate::{Game, PgnError, Side};
 
     #[test]
     fn a_site_pgn_reads_with_its_headers_comments_and_result() {
@@ -127,6 +160,28 @@ mod tests {
         );
         assert_eq!(error.to_string(), "2. Ke3 is not a legal move there");
         assert_eq!(Game::from_pgn("[Event \"x\"]"), Err(PgnError::NoMoves));
+    }
+
+    #[test]
+    fn a_game_written_as_pgn_reads_back_as_the_same_game() {
+        let mut game = Game::from_pgn("1. e4 e5 2. Nf3 Nc6 3. Bc4").expect("a game");
+        assert_eq!(game.to_pgn(), "1. e4 e5 2. Nf3 Nc6 3. Bc4 *");
+        game.resign(Side::Black).expect("a game still going");
+        assert_eq!(game.to_pgn(), "1. e4 e5 2. Nf3 Nc6 3. Bc4 1-0");
+        let read = Game::from_pgn(&game.to_pgn()).expect("its own pgn");
+        assert_eq!(read.sans(), game.sans());
+    }
+
+    #[test]
+    fn a_game_from_a_set_up_position_keeps_its_start_and_its_numbers() {
+        let fen = "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 7";
+        let game = Game::from_pgn(&format!("[FEN \"{fen}\"]\n7... O-O 8. O-O-O")).expect("a game");
+        let pgn = game.to_pgn();
+        assert_eq!(
+            pgn,
+            format!("[SetUp \"1\"]\n[FEN \"{fen}\"]\n\n7... O-O 8. O-O-O *")
+        );
+        assert_eq!(Game::from_pgn(&pgn), Ok(game));
     }
 
     #[test]

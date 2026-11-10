@@ -13,6 +13,7 @@ use gpui_kit::{
 };
 
 use super::nav_pictures::{ACCOUNT_PICTURE, SETTINGS_PICTURE};
+use crate::i18n::tr;
 use crate::{
     components::social::avatar,
     enums::{account::AccountForm, shell::Page},
@@ -96,8 +97,16 @@ impl RenderOnce for AccountMenu {
                 }
                 let ending: Vec<Button> = if person.guest {
                     [
-                        (AccountForm::SignUp, "Create account", IconName::UserPlus),
-                        (AccountForm::SignIn, "Sign in", IconName::LogIn),
+                        (
+                            AccountForm::SignUp,
+                            tr!("shell.account_menu.create_account"),
+                            IconName::UserPlus,
+                        ),
+                        (
+                            AccountForm::SignIn,
+                            tr!("shell.account_menu.sign_in"),
+                            IconName::LogIn,
+                        ),
                     ]
                     .into_iter()
                     .map(|(form, label, icon)| {
@@ -111,10 +120,12 @@ impl RenderOnce for AccountMenu {
                 } else {
                     let (sign_out, close) = (Rc::clone(&on_sign_out), Rc::clone(&close));
                     vec![
-                        item("Sign out", IconName::LogOut).on_click(move |_, window, cx| {
-                            close(window, cx);
-                            sign_out(window, cx);
-                        }),
+                        item(tr!("shell.account_menu.sign_out"), IconName::LogOut).on_click(
+                            move |_, window, cx| {
+                                close(window, cx);
+                                sign_out(window, cx);
+                            },
+                        ),
                     ]
                 };
                 v_flex()
@@ -132,7 +143,7 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
     let detail = person
         .email
         .clone()
-        .unwrap_or_else(|| "Playing as a guest".to_owned());
+        .unwrap_or_else(|| tr!("shell.account_menu.guest"));
     h_flex()
         .gap_3()
         .p_3()
@@ -158,7 +169,7 @@ fn who(person: &MenuPerson, cx: &App) -> Div {
 
 /// A page's item, with the page's own picture.
 fn page_item(page: Page, picture: &'static str) -> Button {
-    Button::new(page.label())
+    Button::new(page.key())
         .ghost()
         .w_full()
         .justify_start()
@@ -170,8 +181,8 @@ fn page_item(page: Page, picture: &'static str) -> Button {
         )
 }
 
-fn item(label: &'static str, icon: IconName) -> Button {
-    Button::new(label)
+fn item(label: String, icon: IconName) -> Button {
+    Button::new(SharedString::from(label.clone()))
         .ghost()
         .w_full()
         .justify_start()

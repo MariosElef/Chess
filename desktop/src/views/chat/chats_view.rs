@@ -19,13 +19,14 @@ use crate::{
         chat::{ConversationKind, GroupChange},
         sound::Sound,
     },
+    i18n::tr,
     models::{
         chat::Conversation,
         play::{LiveEvent, ServerMessage},
         server::ServerError,
         social::Friend,
     },
-    services::{server::error_message, social::avatar_path},
+    services::social::{avatar_path, problem_text},
     views::{
         live::{LiveConnection, SessionSource},
         sound::play_sound,
@@ -178,7 +179,7 @@ impl ChatsView {
                 self.clear_read_chat();
             }
             Err(error) => {
-                let problem = error_message(&error);
+                let problem = problem_text(&error);
                 // The Group modal waits for this list: it stops waiting and says why.
                 if let Some(form) = self.group_form.as_ref().and_then(WeakEntity::upgrade) {
                     let shown = problem.clone();
@@ -224,7 +225,7 @@ impl ChatsView {
             .cloned();
         match listed {
             Some(listed) => {
-                let title = SharedString::from(listed.title.clone());
+                let title = SharedString::from(listed.title_to_keep());
                 chat.update(cx, |chat, cx| chat.set_title(title, cx));
                 self.open = Some((listed, chat));
             }
@@ -257,7 +258,7 @@ impl ChatsView {
                     view.open(conversation, window, cx);
                 }
                 Err(error) => {
-                    view.problem = Some(error_message(&error));
+                    view.problem = Some(problem_text(&error));
                     cx.notify();
                 }
             });
@@ -270,7 +271,7 @@ impl ChatsView {
         let chat = cx.new(|cx| {
             ChatView::new(
                 (&self.connection, self.session.clone()),
-                (conversation.id.clone(), conversation.title.clone().into()),
+                (conversation.id.clone(), conversation.title_to_keep().into()),
                 window,
                 cx,
             )
@@ -366,7 +367,7 @@ impl ChatsView {
             // The view outlives the request unless the window is closing.
             let _ = view.update(cx, |view, cx| {
                 if let Err(error) = result {
-                    let problem = error_message(&error);
+                    let problem = problem_text(&error);
                     let form = view.group_form.as_ref().and_then(WeakEntity::upgrade);
                     if let Some(form) = form.filter(|form| form.read(cx).group_id() == group) {
                         let shown = problem.clone();
@@ -403,11 +404,11 @@ impl ChatsView {
             .as_ref()
             .is_some_and(|(open, _)| open.id == conversation.id);
         let preview = conversation.last_message.as_ref().map_or_else(
-            || "No messages yet".to_owned(),
+            || tr!("chat.no_messages"),
             |last| format!("{}: {}", last.sender.username, last.body),
         );
         let unread = conversation.unread;
-        let row = PersonRow::new(conversation.title.clone())
+        let row = PersonRow::new(conversation.shown_title())
             .picture(self.chat_picture(conversation, cx))
             .detail(shortened(&preview))
             .when(unread > 0 && !opened, |row| {
@@ -519,10 +520,10 @@ impl ChatsView {
             .child(
                 h_flex()
                     .justify_between()
-                    .child(div().font_weight(FontWeight::BOLD).child("Chats"))
+                    .child(div().font_weight(FontWeight::BOLD).child(tr!("chat.title")))
                     .child({
                         let view = cx.entity().downgrade();
-                        StartButton::new("new-group", "New group", move |window, cx| {
+                        StartButton::new("new-group", tr!("chat.new_group"), move |window, cx| {
                             // The page outlives its buttons unless the window is closing.
                             let _ = view.update(cx, |view, cx| view.open_new_group(window, cx));
                         })
@@ -539,7 +540,7 @@ impl ChatsView {
                     div()
                         .text_sm()
                         .text_color(muted)
-                        .child("No chats yet: message a friend from Social to start one."),
+                        .child(tr!("chat.no_chats")),
                 )
             })
             .child(
@@ -570,7 +571,7 @@ impl ChatsView {
                     .gap_2()
                     .text_color(theme.muted_foreground)
                     .child(Icon::from(IconName::Mail).size_10())
-                    .child("Pick a chat to read it"),
+                    .child(tr!("chat.pick_chat")),
             );
         };
         let group = conversation.kind == ConversationKind::Group;
@@ -584,7 +585,7 @@ impl ChatsView {
                         .min_w_0()
                         .text_lg()
                         .font_weight(FontWeight::BOLD)
-                        .child(conversation.title.clone()),
+                        .child(conversation.shown_title()),
                 )
                 .when(group, |this| {
                     this.child(
@@ -606,8 +607,11 @@ impl ChatsView {
 
 /// "1 member" or "3 members".
 fn members_label(count: usize) -> String {
-    let noun = if count == 1 { "member" } else { "members" };
-    format!("{count} {noun}")
+    if count == 1 {
+        tr!("chat.members_one", count = count)
+    } else {
+        tr!("chat.members_other", count = count)
+    }
 }
 
 /// A red count of unread messages.

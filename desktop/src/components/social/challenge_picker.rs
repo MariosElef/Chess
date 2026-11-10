@@ -15,7 +15,8 @@ use crate::{
         panel::{ChoiceTile, RatedSwitch, StartButton},
         play::speed_label,
     },
-    services::play::presets_in,
+    i18n::tr,
+    services::play::{control_label, presets_in},
 };
 
 type OnChoose = Rc<dyn Fn(TimeControl, &mut Window, &mut App)>;
@@ -74,13 +75,13 @@ impl RenderOnce for ChallengePicker {
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
-                    .child("Pick a time control"),
+                    .child(tr!("social.challenge.pick")),
             )
             // The four speeds two by two, as the Play lobby lays its time controls out.
             .child(h_flex().gap_4().child(bullet).child(blitz))
             .child(h_flex().gap_4().child(rapid).child(classical))
             .child(RatedSwitch::new(
-                ("challenge-rated", "Guests play unrated games"),
+                ("challenge-rated", tr!("social.challenge.guest_note")),
                 (self.rated, self.can_rate),
                 move |on, window, cx| on_rated(on, window, cx),
             ))
@@ -89,14 +90,14 @@ impl RenderOnce for ChallengePicker {
                     .gap_3()
                     .child(div().flex_1().child(StartButton::new(
                         "send-challenge",
-                        "Send challenge",
+                        tr!("social.challenge.send"),
                         move |window, cx| on_send(window, cx),
                     )))
                     .child(
                         Button::new("close-challenge")
                             .ghost()
                             .large()
-                            .label("Cancel")
+                            .label(tr!("social.actions.cancel"))
                             .on_click(move |_, window, cx| on_close(window, cx)),
                     ),
             )
@@ -125,7 +126,7 @@ impl ChallengePicker {
         let on_choose = Rc::clone(&self.on_choose);
         ChoiceTile::new(
             format!("challenge-time-{}", control.label()),
-            control.label(),
+            control_label(control),
             self.choice == control,
             move |window, cx| on_choose(control, window, cx),
         )

@@ -21,6 +21,7 @@ use crate::{
         social::avatar,
     },
     enums::account::AccountForm,
+    i18n::tr,
 };
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -101,7 +102,7 @@ impl RenderOnce for AccountCard {
                 // alternative rather than the main way in.
                 StartButton::new(
                     "continue-as-guest",
-                    "Continue as guest",
+                    tr!("account.form.guest"),
                     move |window, cx| on_guest(window, cx),
                 )
                 .plain()
@@ -133,13 +134,13 @@ impl GuestCard {
 impl RenderOnce for GuestCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_sign_in, on_sign_up) = (self.on_sign_in, self.on_sign_up);
-        titled_card("Playing as a guest", cx).child(
+        titled_card(tr!("account.guest.title"), cx).child(
             v_flex()
                 .gap_4()
                 .px_6()
                 .py_5()
                 .child(
-                    Label::new("Sign in or create an account to play online and keep a rating.")
+                    Label::new(tr!("account.guest.about"))
                         .text_sm()
                         .text_color(cx.theme().muted_foreground),
                 )
@@ -237,16 +238,24 @@ impl RenderOnce for SignedInCard {
             .flex_shrink_0()
             .gap_3()
             .child(
-                StartButton::new("delete-account", "Delete account", move |window, cx| {
-                    on_delete(window, cx);
-                })
+                StartButton::new(
+                    "delete-account",
+                    tr!("account.card.delete"),
+                    move |window, cx| {
+                        on_delete(window, cx);
+                    },
+                )
                 .danger()
                 .medium(),
             )
             .child(
-                StartButton::new("sign-out", "Sign out", move |window, cx| {
-                    on_sign_out(window, cx);
-                })
+                StartButton::new(
+                    "sign-out",
+                    tr!("account.card.sign_out"),
+                    move |window, cx| {
+                        on_sign_out(window, cx);
+                    },
+                )
                 .icon(IconName::LogOut)
                 .danger()
                 .medium(),
@@ -283,9 +292,13 @@ fn picture_column(
         .gap_3()
         .child(avatar(name, picture, px(72.), cx))
         .child(
-            StartButton::new("change-picture", "Change picture", move |window, cx| {
-                on_change(window, cx);
-            })
+            StartButton::new(
+                "change-picture",
+                tr!("account.card.change_picture"),
+                move |window, cx| {
+                    on_change(window, cx);
+                },
+            )
             .plain()
             .small()
             .busy(uploading),
@@ -296,7 +309,7 @@ fn picture_column(
                     .ghost()
                     .xsmall()
                     .text_color(cx.theme().muted_foreground)
-                    .label("Remove")
+                    .label(tr!("account.card.remove_picture"))
                     .on_click(move |_, window, cx| on_remove(window, cx)),
             )
         })
@@ -341,23 +354,19 @@ impl RenderOnce for CloseAccountCard {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (on_confirm, on_cancel) = (self.on_confirm, self.on_cancel);
         card(cx)
-            .child(Label::new("Delete your account?").text_xl())
+            .child(Label::new(tr!("account.close.title")).text_xl())
             .child(
                 div()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child(
-                        "Your friends, chats, ratings and puzzle scores are deleted, and you \
-                         cannot sign in again. Your games stay for your opponents, under a \
-                         removed name.",
-                    ),
+                    .child(tr!("account.close.about")),
             )
             .child(self.password)
             .child(
                 Button::new("confirm-delete-account")
                     .danger()
                     .w_full()
-                    .label("Delete my account")
+                    .label(tr!("account.close.confirm"))
                     .loading(self.busy)
                     .on_click(move |_, window, cx| on_confirm(window, cx)),
             )
@@ -365,7 +374,7 @@ impl RenderOnce for CloseAccountCard {
                 Button::new("cancel-delete-account")
                     .ghost()
                     .w_full()
-                    .label("Cancel")
+                    .label(tr!("account.close.cancel"))
                     .on_click(move |_, window, cx| on_cancel(window, cx)),
             )
     }
@@ -374,12 +383,14 @@ impl RenderOnce for CloseAccountCard {
 /// A moment of waiting, said in a sentence.
 #[derive(IntoElement)]
 pub struct WaitingCard {
-    message: &'static str,
+    message: String,
 }
 
 impl WaitingCard {
-    pub fn new(message: &'static str) -> Self {
-        Self { message }
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
     }
 }
 
@@ -394,7 +405,7 @@ impl RenderOnce for WaitingCard {
 }
 
 /// A card with the panels' title band over it: the Play picture and `title`.
-fn titled_card(title: &'static str, cx: &App) -> Div {
+fn titled_card(title: impl Into<SharedString>, cx: &App) -> Div {
     v_flex()
         .w(px(420.))
         .rounded(px(8.))
@@ -412,7 +423,7 @@ fn or_rule(cx: &App) -> Div {
         .text_xs()
         .text_color(theme.muted_foreground)
         .child(line())
-        .child("or")
+        .child(tr!("account.form.or"))
         .child(line())
 }
 

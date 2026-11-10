@@ -7,11 +7,12 @@ use crate::{
     components::account::{HistoryPanel, OnOpen, attempt_row, battle_row, game_row},
     enums::account::HistoryTab,
     models::{
+        account::AccountProblem,
         play::{AnalyzeGame, GameRecord, PlayedGame},
         puzzles::{PlayedAttempt, PlayedBattle},
         server::ServerError,
     },
-    services::{play::opened_game, server::error_message},
+    services::{account::problem_text, play::opened_game},
 };
 
 /// How many rows the server sends a page; a shorter page is the last.
@@ -74,7 +75,7 @@ pub struct HistoryView {
     battles: Listed<PlayedBattle>,
     attempts: Listed<PlayedAttempt>,
     /// What went wrong, and on which tab, so it shows only there.
-    problem: Option<(HistoryTab, String)>,
+    problem: Option<(HistoryTab, AccountProblem)>,
     /// The game picked, on its way; a newer pick or signing out drops it.
     _opening: Option<Task<()>>,
 }
@@ -207,7 +208,7 @@ impl HistoryView {
         list(self).loading = false;
         match result {
             Ok(page) => list(self).add(page, newest),
-            Err(error) => self.problem = Some((tab, error_message(&error))),
+            Err(error) => self.problem = Some((tab, AccountProblem::Server(error))),
         }
         cx.notify();
     }
@@ -234,14 +235,13 @@ impl HistoryView {
         let record = match result {
             Ok(record) => record,
             Err(error) => {
-                self.problem = Some((HistoryTab::Games, error_message(&error)));
+                self.problem = Some((HistoryTab::Games, AccountProblem::Server(error)));
                 cx.notify();
                 return;
             }
         };
         let Some((game, outcome)) = opened_game(&record) else {
-            let problem = "That game could not be read back".to_owned();
-            self.problem = Some((HistoryTab::Games, problem));
+            self.problem = Some((HistoryTab::Games, AccountProblem::GameUnreadable));
             cx.notify();
             return;
         };
@@ -317,7 +317,7 @@ impl Render for HistoryView {
             .problem
             .clone()
             .filter(|(tab, _)| *tab == self.tab)
-            .map(|(_, problem)| problem);
+            .map(|(_, problem)| problem_text(&problem));
         HistoryPanel::new(
             (self.tab, rows),
             (more, loading, problem),

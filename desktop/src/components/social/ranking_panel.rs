@@ -14,6 +14,7 @@ use gpui_kit::{
 use super::{EmptyState, avatar};
 use crate::{
     enums::social::RankingBoard,
+    i18n::tr,
     models::{account::Face, social::RankedPlayer},
     services::account::rating_text,
 };
@@ -105,7 +106,6 @@ impl RenderOnce for RankingPanel {
             .map(|board| board_tab(board, (board == self.board, Rc::clone(&self.on_board)), cx))
             .collect();
         let my_id = self.me.as_ref().map(|(me, _)| me.id.clone());
-        let noun = self.board.played_noun();
         let first_load = self.loading && self.rows.is_empty();
         let empty = !self.loading && self.rows.is_empty() && self.problem.is_none();
         let rows: Vec<Div> = self
@@ -115,7 +115,7 @@ impl RenderOnce for RankingPanel {
                 let mine = my_id.as_deref() == Some(player.id.as_str());
                 place_row(
                     (player, face),
-                    (mine, noun, RowSlot::Listed),
+                    (mine, self.board, RowSlot::Listed),
                     Rc::clone(&self.on_profile),
                     cx,
                 )
@@ -140,11 +140,11 @@ impl RenderOnce for RankingPanel {
                             div()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
-                                .child("Your place"),
+                                .child(tr!("social.leaderboard.your_place")),
                         )
                         .child(place_row(
                             (me, face),
-                            (true, noun, RowSlot::Pinned),
+                            (true, self.board, RowSlot::Pinned),
                             Rc::clone(&self.on_profile),
                             cx,
                         )),
@@ -172,14 +172,14 @@ impl RenderOnce for RankingPanel {
                                 .p_3()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
-                                .child("Loading…"),
+                                .child(tr!("social.loading")),
                         )
                     })
                     .when(empty, |this| {
                         this.child(EmptyState::new(
                             IconName::Trophy,
-                            "No one here yet",
-                            "Players show up once they have a rated result on this board.",
+                            tr!("social.leaderboard.empty_title"),
+                            tr!("social.leaderboard.empty_about"),
                         ))
                     })
                     .children(rows)
@@ -188,7 +188,7 @@ impl RenderOnce for RankingPanel {
                             Button::new("leaderboard-more")
                                 .ghost()
                                 .w_full()
-                                .label("Load more")
+                                .label(tr!("social.leaderboard.load_more"))
                                 .loading(self.loading)
                                 .on_click(move |_, window, cx| on_more(window, cx)),
                         )
@@ -231,7 +231,7 @@ enum RowSlot {
 /// The player's own place shows twice, listed and pinned, so the slot keeps its button's id apart.
 fn place_row(
     (player, face): (&RankedPlayer, &Face),
-    (mine, noun, slot): (bool, &'static str, RowSlot),
+    (mine, board, slot): (bool, RankingBoard, RowSlot),
     on_profile: OnProfile,
     cx: &App,
 ) -> Div {
@@ -266,7 +266,7 @@ fn place_row(
             div()
                 .text_sm()
                 .text_color(theme.muted_foreground)
-                .child(format!("{} {noun}", player.played)),
+                .child(board.played_text(player.played)),
         )
         .child(
             div()
@@ -280,7 +280,7 @@ fn place_row(
             Button::new(profile_button_id(&player.id, slot))
                 .ghost()
                 .small()
-                .label("View profile")
+                .label(tr!("social.actions.view_profile"))
                 .on_click(move |_, window, cx| on_profile(opened.clone(), window, cx)),
         )
 }

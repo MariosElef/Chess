@@ -10,7 +10,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::enums::history::NavStep;
+use crate::{enums::history::NavStep, i18n::tr};
 
 type OnStep = Rc<dyn Fn(NavStep, &mut Window, &mut App)>;
 type OnHold = Rc<dyn Fn(Option<NavStep>, &mut Window, &mut App)>;
@@ -127,11 +127,11 @@ fn step_icon(step: NavStep) -> IconName {
     }
 }
 
-fn step_tooltip(step: NavStep) -> &'static str {
+fn step_tooltip(step: NavStep) -> String {
     match step {
-        NavStep::Start => "First position",
-        NavStep::Back => "Previous position",
-        NavStep::Forward => "Next position",
-        NavStep::Live => "Current position",
+        NavStep::Start => tr!("history.nav.start"),
+        NavStep::Back => tr!("history.nav.back"),
+        NavStep::Forward => tr!("history.nav.forward"),
+        NavStep::Live => tr!("history.nav.live"),
     }
 }

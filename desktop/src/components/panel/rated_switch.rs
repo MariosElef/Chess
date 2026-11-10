@@ -6,6 +6,8 @@ use gpui_kit::{
     *,
 };
 
+use crate::i18n::tr;
+
 type OnRated = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
 /// Rated or not; for a guest the switch stays off, with the reason under its name.
@@ -16,13 +18,13 @@ pub struct RatedSwitch {
     /// Signed in with an account: a guest never plays rated.
     can_rate: bool,
     /// Why a guest cannot, under the switch's name.
-    guest_note: &'static str,
+    guest_note: SharedString,
     on_rated: OnRated,
 }
 
 impl RatedSwitch {
     pub fn new(
-        (id, guest_note): (&'static str, &'static str),
+        (id, guest_note): (&'static str, impl Into<SharedString>),
         (rated, can_rate): (bool, bool),
         on_rated: impl Fn(bool, &mut Window, &mut App) + 'static,
     ) -> Self {
@@ -30,7 +32,7 @@ impl RatedSwitch {
             id,
             rated,
             can_rate,
-            guest_note,
+            guest_note: guest_note.into(),
             on_rated: Rc::new(on_rated),
         }
     }
@@ -43,7 +45,7 @@ impl RenderOnce for RatedSwitch {
             .justify_between()
             .child(
                 v_flex()
-                    .child(Label::new("Rated").text_sm())
+                    .child(Label::new(tr!("common.rated")).text_sm())
                     .when(!self.can_rate, |this| {
                         this.child(
                             div()

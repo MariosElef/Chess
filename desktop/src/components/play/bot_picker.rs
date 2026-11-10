@@ -14,7 +14,7 @@ use gpui_kit::{
 
 use super::play_pictures::DICE_PICTURE;
 use crate::{
-    components::panel::StartButton, enums::play::ColourChoice, models::play::Bot,
+    components::panel::StartButton, enums::play::ColourChoice, i18n::tr, models::play::Bot,
     services::play::custom_bot,
 };
 
@@ -79,9 +79,12 @@ impl RenderOnce for BotPicker {
                 this.child(
                     h_flex()
                         .gap_3()
-                        .child(div().w(px(104.)).flex_shrink_0().child(
-                            Label::new(format!("Strength ~{}", self.custom_rating)).text_sm(),
-                        ))
+                        .child(
+                            div().w(px(104.)).flex_shrink_0().child(
+                                Label::new(tr!("play.setup.strength", rating = self.custom_rating))
+                                    .text_sm(),
+                            ),
+                        )
                         .child(div().flex_1().child(Slider::new(&self.strength))),
                 )
             })
@@ -128,7 +131,7 @@ impl BotPicker {
                 div()
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(bot.name),
+                    .child(bot.shown_name()),
             )
             .child(
                 div()
@@ -143,7 +146,7 @@ impl BotPicker {
         v_flex()
             .items_center()
             .gap_2()
-            .child(Label::new("Play as").text_sm())
+            .child(Label::new(tr!("play.setup.play_as")).text_sm())
             .child(
                 h_flex()
                     .items_center()
@@ -155,7 +158,7 @@ impl BotPicker {
     /// White and Black as 3D buttons in their colours, Random as the dice; unpicked ones fade.
     fn colour_button(&self, colour: ColourChoice) -> AnyElement {
         let on_colour = Rc::clone(&self.on_colour);
-        let id = format!("colour-{}", colour.label());
+        let id = format!("colour-{}", colour.id());
         let dimmed = colour != self.colour;
         let pick = move |window: &mut Window, cx: &mut App| on_colour(colour, window, cx);
         match colour {

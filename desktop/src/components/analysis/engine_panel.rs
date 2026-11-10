@@ -11,6 +11,7 @@ use super::side_chip::side_chip;
 use crate::{
     components::settings::STOCKFISH_PICTURE,
     enums::analysis::EngineStatus,
+    i18n::tr,
     models::analysis::LineView,
     services::analysis::{favours_black, format_nps},
 };
@@ -110,12 +111,16 @@ fn line_row(line: &LineView) -> Div {
 
 fn status_text(status: EngineStatus) -> String {
     match status {
-        EngineStatus::Off => "off".to_owned(),
-        EngineStatus::Starting => "starting…".to_owned(),
-        EngineStatus::Running { depth, nps } => format!("depth {depth} · {}", format_nps(nps)),
-        EngineStatus::Finished => "game over".to_owned(),
-        EngineStatus::PausedForReview => "paused for the review".to_owned(),
-        EngineStatus::NotFound => "not found: brew install stockfish".to_owned(),
-        EngineStatus::Stopped => "stopped: switch it on to restart".to_owned(),
+        EngineStatus::Off => tr!("analysis.engine.off"),
+        EngineStatus::Starting => tr!("analysis.engine.starting"),
+        EngineStatus::Running { depth, nps } => tr!(
+            "analysis.engine.running",
+            depth = depth,
+            speed = format_nps(nps)
+        ),
+        EngineStatus::Finished => tr!("analysis.engine.finished"),
+        EngineStatus::PausedForReview => tr!("analysis.engine.paused"),
+        EngineStatus::NotFound => tr!("analysis.engine.not_found"),
+        EngineStatus::Stopped => tr!("analysis.engine.stopped"),
     }
 }

@@ -3,16 +3,26 @@ use std::{fs, io, path::PathBuf};
 
 use crate::{
     clients::engine::device_cores,
-    enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
+    enums::settings::{Appearance, BoardTheme, Language, PieceSet, SoundSet},
     models::engine::EngineSettings,
 };
 
 const APP_FOLDER: &str = "Chess";
+const LANGUAGE_FILE: &str = "language";
 const APPEARANCE_FILE: &str = "appearance";
 const ENGINE_FILE: &str = "engine";
 const BOARD_THEME_FILE: &str = "board_theme";
 const PIECE_SET_FILE: &str = "pieces";
 const SOUND_SET_FILE: &str = "sounds";
+
+/// The saved language, or `None` on a first launch or when the file is missing or unreadable.
+pub fn load_language() -> Option<Language> {
+    Language::from_key(read_setting(LANGUAGE_FILE)?.trim())
+}
+
+pub fn save_language(language: Language) -> io::Result<()> {
+    write_setting(LANGUAGE_FILE, language.key())
+}
 
 /// The saved choice, or `None` on a first launch or when the file is missing or unreadable.
 pub fn load_appearance() -> Option<Appearance> {

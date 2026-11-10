@@ -21,7 +21,7 @@ use crate::{
         analysis::{
             EnginePanel, EvalBar, EvalGraph, FenInput, REVIEW_PICTURE, ReviewPanel, ShownVerdict,
         },
-        board::{BoardColumn, board_page, copy_fen},
+        board::{BoardColumn, board_page, copy_buttons},
         history::{MoveList, NavigationBar},
         panel::{ChoiceTile, PanelHeader, SidePanel, StartButton, fill_scroll},
         shell::ANALYSIS_PICTURE,
@@ -30,10 +30,12 @@ use crate::{
         analysis::{EngineStatus, MoveClass},
         engine::EngineEvent,
         history::NavStep,
+        settings::Language,
         sound::Sound,
     },
+    i18n::{self, tr},
     models::{
-        analysis::{GameReview, LineView, Pasted},
+        analysis::{GameReview, LineView, Pasted, PastedProblem},
         board::{MoveMade, ShownPosition},
         engine::EngineSettings,
     },
@@ -119,7 +121,9 @@ pub struct AnalysisPage {
     /// A key or navigation button held down.
     holding: Holding,
     fen_input: Entity<TextareaState>,
-    fen_error: Option<String>,
+    fen_error: Option<PastedProblem>,
+    /// The language the field's placeholder is written in.
+    placeholder_in: Language,
     /// Hands engine output to the page; it ends when the engine's output does.
     _engine_task: Option<Task<()>>,
     _fen_events: Subscription,
@@ -131,7 +135,7 @@ impl AnalysisPage {
         let fen_input = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(1, 6)
-                .placeholder("Paste a FEN or a PGN, then Load")
+                .placeholder(tr!("analysis.load.placeholder"))
         });
         let _fen_events = cx.subscribe_in(&fen_input, window, on_fen_event);
         let page = cx.weak_entity();
@@ -166,6 +170,7 @@ impl AnalysisPage {
             holding: Holding::default(),
             fen_input,
             fen_error: None,
+            placeholder_in: i18n::current(),
             _engine_task: None,
             _fen_events,
             focus_handle: cx.focus_handle(),
@@ -458,6 +463,18 @@ impl AnalysisPage {
         cx.notify();
     }
 
+    /// The field asks in the language now shown, once that changes.
+    fn write_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let language = i18n::current();
+        if self.placeholder_in == language {
+            return;
+        }
+        self.placeholder_in = language;
+        self.fen_input.update(cx, |field, cx| {
+            field.set_placeholder(tr!("analysis.load.placeholder"), window, cx);
+        });
+    }
+
     /// Reads the field: a FEN starts a fresh analysis, a PGN opens the whole game.
     fn load_fen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.fen_input.read(cx).value();
@@ -575,13 +592,13 @@ impl AnalysisPage {
                 column.left_strip(EvalBar::new(self.eval(), flipped))
             })
             .tool(flip_button("analysis-flip-board", cx, AnalysisPage::flip))
-            .tool(copy_fen(self.history.shown()))
+            .tool(copy_buttons(self.history.shown(), self.history.game()))
     }
 
     /// The review, the engine, the moves and the field to load a game.
     fn side_column(&self, page: WeakEntity<Self>, cx: &mut Context<Self>) -> SidePanel {
         SidePanel::new()
-            .header(PanelHeader::new(ANALYSIS_PICTURE, "Analysis"))
+            .header(PanelHeader::new(ANALYSIS_PICTURE, tr!("analysis.title")))
             .child(self.header(cx))
             .child(EnginePanel::new(
                 self.engine_on(),
@@ -600,7 +617,7 @@ impl AnalysisPage {
             )
             .child(FenInput::new(
                 self.fen_input.clone(),
-                self.fen_error.clone(),
+                self.fen_error.as_ref().map(PastedProblem::message),
                 load_fen(page),
             ))
     }
@@ -919,10 +936,10 @@ impl AnalysisPage {
         let label = match (&self.reviewer, self.is_reviewing()) {
             (Some(reviewer), _) => {
                 let (done, total) = reviewer.run.progress();
-                format!("Reviewing {done}/{total}")
+                tr!("analysis.review.progress", done = done, total = total)
             }
-            (None, true) => "Reviewing…".to_owned(),
-            (None, false) => "Game Review".to_owned(),
+            (None, true) => tr!("analysis.review.running"),
+            (None, false) => tr!("analysis.review.start"),
         };
         let page = cx.entity().downgrade();
         StartButton::new("review-game", label, move |_, cx| {
@@ -944,13 +961,18 @@ impl AnalysisPage {
                     div()
                         .text_sm()
                         .text_color(cx.theme().danger)
-                        .child("The review stopped: try again"),
+                        .child(tr!("analysis.review.stopped")),
                 )
             })
             .child(
-                ChoiceTile::new("reset-board", "Reset board", false, move |_, cx| {
-                    let _ = reset.update(cx, |page, cx| page.reset_board(cx));
-                })
+                ChoiceTile::new(
+                    "reset-board",
+                    tr!("analysis.reset_board"),
+                    false,
+                    move |_, cx| {
+                        let _ = reset.update(cx, |page, cx| page.reset_board(cx));
+                    },
+                )
                 .icon(IconName::RefreshCw)
                 .height(px(40.)),
             )
@@ -972,7 +994,8 @@ impl HistoryNavigation for AnalysisPage {
 }
 
 impl Render for AnalysisPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.write_placeholder(window, cx);
         let page = cx.entity().downgrade();
         with_history_keys(v_flex(), cx)
             .track_focus(&self.focus_handle)
@@ -1060,7 +1083,7 @@ mod tests {
 
     use chess_domain::{Game, Move};
 
-    use super::AnalysisPage;
+    use super::{AnalysisPage, PastedProblem};
     use crate::{
         clients::engine::locate_stockfish,
         enums::{analysis::MoveClass, engine::EngineEvent, history::NavStep, sound::Sound},
@@ -1254,7 +1277,10 @@ mod tests {
         page.update_in(cx, |page, window, cx| page.load_fen(window, cx));
         page.read_with(cx, |page, _| {
             assert_eq!(
-                page.fen_error.as_deref(),
+                page.fen_error
+                    .as_ref()
+                    .map(PastedProblem::message)
+                    .as_deref(),
                 Some("Not a valid PGN: 2. Ke3 is not a legal move there")
             );
         });

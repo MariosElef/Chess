@@ -1,5 +1,7 @@
 //! The app's pages.
 
+use crate::i18n::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Page {
     Play,
@@ -35,9 +37,9 @@ impl Page {
     }
 
     /// The page's name in its rail item's menu.
-    pub fn menu_label(self) -> &'static str {
+    pub fn menu_label(self) -> String {
         match self {
-            Self::Social => "Friends",
+            Self::Social => tr!("shell.pages.friends"),
             Self::Play
             | Self::Puzzles
             | Self::Analyze
@@ -48,7 +50,21 @@ impl Page {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
+        match self {
+            Self::Play => tr!("shell.pages.play"),
+            Self::Puzzles => tr!("shell.pages.puzzles"),
+            Self::Analyze => tr!("shell.pages.analyze"),
+            Self::Social => tr!("shell.pages.social"),
+            Self::Messages => tr!("shell.pages.messages"),
+            Self::Leaderboard => tr!("shell.pages.leaderboard"),
+            Self::Settings => tr!("shell.pages.settings"),
+            Self::Account => tr!("shell.pages.account"),
+        }
+    }
+
+    /// The page's name for ids and test selectors: the same in every language.
+    pub fn key(self) -> &'static str {
         match self {
             Self::Play => "Play",
             Self::Puzzles => "Puzzles",
@@ -58,6 +74,20 @@ impl Page {
             Self::Leaderboard => "Leaderboard",
             Self::Settings => "Settings",
             Self::Account => "Account",
+        }
+    }
+
+    /// The page's menu entry for ids and test selectors: the same in every language.
+    pub fn menu_key(self) -> &'static str {
+        match self {
+            Self::Social => "Friends",
+            Self::Play
+            | Self::Puzzles
+            | Self::Analyze
+            | Self::Messages
+            | Self::Leaderboard
+            | Self::Settings
+            | Self::Account => self.key(),
         }
     }
 }

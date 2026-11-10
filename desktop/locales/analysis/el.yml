@@ -1,0 +1,52 @@
+analysis:
+  title: Ανάλυση
+  reset_board: Επαναφορά σκακιέρας
+  engine:
+    "off": κλειστή
+    starting: ξεκινά…
+    running: βάθος %{depth} · %{speed}
+    finished: τέλος παρτίδας
+    paused: σε παύση για την ανάλυση
+    not_found: "δεν βρέθηκε: brew install stockfish"
+    stopped: "σταμάτησε: άνοιξέ την για επανεκκίνηση"
+  class:
+    label:
+      brilliant: Λαμπρή
+      great: Σπουδαία
+      best: Καλύτερη
+      excellent: Άριστη
+      good: Καλή
+      book: Θεωρία
+      forced: Αναγκαστική
+      inaccuracy: Ανακρίβεια
+      mistake: Λάθος
+      miss: Χαμένη
+      blunder: Σοβαρό λάθος
+    verdict:
+      brilliant: λαμπρή κίνηση
+      great: σπουδαία κίνηση
+      best: η καλύτερη κίνηση
+      excellent: άριστη κίνηση
+      good: καλή κίνηση
+      book: κίνηση της θεωρίας
+      forced: αναγκαστική κίνηση
+      inaccuracy: ανακρίβεια
+      mistake: λάθος
+      miss: χαμένη ευκαιρία
+      blunder: σοβαρό λάθος
+  review:
+    accuracy: Ακρίβεια
+    game_rating: Βαθμολογία παρτίδας
+    verdict: "%{san}: %{verdict}"
+    best_was: "Η καλύτερη ήταν %{best}"
+    progress: Ανάλυση %{done}/%{total}
+    running: Ανάλυση…
+    start: Ανάλυση παιχνιδιού
+    stopped: "Η ανάλυση σταμάτησε: δοκίμασε ξανά"
+  load:
+    title: ΦΟΡΤΩΣΗ ΠΑΡΤΙΔΑΣ
+    formats: FEN ή PGN
+    button: Φόρτωση
+    placeholder: Επικόλλησε ένα FEN ή PGN και πάτα Φόρτωση
+    not_pgn: "Μη έγκυρο PGN: %{detail}"
+    not_fen: "Μη έγκυρο FEN: %{detail}"

@@ -1,0 +1,104 @@
+account:
+  page:
+    title: Λογαριασμός
+    welcome: Συνδέσου, δημιούργησε λογαριασμό ή παίξε ως επισκέπτης
+  form:
+    sign_in: Σύνδεση
+    sign_up: Δημιουργία λογαριασμού
+    to_sign_up: Είσαι νέος; Δημιούργησε λογαριασμό
+    to_sign_in: Έχεις ήδη λογαριασμό; Σύνδεση
+    guest: Συνέχεια ως επισκέπτης
+    or: ή
+    login: Email ή όνομα χρήστη
+    username: Όνομα χρήστη
+    password: Κωδικός
+    email: Email (προαιρετικό)
+    login_placeholder: Email ή όνομα χρήστη
+    email_placeholder: you@example.com
+    username_placeholder: 3 έως 20 γράμματα, ψηφία ή _
+    password_placeholder: Τουλάχιστον 8 χαρακτήρες
+    confirm_password_placeholder: Ο κωδικός σου
+    signing_in: Σύνδεση…
+  guest:
+    title: Παίζεις ως επισκέπτης
+    about: Συνδέσου ή δημιούργησε λογαριασμό για να παίζεις online και να κρατάς βαθμολογία.
+  card:
+    delete: Διαγραφή λογαριασμού
+    sign_out: Αποσύνδεση
+    change_picture: Αλλαγή εικόνας
+    remove_picture: Αφαίρεση
+    use_as_picture: Χρήση ως εικόνα
+  close:
+    title: Να διαγραφεί ο λογαριασμός σου;
+    about: Οι φίλοι, οι συζητήσεις, οι βαθμολογίες και τα σκορ γρίφων σου διαγράφονται και δεν θα μπορείς να συνδεθείς ξανά. Οι παρτίδες σου μένουν στους αντιπάλους σου, με αφαιρεμένο όνομα.
+    confirm: Διαγραφή του λογαριασμού μου
+    cancel: Ακύρωση
+  stats:
+    title: Στατιστικά
+    puzzles: Γρίφοι
+    games_one: "%{count} παρτίδα"
+    games_other: "%{count} παρτίδες"
+    record: "%{won} νίκες · %{lost} ήττες · %{drawn} ισοπαλίες"
+    no_puzzles: Κανένας γρίφος ακόμα
+    puzzles_solved: "%{solved} από %{attempted} λυμένοι · %{share}%"
+    rush_three: 3 λεπτά
+    rush_five: 5 λεπτά
+    rush_survival: Επιβίωση
+    rush: "Ράλι: %{best}"
+    battle_rating: "Βαθμολογία μάχης %{rating}"
+    best: "Καλύτερη %{rating}"
+  devices:
+    title: Συσκευές
+    sign_out_others: Αποσύνδεση από παντού αλλού
+    this_device: Αυτή η συσκευή
+    last_used: "Τελευταία χρήση %{ago}"
+    signed_in: "Σύνδεση %{ago}"
+  history:
+    title: Ιστορικό
+    loading: Φόρτωση…
+    load_more: Περισσότερα
+    review: Ανάλυση
+    rated: Βαθμολογημένη
+    casual: Φιλική
+    not_rated: Χωρίς βαθμολογία
+    solved: Λύθηκε
+    missed: Λάθος
+    puzzle: Γρίφος
+    puzzle_rated: "Γρίφος %{rating}"
+    battle_line: "%{mine} – %{theirs} · %{kind}"
+    tabs:
+      games: Παρτίδες
+      battles: Μάχες
+      puzzles: Γρίφοι
+    empty:
+      games_title: Καμία παρτίδα ακόμα
+      games_about: Οι ολοκληρωμένες online παρτίδες σου εμφανίζονται εδώ.
+      battles_title: Καμία μάχη ακόμα
+      battles_about: Οι ολοκληρωμένες μάχες γρίφων σου εμφανίζονται εδώ.
+      puzzles_title: Κανένας γρίφος ακόμα
+      puzzles_about: Οι γρίφοι που δοκιμάζεις στην Εξάσκηση και στο Ράλι γρίφων εμφανίζονται εδώ.
+  problems:
+    signed_out: "Αποσυνδέθηκες: συνδέσου ξανά"
+    invalid_email: Αυτό δεν είναι διεύθυνση email
+    username_format: Το όνομα χρήστη έχει 3 έως 20 γράμματα, ψηφία ή κάτω παύλες
+    password_length: Ο κωδικός έχει 8 έως 128 χαρακτήρες
+    picture_too_large: Διάλεξε εικόνα κάτω από 5 MB
+    picture_unreadable: Το αρχείο δεν μπόρεσε να διαβαστεί
+    game_unreadable: Η παρτίδα δεν μπόρεσε να διαβαστεί
+    unreachable: Δεν υπάρχει σύνδεση με τον διακομιστή. Έλεγξε ότι τρέχει.
+    unexpected: Κάτι πήγε στραβά. Δοκίμασε ξανά.
+    server:
+      invalid_credentials: Λάθος email, όνομα χρήστη ή κωδικός
+      email_taken: Το email χρησιμοποιείται ήδη
+      username_taken: Το όνομα χρήστη είναι πιασμένο
+      all_guests_busy: "Όλοι οι λογαριασμοί επισκεπτών χρησιμοποιούνται: κάνε εγγραφή για να παίξεις"
+      sign_in_required: Απαιτείται σύνδεση
+      invalid_fields: Μερικά πεδία δεν είναι έγκυρα
+      invalid_request_body: Το αίτημα δεν μπόρεσε να διαβαστεί
+      route_not_found: Δεν βρέθηκε
+      guest_cannot_close: Ο λογαριασμός επισκέπτη είναι κοινός και δεν διαγράφεται
+      guest_cannot_have_avatar: Ο λογαριασμός επισκέπτη είναι κοινός και δεν έχει εικόνα
+      avatar_unreadable: Αυτό το αρχείο δεν είναι εικόνα που μπορεί να διαβάσει ο διακομιστής
+      avatar_too_large: "Η εικόνα είναι πολύ μεγάλη: διάλεξε μικρότερη"
+      avatar_not_found: Δεν υπάρχει τέτοια εικόνα
+      internal_error: Κάτι πήγε στραβά

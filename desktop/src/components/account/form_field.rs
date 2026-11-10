@@ -11,16 +11,20 @@ use gpui_kit::{
 /// A labelled text field with the server's complaint about it underneath.
 #[derive(IntoElement)]
 pub struct FormField {
-    label: &'static str,
+    label: SharedString,
     state: Entity<InputState>,
     problem: Option<String>,
     mask_toggle: bool,
 }
 
 impl FormField {
-    pub fn new(label: &'static str, state: Entity<InputState>, problem: Option<String>) -> Self {
+    pub fn new(
+        label: impl Into<SharedString>,
+        state: Entity<InputState>,
+        problem: Option<String>,
+    ) -> Self {
         Self {
-            label,
+            label: label.into(),
             state,
             problem,
             mask_toggle: false,

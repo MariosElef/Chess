@@ -14,7 +14,7 @@ use gpui_kit::{
 use super::game_controls::game_tile;
 use crate::{
     components::{
-        board::{BoardColumn, PLAYER_BAR, board_page, copy_fen},
+        board::{BoardColumn, PLAYER_BAR, board_page, copy_buttons},
         history::{MoveList, NavigationBar},
         panel::{ChoiceTile, PanelHeader, SidePanel, action_bar},
         play::{
@@ -28,6 +28,7 @@ use crate::{
         play::{LiveStatus, PlayMode},
         sound::Sound,
     },
+    i18n::tr,
     models::{
         account::ModeStats,
         board::{MoveMade, ShownPosition},
@@ -82,7 +83,7 @@ pub struct OnlineView {
     rated: bool,
     seeking: bool,
     live: Option<LiveBoard>,
-    problem: Option<String>,
+    problem: Option<LiveProblem>,
     board: Entity<BoardView>,
     _board_moves: Subscription,
     /// A key or navigation button held down.
@@ -107,6 +108,25 @@ pub struct OnlineView {
     accepting_rematch: bool,
     /// An ask was in flight as the connection dropped: the next lists say whether it was posted.
     ask_unsure: bool,
+}
+
+/// Why the last request went wrong: the server's own sentence, or something this app found.
+/// The app's own are kept as reasons and said when drawn, so they follow the language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LiveProblem {
+    Server(String),
+    NoRematch,
+    GameUnreadable,
+}
+
+impl LiveProblem {
+    fn message(&self) -> String {
+        match self {
+            Self::Server(message) => message.clone(),
+            Self::NoRematch => tr!("play.problem.no_rematch"),
+            Self::GameUnreadable => tr!("play.problem.game_unreadable"),
+        }
+    }
 }
 
 /// Where a rematch of the finished game on the board stands.
@@ -184,7 +204,7 @@ impl OnlineView {
         }
         self.chat = wanted.map(|chat_id| {
             let source = (&self.connection, self.session.clone());
-            cx.new(|cx| ChatView::new(source, (chat_id, "Chat".into()), window, cx))
+            cx.new(|cx| ChatView::new(source, (chat_id, tr!("play.panel.chat").into()), window, cx))
         });
     }
 
@@ -271,7 +291,7 @@ impl OnlineView {
                 if let Some(live) = self.live.as_mut() {
                     live.pending = None;
                 }
-                self.problem = Some(message);
+                self.problem = Some(LiveProblem::Server(message));
             }
             ServerMessage::Challenges { sent, received } => {
                 self.follow_rematch(&sent, &received, cx);
@@ -343,7 +363,7 @@ impl OnlineView {
             self.rematch = Rematch::None;
         }
         self.accepting_rematch = false;
-        self.problem = Some(message);
+        self.problem = Some(LiveProblem::Server(message));
     }
 
     /// The connection dropped: an ask may be lost, so the lists sent again say if it was posted.
@@ -356,6 +376,11 @@ impl OnlineView {
     /// Whether this app asked for the rematch of the game on the board.
     fn asked_here(&self) -> bool {
         self.asked_rematch_of.is_some() && self.asked_rematch_of.as_deref() == self.board_game()
+    }
+
+    /// Why the last request went wrong, as it reads now.
+    fn problem_text(&self) -> Option<String> {
+        self.problem.as_ref().map(LiveProblem::message)
     }
 
     /// The id of the game on the board, if any.
@@ -375,7 +400,7 @@ impl OnlineView {
             // The view outlives the wait unless the window is closing.
             let _ = view.update(cx, |view, cx| {
                 if view.board_game() == Some(game_id.as_str()) && view.rematch == Rematch::None {
-                    view.problem = Some("No rematch this time".to_owned());
+                    view.problem = Some(LiveProblem::NoRematch);
                     cx.notify();
                 }
             });
@@ -417,7 +442,7 @@ impl OnlineView {
     /// The server's latest word on a game: board, sounds and clock follow, and a premove goes.
     fn on_snapshot(&mut self, snapshot: GameSnapshot, cx: &mut Context<Self>) {
         let Some(game) = replay(&snapshot) else {
-            self.problem = Some("The game could not be read".to_owned());
+            self.problem = Some(LiveProblem::GameUnreadable);
             return;
         };
         let me = (self.session)(cx).and_then(|session| my_side(&snapshot, &session.user.id));
@@ -584,7 +609,7 @@ impl OnlineView {
         self.connection
             .read(cx)
             .is_reconnecting()
-            .then(|| "Connection lost, reconnecting…".to_owned())
+            .then(|| tr!("play.problem.reconnecting"))
     }
 
     fn resign(&mut self, cx: &mut Context<Self>) {
@@ -642,12 +667,9 @@ impl OnlineView {
         let words = match outcome_of(&live.snapshot) {
             Some(outcome) => (
                 result_title(outcome.winner(), live.me, None),
-                outcome_reason(outcome).to_owned(),
+                outcome_reason(outcome),
             ),
-            None => (
-                "Game aborted".to_owned(),
-                "called off before both sides moved".to_owned(),
-            ),
+            None => (tr!("play.title.aborted"), tr!("play.reason.aborted")),
         };
         let detail = live.me.and_then(|me| rating_line(&live.snapshot, me));
         let close = cx.entity().downgrade();
@@ -670,9 +692,13 @@ impl OnlineView {
             let _ = review.update(cx, |view, cx| view.review(cx));
         })
         .when(aborted, GameOverActions::without_review)
-        .choice(("new-game", "New game"), IconName::Plus, move |_, cx| {
-            let _ = fresh.update(cx, |view, cx| view.leave_game(cx));
-        })
+        .choice(
+            ("new-game", tr!("play.actions.new_game")),
+            IconName::Plus,
+            move |_, cx| {
+                let _ = fresh.update(cx, |view, cx| view.leave_game(cx));
+            },
+        )
         .when(live.me.is_some(), |actions| {
             actions.choice(
                 (
@@ -737,11 +763,11 @@ impl OnlineView {
         let can_rate = (self.session)(cx).is_some_and(|session| !session.user.guest);
         let view = cx.entity().downgrade();
         let (choose, start, rated, cancel) = (view.clone(), view.clone(), view.clone(), view);
-        let problem = self.problem.clone().or_else(|| {
+        let problem = self.problem_text().or_else(|| {
             self.connection
                 .read(cx)
                 .is_reconnecting()
-                .then(|| "Connecting to the server…".to_owned())
+                .then(|| tr!("play.problem.connecting"))
         });
         let setup = GameSetup::new(
             Some(self.choice),
@@ -782,7 +808,7 @@ impl OnlineView {
         };
         let clock = Some(self.choice.initial);
         let column = BoardColumn::new(self.board.clone())
-            .top(WaitingBar::new("Opponent").clock(clock))
+            .top(WaitingBar::new(tr!("play.bar.opponent")).clock(clock))
             .bottom(WaitingBar::new(me).person(face).clock(clock));
         let on_mode = self.on_mode.clone();
         let panel = PlayPanel::new(PlayMode::Online, move |mode, window, cx| {
@@ -802,9 +828,12 @@ impl OnlineView {
             .top(self.player_bar(live, bottom.opponent(), cx))
             .bottom(self.player_bar(live, bottom, cx))
             .tool(flip_button("online-flip-board", cx, OnlineView::flip))
-            .tool(copy_fen(live.history.shown()));
+            .tool(copy_buttons(live.history.shown(), live.history.game()));
         let side = SidePanel::new()
-            .header(PanelHeader::new(PLAY_PICTURE, "Play Online"))
+            .header(PanelHeader::new(
+                PLAY_PICTURE,
+                tr!("play.panel.play_online"),
+            ))
             .child(self.header(live, cx))
             .child(MoveList::new(
                 live.history.sans().to_vec(),
@@ -844,9 +873,9 @@ impl OnlineView {
         let status = result_line(snapshot, live.me).unwrap_or_else(|| {
             let mover = live.history.live().side_to_move();
             if Some(mover) == live.me {
-                "Your move".to_owned()
+                tr!("play.status.your_move")
             } else {
-                "Waiting for your opponent".to_owned()
+                tr!("play.status.waiting")
             }
         });
         let rating = live.me.and_then(|me| rating_line(snapshot, me));
@@ -862,7 +891,7 @@ impl OnlineView {
                 )
             })
             .when_some(
-                self.problem.clone().or_else(|| self.connection_line(cx)),
+                self.problem_text().or_else(|| self.connection_line(cx)),
                 |this, problem| {
                     this.child(div().text_sm().text_color(cx.theme().danger).child(problem))
                 },
@@ -874,15 +903,20 @@ impl OnlineView {
         let snapshot = &live.snapshot;
         if can_abort(snapshot) {
             return vec![
-                game_tile(("online-abort", "Abort"), false, cx, OnlineView::abort)
-                    .icon(IconName::Close),
+                game_tile(
+                    ("online-abort", tr!("play.actions.abort")),
+                    false,
+                    cx,
+                    OnlineView::abort,
+                )
+                .icon(IconName::Close),
             ];
         }
         let offer = snapshot.draw_offer.map(Side::from);
         if offer.is_some() && offer != live.me {
             return vec![
                 game_tile(
-                    ("online-accept-draw", "Accept draw"),
+                    ("online-accept-draw", tr!("play.actions.accept_draw")),
                     true,
                     cx,
                     |view, cx| {
@@ -890,23 +924,33 @@ impl OnlineView {
                     },
                 )
                 .icon(IconName::Check),
-                game_tile(("online-decline-draw", "Decline"), false, cx, |view, cx| {
-                    view.answer_draw(false, cx);
-                })
+                game_tile(
+                    ("online-decline-draw", tr!("play.actions.decline")),
+                    false,
+                    cx,
+                    |view, cx| {
+                        view.answer_draw(false, cx);
+                    },
+                )
                 .icon(IconName::Close),
             ];
         }
         vec![
             game_tile(
-                ("online-offer-draw", "Draw"),
+                ("online-offer-draw", tr!("play.actions.draw")),
                 false,
                 cx,
                 OnlineView::offer_draw,
             )
             .glyph("½")
             .disabled(offer.is_some()),
-            game_tile(("online-resign", "Resign"), false, cx, OnlineView::resign)
-                .icon(IconName::Flag),
+            game_tile(
+                ("online-resign", tr!("play.actions.resign")),
+                false,
+                cx,
+                OnlineView::resign,
+            )
+            .icon(IconName::Flag),
         ]
     }
 
@@ -999,15 +1043,15 @@ impl Render for OnlineView {
 }
 
 /// The rematch button's word, short to fit the card: Rematch, Asking…, Cancel or Accept.
-fn rematch_label(rematch: &Rematch, (asked_here, accepting): (bool, bool)) -> &'static str {
+fn rematch_label(rematch: &Rematch, (asked_here, accepting): (bool, bool)) -> String {
     match rematch {
-        Rematch::None => "Rematch",
-        Rematch::Asking => "Asking…",
+        Rematch::None => tr!("play.rematch.ask"),
+        Rematch::Asking => tr!("play.rematch.asking"),
         // Only the device that asked can cancel; another shows it waiting.
-        Rematch::Sent if !asked_here => "Asking…",
-        Rematch::Sent => "Cancel",
-        Rematch::Received(_) if accepting => "Accepting…",
-        Rematch::Received(_) => "Accept",
+        Rematch::Sent if !asked_here => tr!("play.rematch.asking"),
+        Rematch::Sent => tr!("play.rematch.cancel"),
+        Rematch::Received(_) if accepting => tr!("play.rematch.accepting"),
+        Rematch::Received(_) => tr!("play.rematch.accept"),
     }
 }
 
@@ -1323,7 +1367,7 @@ mod tests {
         json!({ "type": "rematch_refused", "game_id": game, "message": message }).to_string()
     }
 
-    fn label(view: &Entity<OnlineView>, cx: &mut VisualTestContext) -> &'static str {
+    fn label(view: &Entity<OnlineView>, cx: &mut VisualTestContext) -> String {
         view.read_with(cx, |view, _| {
             rematch_label(&view.rematch, (view.asked_here(), view.accepting_rematch))
         })
@@ -1352,12 +1396,11 @@ mod tests {
         view.update(cx, |view, cx| view.rematch_pressed(cx));
         hear(&view, cx, &rematches(&["r1"], &[]));
         hear(&view, cx, &rematches(&[], &[]));
-        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+        assert_eq!(view.read_with(cx, |view, _| view.problem_text()), None);
         cx.executor().advance_clock(REMATCH_SETTLES);
         cx.run_until_parked();
         assert_eq!(
-            view.read_with(cx, |view, _| view.problem.clone())
-                .as_deref(),
+            view.read_with(cx, |view, _| view.problem_text()).as_deref(),
             Some("No rematch this time")
         );
     }
@@ -1373,7 +1416,7 @@ mod tests {
         hear(&view, cx, &next.to_string());
         cx.executor().advance_clock(REMATCH_SETTLES);
         cx.run_until_parked();
-        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+        assert_eq!(view.read_with(cx, |view, _| view.problem_text()), None);
     }
 
     #[gpui_kit::test]
@@ -1404,14 +1447,16 @@ mod tests {
                 Rematch::Received("r1".to_owned()),
                 "still theirs to accept"
             );
-            assert_eq!(view.problem.as_deref(), Some("Bob is playing a game"));
+            assert_eq!(
+                view.problem_text().as_deref(),
+                Some("Bob is playing a game")
+            );
         });
         assert_eq!(label(&view, cx), "Accept");
         // A game that failed to start takes theirs too: the lists after say so, the reason stays.
         hear(&view, cx, &rematches(&[], &[]));
         assert_eq!(
-            view.read_with(cx, |view, _| view.problem.clone())
-                .as_deref(),
+            view.read_with(cx, |view, _| view.problem_text()).as_deref(),
             Some("Bob is playing a game")
         );
     }
@@ -1436,7 +1481,10 @@ mod tests {
         hear(&view, cx, &refused("g1", "Bob is not taking a rematch"));
         view.read_with(cx, |view, _| {
             assert_eq!(view.rematch, Rematch::None);
-            assert_eq!(view.problem.as_deref(), Some("Bob is not taking a rematch"));
+            assert_eq!(
+                view.problem_text().as_deref(),
+                Some("Bob is not taking a rematch")
+            );
         });
         // A refusal of another game's rematch changes nothing here.
         view.update(cx, |view, cx| view.rematch_pressed(cx));
@@ -1506,7 +1554,7 @@ mod tests {
         let (view, _sent, cx) = after_a_game(cx);
         hear(&view, cx, &rematches(&[], &["r1"]));
         hear(&view, cx, &refused("g1", "Bob is playing a game"));
-        assert_eq!(view.read_with(cx, |view, _| view.problem.clone()), None);
+        assert_eq!(view.read_with(cx, |view, _| view.problem_text()), None);
     }
 
     #[gpui_kit::test]

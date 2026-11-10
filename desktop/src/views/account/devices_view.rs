@@ -3,8 +3,11 @@ use gpui_kit::*;
 use crate::{
     clients::server::ServerClient,
     components::account::DevicesPanel,
-    models::{account::Device, server::ServerError},
-    services::server::error_message,
+    models::{
+        account::{AccountProblem, Device},
+        server::ServerError,
+    },
+    services::account::problem_text,
 };
 
 /// The Account page's Devices: what is signed in to the account, and signing out the rest.
@@ -15,7 +18,7 @@ pub struct DevicesView {
     devices: Vec<Device>,
     /// The others are being signed out.
     busy: bool,
-    problem: Option<String>,
+    problem: Option<AccountProblem>,
     _fetch: Option<Task<()>>,
     /// Signing out the others, on its way; signing out of this one drops it.
     _signing_out: Option<Task<()>>,
@@ -63,7 +66,7 @@ impl DevicesView {
                 self.devices = devices;
                 self.problem = None;
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(AccountProblem::Server(error)),
         }
         cx.notify();
     }
@@ -86,7 +89,7 @@ impl DevicesView {
         self.busy = false;
         match result {
             Ok(()) => self.fetch(cx),
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(AccountProblem::Server(error)),
         }
         cx.notify();
     }
@@ -97,7 +100,7 @@ impl Render for DevicesView {
         let view = cx.entity().downgrade();
         DevicesPanel::new(
             self.devices.clone(),
-            (self.busy, self.problem.clone()),
+            (self.busy, self.problem.as_ref().map(problem_text)),
             move |_, cx| {
                 // The view outlives its buttons unless the window is closing.
                 let _ = view.update(cx, |view, cx| view.sign_out_others(cx));

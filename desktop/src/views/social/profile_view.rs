@@ -8,11 +8,9 @@ use crate::{
     clients::server::ServerClient,
     components::{account::StatsPanel, panel::StartButton, social::avatar},
     enums::social::Relation,
+    i18n::tr,
     models::{account::Face, server::ServerError, social::Profile},
-    services::{
-        server::error_message,
-        social::{face_of, relation_text},
-    },
+    services::social::{face_of, problem_text, relation_text},
     views::live::SessionSource,
 };
 
@@ -91,7 +89,7 @@ impl ProfileView {
                 self.face = face_of(&profile.id, &profile.username, profile.avatar.as_deref());
                 self.profile = Some(profile);
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(problem_text(&error)),
         }
         cx.notify();
     }
@@ -127,7 +125,7 @@ impl ProfileView {
         match result {
             // Fetched again: the server says whether that made them friends or a request.
             Ok(()) => self.fetch(cx),
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(problem_text(&error)),
         }
         cx.notify();
     }
@@ -152,9 +150,9 @@ impl ProfileView {
             );
         }
         let label = if relation == Relation::RequestReceived {
-            "Accept request"
+            tr!("social.profile.accept_request")
         } else {
-            "Add friend"
+            tr!("social.actions.add_friend")
         };
         let view = cx.entity().downgrade();
         Some(
@@ -174,7 +172,7 @@ impl ProfileView {
             div()
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
-                .child(format!("Joined {}", profile.joined))
+                .child(tr!("social.profile.joined", date = profile.joined.as_str()))
         });
         let mine = self.profile.as_ref().is_some_and(|profile| profile.mine);
         h_flex()
@@ -203,7 +201,7 @@ impl ProfileView {
                             div()
                                 .text_sm()
                                 .text_color(cx.theme().success)
-                                .child("This is you"),
+                                .child(tr!("social.profile.you")),
                         )
                     }),
             )
@@ -231,7 +229,7 @@ impl Render for ProfileView {
                     div()
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child("Loading…"),
+                        .child(tr!("social.loading")),
                 )
             })
             .children(stats.map(StatsPanel::new))

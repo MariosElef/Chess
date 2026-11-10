@@ -15,12 +15,14 @@ use crate::{
         panel::{START_GREEN, StartButton},
         social::avatar,
     },
+    enums::settings::Language,
+    i18n::{self, tr},
     models::{
         chat::ChatMessage,
         play::{LiveEvent, ServerMessage},
         server::ServerError,
     },
-    services::{server::error_message, social::face_of},
+    services::social::{face_of, problem_text},
     views::live::{LiveConnection, SessionSource},
 };
 
@@ -33,6 +35,8 @@ pub struct ChatView {
     messages: Vec<ChatMessage>,
     problem: Option<String>,
     input: Entity<InputState>,
+    /// The language the field's placeholder was written in.
+    placeholder_in: Language,
     _input_events: Subscription,
     _live: Subscription,
     /// On screen: what arrives is read. Off it, as while another page shows, it stays unread.
@@ -52,7 +56,8 @@ impl ChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Write a message"));
+        let input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(tr!("chat.write_placeholder")));
         let _input_events = cx.subscribe_in(&input, window, send_on_enter);
         let _live = cx.subscribe(connection, |view, _, event: &LiveEvent, cx| {
             if let LiveEvent::Message(message) = event
@@ -69,6 +74,7 @@ impl ChatView {
             messages: Vec::new(),
             problem: None,
             input,
+            placeholder_in: i18n::current(),
             _input_events,
             _live,
             reading: true,
@@ -144,7 +150,7 @@ impl ChatView {
                         view.loaded = true;
                         view.scroll.scroll_to_bottom();
                     }
-                    Err(error) => view.problem = Some(error_message(&error)),
+                    Err(error) => view.problem = Some(problem_text(&error)),
                 }
                 if view.reading {
                     view.mark_read(cx);
@@ -207,7 +213,7 @@ impl ChatView {
                 self.problem = None;
                 self.add(message);
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(problem_text(&error)),
         }
         cx.notify();
     }
@@ -253,7 +259,28 @@ impl ChatView {
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(cx.theme().muted_foreground)
             .child(Icon::from(IconName::Mail).size_4())
-            .child(self.title.clone())
+            .child(self.shown_title())
+    }
+
+    /// The chat's name; a game's chat, kept without one, is named in the language shown.
+    fn shown_title(&self) -> SharedString {
+        if self.title.is_empty() {
+            SharedString::from(tr!("chat.game_title"))
+        } else {
+            self.title.clone()
+        }
+    }
+
+    /// The field asks in the language now shown, once that changes.
+    fn write_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let language = i18n::current();
+        if self.placeholder_in == language {
+            return;
+        }
+        self.placeholder_in = language;
+        self.input.update(cx, |input, cx| {
+            input.set_placeholder(tr!("chat.write_placeholder"), window, cx);
+        });
     }
 
     /// The messages, newest at the bottom, or a word that there are none yet.
@@ -279,7 +306,7 @@ impl ChatView {
                     .justify_center()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child("No messages yet")
+                    .child(tr!("chat.no_messages"))
             })
             .child(v_flex().flex_col_reverse().gap_1p5().children(bubbles))
     }
@@ -293,7 +320,7 @@ impl ChatView {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(div().flex_1().child(Input::new(&self.input)))
             .child(
-                StartButton::new("send-message", "Send", move |window, cx| {
+                StartButton::new("send-message", tr!("chat.send"), move |window, cx| {
                     // The chat outlives its button unless its page is gone.
                     let _ = view.update(cx, |view, cx| view.send(window, cx));
                 })
@@ -303,7 +330,8 @@ impl ChatView {
 }
 
 impl Render for ChatView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.write_placeholder(window, cx);
         v_flex()
             .size_full()
             .gap_2()

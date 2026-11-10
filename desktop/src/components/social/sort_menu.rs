@@ -52,7 +52,7 @@ impl RenderOnce for SortMenu {
                     .into_iter()
                     .map(|sort| {
                         let (on_sort, menu) = (Rc::clone(&on_sort), menu.clone());
-                        Button::new(SharedString::from(sort.label()))
+                        Button::new(SharedString::from(sort.key()))
                             .ghost()
                             .small()
                             .w_full()

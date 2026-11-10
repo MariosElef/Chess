@@ -1,4 +1,5 @@
 //! What the analysis engine is doing, and what a game review calls each move.
+use crate::i18n::tr;
 
 /// What the engine is doing, as the panel's header says it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,36 +50,36 @@ impl MoveClass {
         Self::Blunder,
     ];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Brilliant => "Brilliant",
-            Self::Great => "Great",
-            Self::Best => "Best",
-            Self::Excellent => "Excellent",
-            Self::Good => "Good",
-            Self::Book => "Book",
-            Self::Forced => "Forced",
-            Self::Inaccuracy => "Inaccuracy",
-            Self::Mistake => "Mistake",
-            Self::Miss => "Miss",
-            Self::Blunder => "Blunder",
+            Self::Brilliant => tr!("analysis.class.label.brilliant"),
+            Self::Great => tr!("analysis.class.label.great"),
+            Self::Best => tr!("analysis.class.label.best"),
+            Self::Excellent => tr!("analysis.class.label.excellent"),
+            Self::Good => tr!("analysis.class.label.good"),
+            Self::Book => tr!("analysis.class.label.book"),
+            Self::Forced => tr!("analysis.class.label.forced"),
+            Self::Inaccuracy => tr!("analysis.class.label.inaccuracy"),
+            Self::Mistake => tr!("analysis.class.label.mistake"),
+            Self::Miss => tr!("analysis.class.label.miss"),
+            Self::Blunder => tr!("analysis.class.label.blunder"),
         }
     }
 
     /// What the move is, after "Nf3 is": "a blunder", "the best move", "brilliant".
-    pub fn verdict(self) -> &'static str {
+    pub fn verdict(self) -> String {
         match self {
-            Self::Brilliant => "brilliant",
-            Self::Great => "a great move",
-            Self::Best => "the best move",
-            Self::Excellent => "excellent",
-            Self::Good => "good",
-            Self::Book => "a book move",
-            Self::Forced => "forced",
-            Self::Inaccuracy => "an inaccuracy",
-            Self::Mistake => "a mistake",
-            Self::Miss => "a miss",
-            Self::Blunder => "a blunder",
+            Self::Brilliant => tr!("analysis.class.verdict.brilliant"),
+            Self::Great => tr!("analysis.class.verdict.great"),
+            Self::Best => tr!("analysis.class.verdict.best"),
+            Self::Excellent => tr!("analysis.class.verdict.excellent"),
+            Self::Good => tr!("analysis.class.verdict.good"),
+            Self::Book => tr!("analysis.class.verdict.book"),
+            Self::Forced => tr!("analysis.class.verdict.forced"),
+            Self::Inaccuracy => tr!("analysis.class.verdict.inaccuracy"),
+            Self::Mistake => tr!("analysis.class.verdict.mistake"),
+            Self::Miss => tr!("analysis.class.verdict.miss"),
+            Self::Blunder => tr!("analysis.class.verdict.blunder"),
         }
     }
 

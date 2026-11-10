@@ -1,0 +1,113 @@
+play:
+  mode:
+    online: Online
+    bots: Bots
+    local: Τοπικά
+  colour:
+    white: Λευκά
+    random: Τυχαία
+    black: Μαύρα
+  side:
+    white: Λευκά
+    black: Μαύρα
+  speed:
+    bullet: Bullet
+    blitz: Blitz
+    rapid: Rapid
+    classical: Κλασικό
+  time:
+    minutes: "%{minutes} λεπτά"
+    no_clock: Χωρίς ρολόι
+  setup:
+    strength: "Δύναμη ~%{rating}"
+    play_as: Παίξε με
+    guest_cannot_rate: Κάνε λογαριασμό για βαθμολογημένες παρτίδες
+    start: Έναρξη παρτίδας
+    looking: Ψάχνουμε αντίπαλο…
+    cancel: Ακύρωση
+  bar:
+    you: Εσύ
+    opponent: Αντίπαλος
+  bot:
+    custom: Προσαρμοσμένο
+  panel:
+    play: Παιχνίδι
+    play_bots: Παιχνίδι με bots
+    play_online: Παιχνίδι online
+    chat: Συνομιλία
+  actions:
+    game_review: Ανάλυση παιχνιδιού
+    new_game: Νέα παρτίδα
+    new_bot: Νέο bot
+    draw: Ισοπαλία
+    resign: Παραίτηση
+    abort: Ακύρωση
+    accept_draw: Αποδοχή ισοπαλίας
+    decline: Απόρριψη
+  rematch:
+    ask: Ρεβάνς
+    asking: Αίτημα…
+    cancel: Ακύρωση
+    accepting: Αποδοχή…
+    accept: Αποδοχή
+  problem:
+    stockfish_missing: "Δεν βρέθηκε το Stockfish: εγκατάστησέ το (brew install stockfish)"
+    stockfish_failed: Το Stockfish δεν ξεκίνησε
+    bot_engine_stopped: Η μηχανή του bot σταμάτησε
+    no_rematch: Αυτή τη φορά δεν έγινε ρεβάνς
+    game_unreadable: Η παρτίδα δεν μπόρεσε να διαβαστεί
+    reconnecting: Χάθηκε η σύνδεση, επανασύνδεση…
+    connecting: Σύνδεση με τον διακομιστή…
+  status:
+    your_move: Η σειρά σου
+    waiting: Περιμένουμε τον αντίπαλο
+    to_move: "Παίζουν τα %{side}"
+    to_move_check: "Παίζουν τα %{side} — σαχ!"
+    with_offer: "%{status} · %{offer}"
+    offers_draw: "Τα %{side} προτείνουν ισοπαλία"
+    checkmate: "Ματ — κερδίζουν τα %{winner}"
+    resigned: "Τα %{loser} παραιτήθηκαν — κερδίζουν τα %{winner}"
+    out_of_time: "Τα %{loser} έμειναν από χρόνο — κερδίζουν τα %{winner}"
+    stalemate: Πατ
+    draw_agreed: Ισοπαλία με συμφωνία
+    draw_insufficient_material: Ισοπαλία λόγω ανεπαρκούς υλικού
+    draw_repetition: Ισοπαλία λόγω τριπλής επανάληψης
+    draw_fifty_moves: Ισοπαλία λόγω του κανόνα των πενήντα κινήσεων
+  title:
+    draw: Ισοπαλία
+    side_won: "Κέρδισαν τα %{side}"
+    you_won: Κέρδισες!
+    you_beat: "Νίκη απέναντι σε %{name}!"
+    you_lost: Έχασες
+    bot_won: "Νίκη για %{name}"
+    aborted: Η παρτίδα ακυρώθηκε
+  reason:
+    by: "%{reason}"
+    aborted: ακυρώθηκε πριν παίξουν και οι δύο
+  ending:
+    checkmate: με ματ
+    resignation: με παραίτηση
+    timeout: λόγω χρόνου
+    stalemate: με πατ
+    draw_agreement: με συμφωνία
+    insufficient_material: λόγω ανεπαρκούς υλικού
+    repetition: λόγω τριπλής επανάληψης
+    fifty_move: λόγω του κανόνα των πενήντα κινήσεων
+  result:
+    draw_by: "Ισοπαλία %{reason}"
+    you_won_by: "Κέρδισες %{reason}"
+    you_lost_by: "Έχασες %{reason}"
+    side_won_by: "Κέρδισαν τα %{side} %{reason}"
+    rating: "Βαθμολογία %{rating} (%{change})"
+  history:
+    won: Νίκη
+    lost: Ήττα
+    drawn: Ισοπαλία
+    line: "%{control} · %{kind} · %{moves}"
+    rated: Βαθμολογημένη
+    casual: Φιλική
+    moves_one: "%{count} κίνηση"
+    moves_other: "%{count} κινήσεις"
+  challenge:
+    rated: "%{control} · βαθμολογημένη"
+    casual: "%{control} · φιλική"

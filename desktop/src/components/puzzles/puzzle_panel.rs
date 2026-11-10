@@ -8,11 +8,14 @@ use gpui_kit::{
     *,
 };
 
-use crate::components::{
-    panel::{PanelTitle, StartButton},
-    play::format_clock,
-    puzzles::status_card,
-    shell::PUZZLES_PICTURE,
+use crate::{
+    components::{
+        panel::{PanelTitle, StartButton},
+        play::format_clock,
+        puzzles::status_card,
+        shell::PUZZLES_PICTURE,
+    },
+    i18n::tr,
 };
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -106,17 +109,19 @@ impl RenderOnce for PuzzlePanel {
         let theme = cx.theme();
         let (on_next, on_back) = (self.on_next, self.on_back);
         let next_label = if self.loading {
-            "Finding a puzzle…"
+            tr!("puzzles.practice.finding")
         } else {
-            "Next puzzle"
+            tr!("puzzles.practice.next")
         };
         v_flex()
             .size_full()
             .gap_3()
             .child(
-                PanelTitle::new(PUZZLES_PICTURE, "Puzzles").on_back(move |window, cx| {
-                    on_back(window, cx);
-                }),
+                PanelTitle::new(PUZZLES_PICTURE, tr!("puzzles.title")).on_back(
+                    move |window, cx| {
+                        on_back(window, cx);
+                    },
+                ),
             )
             .child(status_card(&self.status, self.status_good, self.side, cx))
             .when_some(self.player_rating, |this, rating| {
@@ -127,7 +132,7 @@ impl RenderOnce for PuzzlePanel {
                                 .text_xs()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme.muted_foreground)
-                                .child("YOUR RATING"),
+                                .child(tr!("puzzles.practice.your_rating")),
                         )
                         .child(
                             div()
@@ -177,7 +182,7 @@ impl RenderOnce for PuzzlePanel {
                 div()
                     .text_xs()
                     .text_color(theme.muted_foreground)
-                    .child("Puzzles from lichess.org, free for everyone (CC0)"),
+                    .child(tr!("puzzles.practice.source")),
             )
     }
 }

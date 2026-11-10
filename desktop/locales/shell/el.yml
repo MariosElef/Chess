@@ -1,0 +1,24 @@
+shell:
+  pages:
+    play: Παιχνίδι
+    puzzles: Γρίφοι
+    analyze: Ανάλυση
+    social: Κοινότητα
+    messages: Μηνύματα
+    leaderboard: Κατάταξη
+    settings: Ρυθμίσεις
+    account: Λογαριασμός
+    friends: Φίλοι
+  account_menu:
+    create_account: Δημιουργία λογαριασμού
+    sign_in: Σύνδεση
+    sign_out: Αποσύνδεση
+    guest: Παίζεις ως επισκέπτης
+  invite:
+    challenges_you: "Πρόκληση από %{name}"
+    invites_battle: "Πρόσκληση σε Μάχη γρίφων από %{name}"
+    rated: Βαθμολογούμενη
+    casual: Φιλική
+  rematch:
+    wants_rematch: "Ρεβάνς από %{name}"
+    terms: "%{terms} · αλλαγή χρωμάτων"

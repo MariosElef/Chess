@@ -1,0 +1,38 @@
+settings:
+  title: Ρυθμίσεις
+  language:
+    title: Γλώσσα
+    about: Η γλώσσα κάθε οθόνης και μηνύματος της εφαρμογής.
+  appearance:
+    title: Εμφάνιση
+    about: Ακολούθησε το σύστημα ή κράτα την εφαρμογή φωτεινή ή σκοτεινή.
+    system: Σύστημα
+    light: Φωτεινή
+    dark: Σκοτεινή
+  board:
+    title: Σκακιέρα
+    about: Κάθε σκακιέρα της εφαρμογής, στο παιχνίδι, στους γρίφους και στην ανάλυση.
+    theme: Θέμα
+    pieces: Κομμάτια
+    themes:
+      slate: Σχιστόλιθος
+      brown: Καφέ
+      blue: Μπλε
+      green: Πράσινο
+    sets:
+      classic: Κλασικά
+      modern: Μοντέρνα
+      staunty: Staunty
+      california: California
+  sounds:
+    title: Ήχοι
+    about: Κάθε κίνηση, αιχμαλώτιση, σαχ και προειδοποίηση του ρολογιού. Διάλεξε ένα σετ για να τα ακούσεις όλα.
+    sets:
+      standard: Στάνταρ
+      lisp: Lisp
+  stockfish:
+    about: Λιγότερα νήματα και όριο βάθους κρατούν τον υπολογιστή ήσυχο· περισσότερα ψάχνουν βαθύτερα.
+    threads: Νήματα
+    memory: Μνήμη (MB)
+    depth: Βάθος αναζήτησης
+    infinite: Άπειρο

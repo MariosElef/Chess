@@ -17,11 +17,12 @@ use crate::{
         puzzles::{PlayerHeader, PuzzlePanel, RangePicker, SessionResults},
     },
     enums::puzzles::{PracticeKind, PuzzleState, PuzzleVerdict},
+    i18n::tr,
     models::{
-        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, PuzzleRating, RatingRange},
+        puzzles::{AttemptReport, Puzzle, PuzzleOutcome, PuzzleProblem, PuzzleRating, RatingRange},
         server::ServerError,
     },
-    services::{puzzles::rating_with_change, server::error_message},
+    services::puzzles::{problem_text, rating_with_change},
     views::{
         live::{SessionSource, my_face},
         ticker::start_ticker,
@@ -44,7 +45,7 @@ pub struct PracticeView {
     /// The difficulty slider, shared with the menu.
     slider: Entity<SliderState>,
     loading: bool,
-    problem: Option<String>,
+    problem: Option<PuzzleProblem>,
     /// The rating after the last rated attempt, with its change.
     player_rating: Option<PuzzleRating>,
     /// This puzzle's first try has been sent.
@@ -135,8 +136,8 @@ impl PracticeView {
     }
 
     #[cfg(test)]
-    pub fn problem(&self) -> Option<&str> {
-        self.problem.as_deref()
+    pub fn problem(&self) -> Option<&PuzzleProblem> {
+        self.problem.as_ref()
     }
 
     #[cfg(test)]
@@ -161,7 +162,7 @@ impl PracticeView {
     /// Waits for the puzzle asked for; asking while signed out shows why nothing came.
     fn fetch(
         &mut self,
-        request: Result<impl Future<Output = Result<Puzzle, ServerError>> + 'static, &'static str>,
+        request: Result<impl Future<Output = Result<Puzzle, ServerError>> + 'static, PuzzleProblem>,
         cx: &mut Context<Self>,
     ) {
         match request {
@@ -173,7 +174,7 @@ impl PracticeView {
                     let _ = view.update(cx, |view, cx| view.loaded(result, cx));
                 }));
             }
-            Err(reason) => self.problem = Some(reason.to_owned()),
+            Err(reason) => self.problem = Some(reason),
         }
         cx.notify();
     }
@@ -186,7 +187,7 @@ impl PracticeView {
                 self.solver.update(cx, |solver, cx| solver.load(puzzle, cx));
                 self._ticker = Some(start_ticker(TICK, cx, PracticeView::tick));
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(PuzzleProblem::Server(error)),
         }
         cx.notify();
     }
@@ -288,7 +289,7 @@ impl PracticeView {
         let solver = self.solver.read(cx);
         let status = match solver.status() {
             Some(status) => status,
-            None if self.loading => ("Finding a puzzle…".to_owned(), false),
+            None if self.loading => (tr!("puzzles.practice.finding"), false),
             None => (String::new(), false),
         };
         let run = solver.run();
@@ -304,7 +305,7 @@ impl PracticeView {
                     .unwrap_or_default(),
             )
             .elapsed(elapsed)
-            .problem(self.problem.clone())
+            .problem(self.problem.as_ref().map(problem_text))
             // Rated, the rating shows large over the session instead.
             .player_rating(
                 self.player_rating
@@ -372,8 +373,11 @@ mod tests {
         enums::{
             analysis::MoveClass,
             puzzles::{PracticeKind, PuzzleState},
+            settings::Language,
         },
+        i18n::set_current,
         models::puzzles::RatingRange,
+        services::puzzles::problem_text,
         testing::{ANSWER_WAIT, click, drag, play_and_wait, puzzle_server, wait_until},
     };
 
@@ -560,7 +564,11 @@ mod tests {
     #[gpui_kit::test]
     fn signed_out_there_is_no_puzzle_to_fetch(cx: &mut TestAppContext) {
         let (view, cx) = opened(cx, None);
-        let problem = view.update(cx, |view, _| view.problem().map(str::to_owned));
+        let problem = view.update(cx, |view, _| view.problem().map(problem_text));
         assert_eq!(problem.as_deref(), Some("Sign in to solve puzzles."));
+        set_current(Language::Greek);
+        let greek = view.update(cx, |view, _| view.problem().map(problem_text));
+        set_current(Language::English);
+        assert_eq!(greek.as_deref(), Some("Συνδέσου για να λύσεις γρίφους."));
     }
 }

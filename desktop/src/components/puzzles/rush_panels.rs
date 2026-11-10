@@ -11,6 +11,7 @@ use super::status_card::status_card;
 use crate::{
     components::panel::{StartButton, StatCard},
     enums::puzzles::RushKind,
+    i18n::tr,
     models::puzzles::RushRecord,
     services::puzzles::STRIKES,
 };
@@ -66,7 +67,7 @@ impl RenderOnce for RushScore {
             .child(h_flex().gap_3().child(StatCard::new(
                 (IconName::Timer, theme.green),
                 time,
-                "Time left",
+                tr!("puzzles.rush.time_left"),
             )))
             .child(
                 h_flex()
@@ -79,7 +80,7 @@ impl RenderOnce for RushScore {
                         Button::new("rush-retry")
                             .outline()
                             .w_full()
-                            .label("Try again")
+                            .label(tr!("puzzles.rush.try_again"))
                             .on_click(move |_, window, cx| on_retry(window, cx)),
                     )
             })
@@ -117,7 +118,10 @@ impl RenderOnce for RushResult {
         let on_again = self.on_again;
         panel()
             .items_center()
-            .child(muted(&format!("{} rush over", self.kind.label()), cx))
+            .child(muted(
+                &tr!("puzzles.rush.over", kind = self.kind.label()),
+                cx,
+            ))
             .child(
                 div()
                     .text_size(px(48.))
@@ -126,9 +130,9 @@ impl RenderOnce for RushResult {
             )
             .when_some(self.record, |this, record| {
                 let line = if record.new_best {
-                    "New best!".to_owned()
+                    tr!("puzzles.rush.new_best")
                 } else {
-                    format!("Best {}", record.best)
+                    tr!("puzzles.rush.best", score = record.best)
                 };
                 this.child(
                     div()
@@ -140,7 +144,7 @@ impl RenderOnce for RushResult {
             .child(div().h_4())
             .child(StartButton::new(
                 "rush-again",
-                "Play again",
+                tr!("puzzles.rush.play_again"),
                 move |window, cx| {
                     on_again(window, cx);
                 },

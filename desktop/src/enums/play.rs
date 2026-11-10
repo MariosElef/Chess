@@ -2,6 +2,8 @@
 use chess_domain::Side;
 use serde::Deserialize;
 
+use crate::i18n::tr;
+
 /// A side, as it travels the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -54,16 +56,16 @@ pub enum GameResult {
 
 impl GameResult {
     /// The words after "by": `checkmate`, `agreement`, `the fifty-move rule`…
-    pub fn by(self) -> &'static str {
+    pub fn by(self) -> String {
         match self {
-            Self::Checkmate => "checkmate",
-            Self::Resignation => "resignation",
-            Self::Timeout => "time",
-            Self::Stalemate => "stalemate",
-            Self::DrawAgreement => "agreement",
-            Self::InsufficientMaterial => "insufficient material",
-            Self::Repetition => "threefold repetition",
-            Self::FiftyMove => "the fifty-move rule",
+            Self::Checkmate => tr!("play.ending.checkmate"),
+            Self::Resignation => tr!("play.ending.resignation"),
+            Self::Timeout => tr!("play.ending.timeout"),
+            Self::Stalemate => tr!("play.ending.stalemate"),
+            Self::DrawAgreement => tr!("play.ending.draw_agreement"),
+            Self::InsufficientMaterial => tr!("play.ending.insufficient_material"),
+            Self::Repetition => tr!("play.ending.repetition"),
+            Self::FiftyMove => tr!("play.ending.fifty_move"),
         }
     }
 }
@@ -81,7 +83,16 @@ impl PlayMode {
     /// In the order the tabs show them, the first being where Play opens.
     pub const ALL: [Self; 3] = [Self::Online, Self::Bots, Self::Local];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
+        match self {
+            Self::Local => tr!("play.mode.local"),
+            Self::Online => tr!("play.mode.online"),
+            Self::Bots => tr!("play.mode.bots"),
+        }
+    }
+
+    /// A name that never changes with the language, for element ids.
+    pub fn id(self) -> &'static str {
         match self {
             Self::Local => "Local",
             Self::Online => "Online",
@@ -102,11 +113,39 @@ pub enum ColourChoice {
 impl ColourChoice {
     pub const ALL: [Self; 3] = [Self::White, Self::Random, Self::Black];
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
+        match self {
+            Self::White => tr!("play.colour.white"),
+            Self::Random => tr!("play.colour.random"),
+            Self::Black => tr!("play.colour.black"),
+        }
+    }
+
+    /// A name that never changes with the language, for element ids.
+    pub fn id(self) -> &'static str {
         match self {
             Self::White => "White",
             Self::Random => "Random",
             Self::Black => "Black",
+        }
+    }
+}
+
+/// Why a game against a bot could not start or went on: kept as a reason and said when drawn,
+/// so it follows a change of language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BotProblem {
+    StockfishMissing,
+    StockfishFailed,
+    EngineStopped,
+}
+
+impl BotProblem {
+    pub fn message(self) -> String {
+        match self {
+            Self::StockfishMissing => tr!("play.problem.stockfish_missing"),
+            Self::StockfishFailed => tr!("play.problem.stockfish_failed"),
+            Self::EngineStopped => tr!("play.problem.bot_engine_stopped"),
         }
     }
 }

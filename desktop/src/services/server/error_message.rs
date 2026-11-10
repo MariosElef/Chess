@@ -1,14 +1,11 @@
-use crate::models::server::ServerError;
-
-const UNREACHABLE: &str = "Can't reach the server. Check that it is running.";
-const UNEXPECTED: &str = "Something went wrong. Try again.";
+use crate::{i18n::tr, models::server::ServerError};
 
 /// The sentence a person reads for a failed request: the server's own words, or what went wrong.
 pub fn error_message(error: &ServerError) -> String {
     match error {
         ServerError::Refused(problem) => problem.message().to_owned(),
-        ServerError::Unreachable => UNREACHABLE.to_owned(),
-        ServerError::Unexpected(_) => UNEXPECTED.to_owned(),
+        ServerError::Unreachable => tr!("common.errors.unreachable"),
+        ServerError::Unexpected(_) => tr!("common.errors.unexpected"),
     }
 }
 

@@ -1,11 +1,14 @@
-use crate::models::puzzles::{PuzzleRating, PuzzleSummary};
+use crate::{
+    i18n::tr,
+    models::puzzles::{PuzzleRating, PuzzleSummary},
+};
 
 /// The menu's line about the puzzle rating: the rating, none yet, or that a guest keeps none.
 pub fn rating_line(summary: &PuzzleSummary) -> String {
     match (summary.guest, summary.rating) {
-        (true, _) => "Playing as a guest: sign up to keep a rating and best scores.".to_owned(),
-        (false, Some(rating)) => format!("Puzzle rating {}", rating_text(rating)),
-        (false, None) => "No puzzle rating yet: solve a Practice puzzle to get one.".to_owned(),
+        (true, _) => tr!("puzzles.rating.guest"),
+        (false, Some(rating)) => tr!("puzzles.rating.line", rating = rating_text(rating)),
+        (false, None) => tr!("puzzles.rating.none"),
     }
 }
 

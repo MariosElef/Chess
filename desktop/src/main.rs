@@ -5,6 +5,7 @@ mod assets;
 mod clients;
 mod components;
 mod enums;
+mod i18n;
 mod models;
 mod services;
 #[cfg(test)]
@@ -12,6 +13,9 @@ mod testing;
 mod views;
 
 use gpui_kit::*;
+
+// Every word the app shows, in English and Greek; English stands in for what Greek lacks.
+rust_i18n::i18n!("locales", fallback = "en");
 
 use crate::{
     assets::AppAssets,

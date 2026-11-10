@@ -1,0 +1,72 @@
+puzzles:
+  title: Puzzles
+  to_move: "%{side} to move"
+  sign_in_first: Sign in to solve puzzles.
+  difficulty: Difficulty
+  menu:
+    solve: Solve Puzzles
+    custom: Custom Practice
+  practice:
+    finding: Finding a puzzle…
+    next: Next puzzle
+    your_rating: YOUR RATING
+    source: Puzzles from lichess.org, free for everyone (CC0)
+  status:
+    solved: Solved!
+    solved_after_one: Solved, after 1 wrong try
+    solved_after_other: Solved, after %{count} wrong tries
+    correct: Correct!
+    wrong: Not the move. Try again.
+    keep_going: "Correct. Keep going: %{side} to move."
+    find_best: Find the best move for %{side}.
+  rating:
+    guest: "Playing as a guest: sign up to keep a rating and best scores."
+    line: Puzzle rating %{rating}
+    none: "No puzzle rating yet: solve a Practice puzzle to get one."
+  rush:
+    title: Puzzle Rush
+    kind:
+      three_minutes: 3 minutes
+      five_minutes: 5 minutes
+      survival: Survival
+    short:
+      three_minutes: 3 min
+      five_minutes: 5 min
+      survival: Survival
+    time_left: Time left
+    try_again: Try again
+    over: "%{kind} rush over"
+    new_best: New best!
+    best: Best %{score}
+    play_again: Play again
+    best_today: Best today
+    top_score: Top score
+    play: Play
+    next: Next puzzle…
+  battle:
+    title: Puzzle Battle
+    rated_tag: RATED
+    casual_tag: CASUAL
+    you: You
+    opponent: Opponent
+    resign: Resign
+    won: You won!
+    lost: You lost
+    drawn: A draw
+    rating_change: Battle rating %{change}
+    play_again: Play again
+    back: Back to Puzzle Battle
+    waiting_for: Waiting for %{friend}…
+    looking: Looking for an opponent…
+    play: Play
+    wins_this_month: Wins this month
+    rating: Rating
+    sign_up_rated: Sign up to play rated battles
+    vs_random: vs Random
+    friends_online: Friends online · %{count}
+    none_online: None of your friends is online right now.
+    cancel: Cancel
+    invites_rated: "%{name} invites you · rated"
+    invites_casual: "%{name} invites you · casual"
+    accept: Accept
+    decline: Decline

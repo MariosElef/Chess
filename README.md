@@ -34,8 +34,14 @@ right-click it and choose Open the first time; on Windows, choose More info → 
 - **Account**: your rating in every mode, each with its graph, your history of games (to look at
   again or review), battles and puzzles, your profile picture, the devices signed in, and
   account deletion.
-- **Settings**: light or dark, four board themes, four piece sets (Classic, Modern, Staunty and
-  California), two sound sets (Standard and Lisp), and how hard Stockfish works.
+- **Settings**: English or Greek (every screen, message and bot switches live), light or dark,
+  four board themes, four piece sets (Classic, Modern, Staunty and California), two sound sets
+  (Standard and Lisp), and how hard Stockfish works.
+
+The app's words live in `desktop/locales/<area>/en.yml` and `el.yml`, one folder per part of the app;
+a test fails if the two languages ever disagree on a key. The bots' lines are written separately per
+language in `desktop/src/services/play/bot_characters/`, in each character's own voice (in Cypriot
+Greek when the app is in Greek).
 
 ## Screenshots
 
@@ -73,7 +79,7 @@ else on the `PATH`.
 | app | `CHESS_SERVER_URL` | `http://127.0.0.1:8080` |
 | app | `STOCKFISH_PATH` | Homebrew's, then the `PATH` |
 
-The app keeps its own settings (appearance, board, Stockfish, the signed-in session) in
+The app keeps its own settings (language, appearance, board, Stockfish, the signed-in session) in
 `~/Library/Application Support/Chess/`.
 
 ## Hosting and installers
@@ -193,9 +199,10 @@ low. Bot games are unrated; a bot takes no draw offers, and only Andreas makes t
 Each named bot has a character of its own: it talks in a bubble at the top of the game's panel,
 reacting to captures, checks and now and then a quiet move, and some act on the game too.
 Vasilis is bored and thinks only of food: he moves almost at once and shrugs off what happens
-on the board. Danis is angry from his first words and resigns on his turn once his engine sees
-him two pawns down or being mated. Stefanos is a metalhead who screams at nearly every capture
-and check, and talks about goth girls in between. Andreas gambles on everything and checks his
+on the board. Danis is furious from his first words, swears in every line, curses the player
+and their mother, and resigns on his turn once his engine sees him two pawns down or being
+mated. Stefanos is a metalhead who screams at nearly every capture and check, and talks about
+goth girls in between. Andreas gambles on everything and checks his
 kouponoui between moves; once a pawn down he now and then offers a deal, a draw you can accept
 or decline. Sporos, the strongest, is sure nobody likes him and that he gave up his happiness
 for games, and sighs about it while he beats you.
@@ -212,16 +219,26 @@ While it runs, the board plays through the game with each move's slide and sound
 ready, it goes back to the start. Each move's icon shows beside it and on the board, where the
 move's squares take its colour; for any move but the best, a green arrow and "Best was …" show
 what the engine preferred. The panel gives each side's accuracy, counts of each kind of move,
-and a game rating: the rating that accuracy is typical of (an estimate, given to the nearest
-fifty, with at least five moves of a side's own).
+and a game rating: the rating a side played like in that game.
+
+Accuracy is Lichess's, computed exactly as Lichess does (each move's accuracy from the winning
+chances it kept, then the mean of a volatility-weighted mean and a harmonic mean, so one blunder
+counts for what it cost); it gives the same numbers Lichess shows for its own games. The game
+rating is measured, not guessed: every move is sorted by what it gave away, how the mover stood
+and the phase of the game, the estimate is the rating under which those moves were most likely,
+and the bias a game's length brings is taken off. It was fitted to 683,632 sides of analysed
+rated Lichess games and checked on 169,888 more: typically within 450 of the player's real
+(Lichess) rating, to the nearest fifty, for games of ten moves or more. One game says only so
+much, so it swings from game to game.
 
 A move is graded by the expected points it loses against the engine's best move: Excellent up
 to 0.02, Good to 0.05, Inaccuracy to 0.10, Mistake to 0.20, Blunder beyond (chess.com's
 published bands). Brilliant is a sound piece sacrifice from a position that was not already
 won; Great is the only good move; Miss lets the opponent's error go; Book follows the opening
 table in `desktop/assets/review/openings.txt`; Forced is the only legal move. Chess.com's own
-evaluation curve and accuracy formula are not published, so this uses Lichess's: the numbers
-will be close to theirs, not equal.
+evaluation curve, accuracy formula and game rating are not published, so this uses Lichess's
+curve and accuracy and its own measured game rating: the numbers will be close to theirs, not
+equal.
 
 ## The board
 

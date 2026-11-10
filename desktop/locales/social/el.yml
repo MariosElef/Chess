@@ -1,0 +1,98 @@
+social:
+  page_title: Φίλοι
+  loading: Φόρτωση…
+  search_placeholder: Αναζήτηση με όνομα ή όνομα χρήστη
+  tiles:
+    find: Βρες φίλους
+    requests: Αιτήματα φιλίας
+  friends:
+    title: Φίλοι
+    empty_title: Δεν έχεις φίλους ακόμα
+    empty_about: Ψάξε παίκτες με το όνομά τους παραπάνω και πρόσθεσέ τους ως φίλους.
+  sort:
+    recently_online: Πιο πρόσφατα online
+    username: Όνομα χρήστη
+  requests:
+    title: Αιτήματα φιλίας
+    empty_title: Κανένα αίτημα
+    empty_about: Τα αιτήματα που στέλνεις και λαμβάνεις εμφανίζονται εδώ.
+    received: Ληφθέντα
+    sent: Απεσταλμένα
+    blocked: Αποκλεισμένοι
+  search:
+    title: Παίκτες
+    empty_title: Δεν βρέθηκε κανείς
+    empty_about: Κανένας παίκτης δεν έχει τέτοιο όνομα.
+  detail:
+    wants_friend: Θέλει να γίνετε φίλοι
+    request_sent: Το αίτημα στάλθηκε
+    friends: Φίλοι
+    blocked: Αποκλεισμένος
+  actions:
+    accept: Αποδοχή
+    decline: Απόρριψη
+    cancel: Ακύρωση
+    cancel_request: Ακύρωση αιτήματος
+    add_friend: Προσθήκη φίλου
+    block: Αποκλεισμός
+    unblock: Άρση αποκλεισμού
+    challenge: Πρόκληση
+    message: Μήνυμα
+    remove_friend: Αφαίρεση φίλου
+    view_profile: Δες το προφίλ
+  challenge:
+    heading: Προκλήσεις
+    title: "Πρόκληση: %{name}"
+    from_them: Σε προκαλεί · %{terms}
+    waiting: Αναμονή για απάντηση · %{terms}
+    offline: "Εκτός σύνδεσης: μπορείς να προκαλέσεις έναν φίλο όταν είναι online"
+    pick: Διάλεξε ρυθμό παιχνιδιού
+    guest_note: Οι επισκέπτες παίζουν χωρίς βαθμολογία
+    send: Αποστολή πρόκλησης
+  last_online:
+    online: Online τώρα
+    never: Δεν έχει συνδεθεί ακόμα
+    just_now: Ήταν online πριν από λίγο
+    minutes_one: Ήταν online πριν από %{count} λεπτό
+    minutes_other: Ήταν online πριν από %{count} λεπτά
+    hours_one: Ήταν online πριν από %{count} ώρα
+    hours_other: Ήταν online πριν από %{count} ώρες
+    days_one: Ήταν online πριν από %{count} ημέρα
+    days_other: Ήταν online πριν από %{count} ημέρες
+    months_one: Ήταν online πριν από %{count} μήνα
+    months_other: Ήταν online πριν από %{count} μήνες
+    years_one: Ήταν online πριν από %{count} χρόνο
+    years_other: Ήταν online πριν από %{count} χρόνια
+  profile:
+    joined: Εγγραφή %{date}
+    you: Αυτός είσαι εσύ
+    accept_request: Αποδοχή αιτήματος
+  leaderboard:
+    page_title: Κατάταξη
+    friends_title: Κατάταξη φίλων
+    no_ratings: Καμία βαθμολογία ακόμα
+    your_place: Η θέση σου
+    empty_title: Κανείς ακόμα εδώ
+    empty_about: Οι παίκτες εμφανίζονται μόλις έχουν βαθμολογημένο αποτέλεσμα σε αυτόν τον πίνακα.
+    load_more: Φόρτωση περισσότερων
+    boards:
+      bullet: Bullet
+      blitz: Blitz
+      rapid: Rapid
+      classical: Κλασικό
+      puzzles: Γρίφοι
+      puzzle_battle: Μάχη γρίφων
+      average: Μέσος όρος
+    played:
+      games_one: "%{count} παρτίδα"
+      games_other: "%{count} παρτίδες"
+      puzzles_one: "%{count} γρίφος"
+      puzzles_other: "%{count} γρίφοι"
+      battles_one: "%{count} μάχη"
+      battles_other: "%{count} μάχες"
+      results_one: "%{count} βαθμολογημένο αποτέλεσμα"
+      results_other: "%{count} βαθμολογημένα αποτελέσματα"
+  errors:
+    user_not_found: Δεν υπάρχει τέτοιος παίκτης
+    no_friend_request: Δεν υπάρχει αίτημα φιλίας από αυτόν τον παίκτη
+    cannot_befriend_yourself: Δεν μπορείς να προσθέσεις τον εαυτό σου

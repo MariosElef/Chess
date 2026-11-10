@@ -11,6 +11,7 @@ use gpui_kit::{
 use crate::{
     components::{panel::StartButton, shell::Toast},
     enums::sound::Sound,
+    i18n::tr,
     models::play::{Challenge, ClientMessage, LiveEvent, ServerMessage},
     services::{
         play::{COUNTDOWN_TICK, Countdown, challenge_terms},
@@ -236,10 +237,10 @@ impl Render for RematchToast {
         let dismissed = cx.entity().downgrade();
         let toast = Toast::new(
             "rematch-toast",
-            format!("{} wants a rematch", from.username),
+            tr!("shell.rematch.wants_rematch", name = from.username),
         )
         .person(face_of(&from.id, &from.username, from.avatar.as_deref()))
-        .description(format!("{terms} · colours swapped"))
+        .description(tr!("shell.rematch.terms", terms = terms))
         .problem(offer.problem.clone())
         .time_left(Some(left))
         .on_dismiss(move |_, cx| {
@@ -251,7 +252,7 @@ impl Render for RematchToast {
         }
         toast
             .action(
-                StartButton::new("rematch-accept", "Accept", {
+                StartButton::new("rematch-accept", tr!("common.accept"), {
                     let toast = cx.entity().downgrade();
                     move |_, cx| {
                         // The toast outlives its buttons unless the window is closing.
@@ -264,7 +265,7 @@ impl Render for RematchToast {
                 Button::new("rematch-decline")
                     .ghost()
                     .small()
-                    .label("Decline")
+                    .label(tr!("common.decline"))
                     .on_click(cx.listener(|toast, _, _, cx| toast.answer(false, cx))),
             )
             .into_any_element()

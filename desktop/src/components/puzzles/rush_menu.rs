@@ -12,6 +12,7 @@ use crate::{
         play::BULLET_PICTURE,
     },
     enums::puzzles::RushKind,
+    i18n::tr,
     models::puzzles::BestRush,
     services::puzzles::score_text,
 };
@@ -71,9 +72,11 @@ impl RenderOnce for RushMenu {
             .size_full()
             .gap_3()
             .child(
-                PanelTitle::new(RUSH_PICTURE, "Puzzle Rush").on_back(move |window, cx| {
-                    on_back(window, cx);
-                }),
+                PanelTitle::new(RUSH_PICTURE, tr!("puzzles.rush.title")).on_back(
+                    move |window, cx| {
+                        on_back(window, cx);
+                    },
+                ),
             )
             .child(
                 h_flex()
@@ -81,29 +84,33 @@ impl RenderOnce for RushMenu {
                     .child(StatCard::new(
                         (IconName::Calendar, theme.green),
                         score_text(best_of(self.today, self.picked)),
-                        "Best today",
+                        tr!("puzzles.rush.best_today"),
                     ))
                     .child(StatCard::new(
                         (IconName::Trophy, theme.blue),
                         score_text(best_of(self.best, self.picked)),
-                        "Top score",
+                        tr!("puzzles.rush.top_score"),
                     )),
             )
             .child(div().h_2())
             .children(tiles)
             .child(div().flex_1())
-            .child(StartButton::new("rush-play", "Play", move |window, cx| {
-                on_play(window, cx);
-            }))
+            .child(StartButton::new(
+                "rush-play",
+                tr!("puzzles.rush.play"),
+                move |window, cx| {
+                    on_play(window, cx);
+                },
+            ))
     }
 }
 
 /// The kind's name on its tile, as chess.com writes it.
-fn short_name(kind: RushKind) -> &'static str {
+fn short_name(kind: RushKind) -> String {
     match kind {
-        RushKind::ThreeMinutes => "3 min",
-        RushKind::FiveMinutes => "5 min",
-        RushKind::Survival => "Survival",
+        RushKind::ThreeMinutes => tr!("puzzles.rush.short.three_minutes"),
+        RushKind::FiveMinutes => tr!("puzzles.rush.short.five_minutes"),
+        RushKind::Survival => tr!("puzzles.rush.short.survival"),
     }
 }
 

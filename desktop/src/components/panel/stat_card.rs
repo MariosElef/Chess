@@ -4,26 +4,28 @@ use gpui_kit::{
     *,
 };
 
+use crate::i18n::uppercase;
+
 /// A number worth showing off: an icon and the value large, its name small and in capitals under.
 #[derive(IntoElement)]
 pub struct StatCard {
     icon: IconName,
     colour: Hsla,
     value: SharedString,
-    caption: &'static str,
+    caption: SharedString,
 }
 
 impl StatCard {
     pub fn new(
         (icon, colour): (IconName, Hsla),
         value: impl Into<SharedString>,
-        caption: &'static str,
+        caption: impl Into<SharedString>,
     ) -> Self {
         Self {
             icon,
             colour,
             value: value.into(),
-            caption,
+            caption: caption.into(),
         }
     }
 }
@@ -54,7 +56,7 @@ impl RenderOnce for StatCard {
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
                     .text_color(theme.muted_foreground)
-                    .child(self.caption.to_uppercase()),
+                    .child(uppercase(&self.caption)),
             )
     }
 }

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{components::panel::fill_scroll, enums::analysis::MoveClass};
+use crate::{components::panel::fill_scroll, enums::analysis::MoveClass, i18n::tr};
 
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex, v_flex},
@@ -132,7 +132,7 @@ fn empty_text(cx: &App) -> Div {
     div()
         .py_2()
         .text_color(cx.theme().muted_foreground)
-        .child("No moves yet")
+        .child(tr!("history.moves.empty"))
 }
 
 /// A move number with White's move and Black's reply, each with its index into the move list.

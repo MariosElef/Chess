@@ -1,5 +1,7 @@
 //! The Settings page's own pictures: the sections' and the appearance choices'.
 
+/// The Language section's globe.
+pub const LANGUAGE_PICTURE: &str = "settings/language.svg";
 /// The Appearance section's palette.
 pub const APPEARANCE_PICTURE: &str = "settings/appearance.svg";
 /// The Board section's knight: the staunty set's white one, one of the board's own pieces.
@@ -14,7 +16,11 @@ pub const LIGHT_PICTURE: &str = "settings/light.svg";
 pub const DARK_PICTURE: &str = "settings/dark.svg";
 
 /// Each picture of the page's own: its asset path and its bytes.
-const PICTURES: [(&str, &[u8]); 6] = [
+const PICTURES: [(&str, &[u8]); 7] = [
+    (
+        LANGUAGE_PICTURE,
+        include_bytes!("../../../assets/settings/language.svg"),
+    ),
     (
         APPEARANCE_PICTURE,
         include_bytes!("../../../assets/settings/appearance.svg"),

@@ -4,6 +4,7 @@ use std::time::Duration;
 use super::strikes::STRIKES;
 use crate::{
     enums::puzzles::{BattleResult, BattleStatus},
+    i18n::tr,
     models::puzzles::BattleSnapshot,
 };
 
@@ -21,18 +22,23 @@ pub fn battle_left(battle: &BattleSnapshot, since: Duration) -> Duration {
     }
 }
 
-/// The battle's result as its panel says it: "You won!", "You lost" or "A draw".
-pub fn result_words(result: BattleResult) -> &'static str {
+/// The battle's result as its panel says it: tr!("puzzles.battle.won"), tr!("puzzles.battle.lost") or tr!("puzzles.battle.drawn").
+pub fn result_words(result: BattleResult) -> String {
     match result {
-        BattleResult::Won => "You won!",
-        BattleResult::Lost => "You lost",
-        BattleResult::Drawn => "A draw",
+        BattleResult::Won => tr!("puzzles.battle.won"),
+        BattleResult::Lost => tr!("puzzles.battle.lost"),
+        BattleResult::Drawn => tr!("puzzles.battle.drawn"),
     }
 }
 
 /// `Battle rating +12`, after a rated battle.
 pub fn rating_change_text(change: Option<i32>) -> Option<String> {
-    change.map(|change| format!("Battle rating {change:+}"))
+    change.map(|change| {
+        tr!(
+            "puzzles.battle.rating_change",
+            change = format!("{change:+}")
+        )
+    })
 }
 
 #[cfg(test)]

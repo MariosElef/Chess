@@ -16,6 +16,7 @@ use gpui_kit::{
 use crate::{
     components::{panel::PanelHeader, shell::MESSAGES_PICTURE, social::avatar},
     enums::chat::GroupChange,
+    i18n::tr,
     models::{
         chat::Conversation,
         social::{Friend, UserRef},
@@ -149,9 +150,9 @@ impl GroupForm {
         let (id, name) = (member.id.as_str(), member.username.as_str());
         let muted = cx.theme().muted_foreground;
         let tag = if self.group.owner_id.as_deref() == Some(id) {
-            Some("Owner")
+            Some(tr!("chat.group.owner"))
         } else if id == self.me {
-            Some("You")
+            Some(tr!("chat.group.you"))
         } else {
             None
         };
@@ -166,7 +167,7 @@ impl GroupForm {
                     Button::new(SharedString::from(format!("group-remove-{id}")))
                         .ghost()
                         .small()
-                        .label("Remove")
+                        .label(tr!("chat.group.remove"))
                         .disabled(self.sending)
                         .on_click(cx.listener(move |form, _, window, cx| {
                             form.change(GroupChange::Remove(to_remove.clone()), window, cx);
@@ -184,7 +185,7 @@ impl GroupForm {
                 .outline()
                 .small()
                 .icon(IconName::UserPlus)
-                .label("Add")
+                .label(tr!("chat.group.add"))
                 .disabled(self.sending)
                 .on_click(cx.listener(move |form, _, window, cx| {
                     form.change(GroupChange::Add(id.clone()), window, cx);
@@ -201,7 +202,7 @@ impl GroupForm {
             .child(
                 Button::new("group-rename")
                     .primary()
-                    .label("Save")
+                    .label(tr!("chat.group.save"))
                     .disabled(new_name.is_none() || self.sending)
                     .on_click(cx.listener(move |form, _, window, cx| {
                         if let Some(name) = form.new_name(cx) {
@@ -248,7 +249,7 @@ impl Render for GroupForm {
                         .gap_4()
                         .px_5()
                         .py_4()
-                        .child(section("You are no longer in this group.".to_owned()))
+                        .child(section(tr!("chat.group.gone")))
                         .child(close_button()),
                 );
         }
@@ -264,7 +265,7 @@ impl Render for GroupForm {
             .child(
                 v_flex()
                     .gap_1()
-                    .child(section(format!("Members ({})", members.len())))
+                    .child(section(tr!("chat.group.members", count = members.len())))
                     .child(
                         div()
                             .id("group-members")
@@ -277,7 +278,7 @@ impl Render for GroupForm {
                 this.child(
                     v_flex()
                         .gap_1()
-                        .child(section("Add friends".to_owned()))
+                        .child(section(tr!("chat.group.add_friends")))
                         .child(
                             div()
                                 .id("group-addable")
@@ -294,7 +295,7 @@ impl Render for GroupForm {
                         Button::new("leave-group")
                             .danger()
                             .large()
-                            .label("Leave group")
+                            .label(tr!("chat.group.leave"))
                             .disabled(self.sending)
                             .on_click(cx.listener(|form, _, window, cx| {
                                 form.change(GroupChange::Leave, window, cx);
@@ -314,7 +315,7 @@ fn close_button() -> Button {
         .ghost()
         .large()
         .w_full()
-        .label("Close")
+        .label(tr!("chat.group.close"))
         .on_click(|_, window, cx| window.close_dialog(cx))
 }
 

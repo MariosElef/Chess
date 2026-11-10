@@ -8,6 +8,7 @@ use gpui_kit::{
 
 use crate::{
     components::social::{ChallengePicker, avatar},
+    i18n::tr,
     models::social::Friend,
     services::social::face_of,
 };
@@ -89,7 +90,7 @@ impl ChallengeForm {
                 div()
                     .text_lg()
                     .font_weight(FontWeight::BOLD)
-                    .child(format!("Challenge {}", self.friend.username)),
+                    .child(tr!("social.challenge.title", name = self.friend.username)),
             )
     }
 }

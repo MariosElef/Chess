@@ -4,16 +4,13 @@ use chess_domain::{
 };
 
 use super::{
-    accuracy::{move_accuracy, side_accuracy},
+    accuracy::game_accuracy,
     classify::{MoveFacts, classify},
-    game_rating::{FEWEST_MOVES, estimated_rating},
+    game_rating::{FEWEST_PLIES, estimated_rating, move_kinds},
     opening_book::{is_book, warm_up},
     sacrifice::is_sacrifice,
 };
-use crate::{
-    enums::analysis::MoveClass,
-    models::analysis::{EngineLine, GameReview, MoveReview, PositionEval},
-};
+use crate::models::analysis::{EngineLine, GameReview, MoveReview, PositionEval};
 
 /// Moves after this many are never Book, whatever the table says.
 const BOOK_PLIES: usize = 20;
@@ -138,22 +135,13 @@ fn review(game: &Game, evals: &[&PositionEval]) -> GameReview {
             mover,
             class,
             best: best_line.first,
-            accuracy: accuracy_of(class, &facts),
         });
         facts_so_far.push(facts);
     }
-    let accuracy = [Side::White, Side::Black].map(|side| {
-        let of_side: Vec<f64> = moves
-            .iter()
-            .filter(|reviewed| reviewed.mover == side)
-            .map(|reviewed| reviewed.accuracy)
-            .collect();
-        side_accuracy(&of_side)
-    });
-    let ratings = [0, 1].map(|index| {
-        let side = [Side::White, Side::Black][index];
-        (own_moves(&moves, side) >= FEWEST_MOVES).then(|| estimated_rating(accuracy[index]))
-    });
+    let analysed = analysed_values(game, evals);
+    let first_mover = game.positions()[0].side_to_move();
+    let accuracy = game_accuracy(&analysed, first_mover).map(|accuracy| accuracy.unwrap_or(100.0));
+    let ratings = game_ratings(&analysed, first_mover);
     let shares = evals
         .iter()
         .map(|eval| eval.lines[0].eval.white_share())
@@ -164,16 +152,6 @@ fn review(game: &Game, evals: &[&PositionEval]) -> GameReview {
         ratings,
         shares,
     }
-}
-
-/// The moves `side` chose for itself: not Book, which follows theory, and not Forced.
-fn own_moves(moves: &[MoveReview], side: Side) -> usize {
-    moves
-        .iter()
-        .filter(|reviewed| {
-            reviewed.mover == side && !matches!(reviewed.class, MoveClass::Book | MoveClass::Forced)
-        })
-        .count()
 }
 
 /// The expected points of the engine's `line` at a position, for `side`.
@@ -187,20 +165,30 @@ fn nearly_best(facts: &MoveFacts) -> bool {
     facts.loss() <= NEARLY_BEST
 }
 
-/// Book and forced moves cost nothing; any other keeps what its points lost allow.
-fn accuracy_of(class: MoveClass, facts: &MoveFacts) -> f64 {
-    match class {
-        MoveClass::Book | MoveClass::Forced => 100.0,
-        MoveClass::Brilliant
-        | MoveClass::Great
-        | MoveClass::Best
-        | MoveClass::Excellent
-        | MoveClass::Good
-        | MoveClass::Inaccuracy
-        | MoveClass::Mistake
-        | MoveClass::Miss
-        | MoveClass::Blunder => move_accuracy(facts.loss()),
-    }
+/// The best line's value at every position Lichess would have analysed, as both the accuracy
+/// and the game rating were measured on Lichess: it leaves the mated position out, so the mating
+/// move, whose result needs no engine, counts for nothing either way.
+fn analysed_values(game: &Game, evals: &[&PositionEval]) -> Vec<Eval> {
+    let ends_in_mate = matches!(
+        game.positions().last().map(Position::status),
+        Some(GameStatus::Checkmate { .. })
+    );
+    let analysed = if ends_in_mate {
+        &evals[..evals.len() - 1]
+    } else {
+        evals
+    };
+    analysed.iter().map(|eval| eval.lines[0].eval).collect()
+}
+
+/// The rating each side played like, once the game is long enough to say, and the side moved.
+fn game_ratings(analysed: &[Eval], first_mover: Side) -> [Option<u32>; 2] {
+    let plies = analysed.len().saturating_sub(1);
+    let kinds = move_kinds(analysed, first_mover);
+    kinds.map(|made| {
+        (plies >= FEWEST_PLIES && made.iter().any(|count| *count > 0))
+            .then(|| estimated_rating(&made, plies))
+    })
 }
 
 #[cfg(test)]

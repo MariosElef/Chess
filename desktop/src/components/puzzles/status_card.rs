@@ -5,7 +5,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::services::board::side_name;
+use crate::{i18n::tr, services::board::side_name};
 
 /// How it is going, on a white card: a square of the colour to move, then the status.
 pub fn status_card(status: &str, good: bool, side: Option<Side>, cx: &App) -> Div {
@@ -41,6 +41,6 @@ pub fn status_card(status: &str, good: bool, side: Option<Side>, cx: &App) -> Di
         })
         .child(div().flex_1().child(status.to_owned()))
         .when_some(side.filter(|_| status.is_empty()), |this, side| {
-            this.child(format!("{} to move", side_name(side)))
+            this.child(tr!("puzzles.to_move", side = side_name(side)))
         })
 }

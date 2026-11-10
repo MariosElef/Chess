@@ -1,6 +1,7 @@
 use super::puzzle_run::PuzzleRun;
 use crate::{
     enums::puzzles::{PuzzleState, PuzzleVerdict},
+    i18n::tr,
     services::board::side_name,
 };
 
@@ -8,30 +9,26 @@ use crate::{
 pub fn status_line(run: &PuzzleRun, last: Option<PuzzleVerdict>) -> (String, bool) {
     let solver = side_name(run.solver());
     match (run.state(), last) {
-        (PuzzleState::Solved, _) if run.mistakes() == 0 => ("Solved!".to_owned(), true),
-        (PuzzleState::Solved, _) => (
-            format!(
-                "Solved, after {} wrong {}",
-                run.mistakes(),
-                tries(run.mistakes())
-            ),
-            true,
-        ),
-        (PuzzleState::Answering, _) => ("Correct!".to_owned(), true),
-        (PuzzleState::Solving, Some(PuzzleVerdict::Wrong)) => {
-            ("Not the move. Try again.".to_owned(), false)
-        }
+        (PuzzleState::Solved, _) if run.mistakes() == 0 => (tr!("puzzles.status.solved"), true),
+        (PuzzleState::Solved, _) => (solved_after(run.mistakes()), true),
+        (PuzzleState::Answering, _) => (tr!("puzzles.status.correct"), true),
+        (PuzzleState::Solving, Some(PuzzleVerdict::Wrong)) => (tr!("puzzles.status.wrong"), false),
         (PuzzleState::Solving, Some(PuzzleVerdict::Correct)) => {
-            (format!("Correct. Keep going: {solver} to move."), true)
+            (tr!("puzzles.status.keep_going", side = solver), true)
         }
         (PuzzleState::Solving, Some(PuzzleVerdict::Solved) | None) => {
-            (format!("Find the best move for {solver}."), false)
+            (tr!("puzzles.status.find_best", side = solver), false)
         }
     }
 }
 
-fn tries(count: u32) -> &'static str {
-    if count == 1 { "try" } else { "tries" }
+/// "Solved, after 1 wrong try", or "after 2 wrong tries".
+fn solved_after(mistakes: u32) -> String {
+    if mistakes == 1 {
+        tr!("puzzles.status.solved_after_one")
+    } else {
+        tr!("puzzles.status.solved_after_other", count = mistakes)
+    }
 }
 
 #[cfg(test)]

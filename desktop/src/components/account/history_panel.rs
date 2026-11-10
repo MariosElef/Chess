@@ -22,6 +22,7 @@ use crate::{
         social::EmptyState,
     },
     enums::{account::HistoryTab, play::PlayerResult},
+    i18n::tr,
     models::{
         play::PlayedGame,
         puzzles::{PlayedAttempt, PlayedBattle},
@@ -93,7 +94,7 @@ impl RenderOnce for HistoryPanel {
                             .pb_2()
                             .text_lg()
                             .font_weight(FontWeight::BOLD)
-                            .child("History"),
+                            .child(tr!("account.history.title")),
                     )
                     .children(tabs),
             )
@@ -115,7 +116,13 @@ impl RenderOnce for HistoryPanel {
                     })
                     .when(empty, |this| this.child(empty_state(self.tab)))
                     .when(first_load, |this| {
-                        this.child(div().p_3().text_sm().text_color(muted).child("Loading…"))
+                        this.child(
+                            div()
+                                .p_3()
+                                .text_sm()
+                                .text_color(muted)
+                                .child(tr!("account.history.loading")),
+                        )
                     })
                     .children(self.rows)
                     .when(self.more, |this| {
@@ -123,7 +130,7 @@ impl RenderOnce for HistoryPanel {
                             Button::new("history-more")
                                 .ghost()
                                 .w_full()
-                                .label("Load more")
+                                .label(tr!("account.history.load_more"))
                                 .loading(self.loading)
                                 .on_click(move |_, window, cx| on_more(window, cx)),
                         )
@@ -136,7 +143,7 @@ impl RenderOnce for HistoryPanel {
 fn tab_title(tab: HistoryTab, (chosen, on_tab): (bool, OnTab), cx: &App) -> Stateful<Div> {
     let theme = cx.theme();
     let (bright, muted) = (theme.foreground, theme.muted_foreground);
-    let id = format!("history-tab-{}", tab.label().to_lowercase());
+    let id = format!("history-tab-{}", tab.id());
     let selector = id.clone();
     div()
         .id(SharedString::from(id))
@@ -160,18 +167,18 @@ fn empty_state(tab: HistoryTab) -> EmptyState {
     match tab {
         HistoryTab::Games => EmptyState::new(
             IconName::ChessKnight,
-            "No games yet",
-            "Your finished online games show up here.",
+            tr!("account.history.empty.games_title"),
+            tr!("account.history.empty.games_about"),
         ),
         HistoryTab::Battles => EmptyState::new(
             IconName::Swords,
-            "No battles yet",
-            "Your finished Puzzle Battles show up here.",
+            tr!("account.history.empty.battles_title"),
+            tr!("account.history.empty.battles_about"),
         ),
         HistoryTab::Puzzles => EmptyState::new(
             IconName::Puzzle,
-            "No puzzles yet",
-            "Puzzles you try in Practice and Puzzle Rush show up here.",
+            tr!("account.history.empty.puzzles_title"),
+            tr!("account.history.empty.puzzles_about"),
         ),
     }
 }
@@ -179,7 +186,11 @@ fn empty_state(tab: HistoryTab) -> EmptyState {
 /// A battle: the opponent, the score with yours first, the result, the rating change and when.
 pub fn battle_row(battle: &PlayedBattle, cx: &App) -> Div {
     let muted = cx.theme().muted_foreground;
-    let kind = if battle.rated { "Rated" } else { "Casual" };
+    let kind = if battle.rated {
+        tr!("account.history.rated")
+    } else {
+        tr!("account.history.casual")
+    };
     row_frame(cx)
         .child(picture_slot(Some(BATTLE_PICTURE)))
         .child(
@@ -191,9 +202,11 @@ pub fn battle_row(battle: &PlayedBattle, cx: &App) -> Div {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(battle.opponent.clone()),
                 )
-                .child(div().text_xs().text_color(muted).child(format!(
-                    "{} – {} · {kind}",
-                    battle.my_score, battle.their_score
+                .child(div().text_xs().text_color(muted).child(tr!(
+                    "account.history.battle_line",
+                    mine = battle.my_score,
+                    theirs = battle.their_score,
+                    kind = kind
                 ))),
         )
         .child(result_chip(battle.result, cx))
@@ -204,15 +217,20 @@ pub fn battle_row(battle: &PlayedBattle, cx: &App) -> Div {
 /// A puzzle attempt: solved or missed, its rating, how long it took, the change and when.
 pub fn attempt_row(attempt: &PlayedAttempt, cx: &App) -> Div {
     let muted = cx.theme().muted_foreground;
-    let (word, colour): (&str, Hsla) = if attempt.solved {
-        ("Solved", rgb(START_GREEN).into())
+    let (word, colour): (String, Hsla) = if attempt.solved {
+        (tr!("account.history.solved"), rgb(START_GREEN).into())
     } else {
-        ("Missed", rgb(FALL).into())
+        (tr!("account.history.missed"), rgb(FALL).into())
     };
-    let rating = attempt
-        .puzzle_rating
-        .map_or_else(|| "Puzzle".to_owned(), |rating| format!("Puzzle {rating}"));
-    let kind = if attempt.rated { "Rated" } else { "Not rated" };
+    let rating = attempt.puzzle_rating.map_or_else(
+        || tr!("account.history.puzzle"),
+        |rating| tr!("account.history.puzzle_rated", rating = rating),
+    );
+    let kind = if attempt.rated {
+        tr!("account.history.rated")
+    } else {
+        tr!("account.history.not_rated")
+    };
     let took = format_clock(Duration::from_millis(attempt.duration_ms.into()));
     row_frame(cx)
         .child(picture_slot(Some(PUZZLES_PICTURE)))
@@ -311,7 +329,7 @@ pub fn game_row(game: &PlayedGame, on_open: OnOpen, cx: &App) -> Stateful<Div> {
                 .ghost()
                 .small()
                 .child(img(REVIEW_PICTURE).size_4())
-                .label("Review")
+                .label(tr!("account.history.review"))
                 .on_click(move |_, window, cx| {
                     cx.stop_propagation();
                     review(review_id.clone(), true, window, cx);

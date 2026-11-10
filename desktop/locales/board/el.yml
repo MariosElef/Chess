@@ -1,0 +1,8 @@
+board:
+  copy: Αντιγραφή
+  copy_fen: Αντιγραφή FEN
+  copy_pgn: Αντιγραφή PGN
+  flip_board: Αναστροφή σκακιέρας
+  side:
+    white: Λευκά
+    black: Μαύρα

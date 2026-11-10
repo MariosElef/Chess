@@ -11,9 +11,12 @@ use gpui_kit::{
     *,
 };
 
-use crate::components::{
-    analysis::REVIEW_PICTURE,
-    panel::{ChoiceTile, StartButton, action_bar},
+use crate::{
+    components::{
+        analysis::REVIEW_PICTURE,
+        panel::{ChoiceTile, StartButton, action_bar},
+    },
+    i18n::tr,
 };
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -93,7 +96,7 @@ impl RenderOnce for GameOverActions {
                 this.child(
                     StartButton::new(
                         format!("{prefix}game-review"),
-                        "Game Review",
+                        tr!("play.actions.game_review"),
                         move |window, cx| {
                             on_review(window, cx);
                         },

@@ -18,8 +18,8 @@ use crate::{
         server::{ServerClient, server_url},
         settings::{
             SessionTokenFile, load_appearance, load_board_theme, load_engine_settings,
-            load_piece_set, load_sound_set, save_appearance, save_board_theme,
-            save_engine_settings, save_piece_set, save_sound_set,
+            load_language, load_piece_set, load_sound_set, save_appearance, save_board_theme,
+            save_engine_settings, save_language, save_piece_set, save_sound_set,
         },
     },
     components::{
@@ -30,9 +30,10 @@ use crate::{
     enums::{
         play::LiveStatus,
         puzzles::BattleStatus,
-        settings::{Appearance, SoundSet},
+        settings::{Appearance, Language, SoundSet},
         shell::Page,
     },
+    i18n::{self, tr},
     models::{
         account::AccountChanged,
         engine::EngineSettings,
@@ -104,6 +105,7 @@ pub struct AppShell {
     _puzzle_changes: Subscription,
     /// The last battle that opened Puzzles: each one opens it once, when it begins.
     last_battle: Option<String>,
+    language: Language,
     appearance: Appearance,
     /// The board theme and pieces every board draws with; also kept as a global for them.
     board_style: BoardStyle,
@@ -118,12 +120,14 @@ pub struct AppShell {
 impl AppShell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let setup = ShellSetup::from_system();
+        i18n::set_current(load_language().unwrap_or_default());
         // Players' pictures come from the same server as everything else.
         load_pictures_from(setup.client.clone());
         Self::with(setup, window, cx)
     }
 
     pub fn with(setup: ShellSetup, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let language = i18n::current();
         let appearance = load_appearance().unwrap_or_default();
         apply_appearance(appearance, window, cx);
         let _appearance_changes = cx.observe_window_appearance(window, |shell, window, cx| {
@@ -168,6 +172,7 @@ impl AppShell {
             _social_changes: pages.social_changes,
             _puzzle_changes: pages.puzzle_changes,
             last_battle: None,
+            language,
             appearance,
             board_style,
             sound_set,
@@ -279,6 +284,16 @@ impl AppShell {
         self._social_changes = pages.social_changes;
         self._puzzle_changes = pages.puzzle_changes;
         self._play_events = pages.play_events;
+    }
+
+    /// Every page draws again in `language`, and the next launch starts in it.
+    fn set_language(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
+        self.language = language;
+        i18n::set_current(language);
+        // A failed save only means the next launch starts in English again.
+        let _ = save_language(language);
+        window.refresh();
+        cx.notify();
     }
 
     fn set_appearance(
@@ -408,12 +423,14 @@ impl AppShell {
             Page::Account => self.account.clone().into_any_element(),
             Page::Settings => SettingsPage::new(
                 SettingsChoices {
+                    language: self.language,
                     appearance: self.appearance,
                     board_style: self.board_style,
                     sound_set: self.sound_set,
                     engine: self.engine_settings,
                     cores: device_cores(),
                 },
+                change_language(shell.clone()),
                 change_appearance(shell.clone()),
                 change_board_style(shell.clone()),
                 change_sound_set(shell.clone()),
@@ -453,6 +470,14 @@ fn change_board_style(
 ) -> impl Fn(BoardStyle, &mut Window, &mut App) + 'static {
     move |style, _, cx| {
         let _ = shell.update(cx, |shell, cx| shell.set_board_style(style, cx));
+    }
+}
+
+fn change_language(
+    shell: WeakEntity<AppShell>,
+) -> impl Fn(Language, &mut Window, &mut App) + 'static {
+    move |language, window, cx| {
+        let _ = shell.update(cx, |shell, cx| shell.set_language(language, window, cx));
     }
 }
 
@@ -628,7 +653,7 @@ fn messages_page(chats: Entity<ChatsView>) -> Div {
                     div()
                         .text_3xl()
                         .font_weight(FontWeight::BOLD)
-                        .child("Messages"),
+                        .child(tr!("shell.pages.messages")),
                 ),
         )
         .child(div().flex_1().min_h_0().child(chats))

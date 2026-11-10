@@ -1,6 +1,8 @@
 use chess_domain::Category;
 use gpui_kit::{component::h_flex, prelude::FluentBuilder as _, *};
 
+use crate::services::play::category_name;
+
 /// Bullet's lightning: also Puzzle Rush's picture.
 pub const BULLET_PICTURE: &str = "speed/bullet.png";
 
@@ -36,7 +38,7 @@ pub fn speed_label(category: Category) -> Div {
         .when_some(speed_picture(category), |this, path| {
             this.child(img(path).size_4().flex_shrink_0())
         })
-        .child(category.name())
+        .child(category_name(category))
 }
 
 /// A speed's picture, by asset path, where it has one.

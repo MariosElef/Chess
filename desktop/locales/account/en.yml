@@ -1,0 +1,104 @@
+account:
+  page:
+    title: Account
+    welcome: Sign in, create an account, or play as a guest
+  form:
+    sign_in: Sign in
+    sign_up: Create account
+    to_sign_up: New here? Create an account
+    to_sign_in: Already have an account? Sign in
+    guest: Continue as guest
+    or: or
+    login: Email or username
+    username: Username
+    password: Password
+    email: Email (optional)
+    login_placeholder: Email or username
+    email_placeholder: you@example.com
+    username_placeholder: 3 to 20 letters, digits or _
+    password_placeholder: At least 8 characters
+    confirm_password_placeholder: Your password
+    signing_in: Signing you in…
+  guest:
+    title: Playing as a guest
+    about: Sign in or create an account to play online and keep a rating.
+  card:
+    delete: Delete account
+    sign_out: Sign out
+    change_picture: Change picture
+    remove_picture: Remove
+    use_as_picture: Use as picture
+  close:
+    title: Delete your account?
+    about: Your friends, chats, ratings and puzzle scores are deleted, and you cannot sign in again. Your games stay for your opponents, under a removed name.
+    confirm: Delete my account
+    cancel: Cancel
+  stats:
+    title: Stats
+    puzzles: Puzzles
+    games_one: "%{count} game"
+    games_other: "%{count} games"
+    record: "%{won} won · %{lost} lost · %{drawn} drawn"
+    no_puzzles: No puzzles yet
+    puzzles_solved: "%{solved} of %{attempted} solved · %{share}%"
+    rush_three: 3 min
+    rush_five: 5 min
+    rush_survival: Survival
+    rush: "Rush: %{best}"
+    battle_rating: "Battle rating %{rating}"
+    best: "Best %{rating}"
+  devices:
+    title: Devices
+    sign_out_others: Sign out everywhere else
+    this_device: This device
+    last_used: "Last used %{ago}"
+    signed_in: "Signed in %{ago}"
+  history:
+    title: History
+    loading: Loading…
+    load_more: Load more
+    review: Review
+    rated: Rated
+    casual: Casual
+    not_rated: Not rated
+    solved: Solved
+    missed: Missed
+    puzzle: Puzzle
+    puzzle_rated: "Puzzle %{rating}"
+    battle_line: "%{mine} – %{theirs} · %{kind}"
+    tabs:
+      games: Games
+      battles: Battles
+      puzzles: Puzzles
+    empty:
+      games_title: No games yet
+      games_about: Your finished online games show up here.
+      battles_title: No battles yet
+      battles_about: Your finished Puzzle Battles show up here.
+      puzzles_title: No puzzles yet
+      puzzles_about: Puzzles you try in Practice and Puzzle Rush show up here.
+  problems:
+    signed_out: "You were signed out: sign in again"
+    invalid_email: That is not an email address
+    username_format: A username is 3 to 20 letters, digits or underscores
+    password_length: A password is 8 to 128 characters
+    picture_too_large: Pick a picture under 5 MB
+    picture_unreadable: That file could not be read
+    game_unreadable: That game could not be read back
+    unreachable: Can't reach the server. Check that it is running.
+    unexpected: Something went wrong. Try again.
+    server:
+      invalid_credentials: Wrong email, username or password
+      email_taken: Email already in use
+      username_taken: Username already taken
+      all_guests_busy: "Every guest account is in use: sign up to play"
+      sign_in_required: Sign in required
+      invalid_fields: Some fields are not valid
+      invalid_request_body: The request could not be read
+      route_not_found: Not found
+      guest_cannot_close: A guest account is shared and cannot be deleted
+      guest_cannot_have_avatar: A guest account is shared and cannot have a picture
+      avatar_unreadable: That file is not a picture this server can read
+      avatar_too_large: "That picture is too large: pick a smaller one"
+      avatar_not_found: No such picture
+      internal_error: Something went wrong

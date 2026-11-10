@@ -8,7 +8,7 @@ use gpui_kit::{
 use crate::{
     components::board::{BoardStyle, piece_image},
     enums::settings::PieceSet,
-    services::board::side_name,
+    services::play::side_label,
 };
 
 /// The pieces one side has taken, small, with "+N" when that side is ahead in material.
@@ -37,7 +37,7 @@ impl RenderOnce for CapturedRow {
         h_flex()
             .h_6()
             .gap_1()
-            .child(Label::new(side_name(self.side)).text_sm().w_12())
+            .child(Label::new(side_label(self.side)).text_sm().w_12())
             .children(
                 self.taken
                     .iter()

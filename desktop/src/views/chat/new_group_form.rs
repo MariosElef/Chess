@@ -19,6 +19,7 @@ use crate::{
         shell::MESSAGES_PICTURE,
         social::avatar,
     },
+    i18n::tr,
     models::social::Friend,
     services::social::avatar_path,
 };
@@ -41,7 +42,8 @@ impl NewGroupForm {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let name = cx.new(|cx| InputState::new(window, cx).placeholder("Group name"));
+        let name = cx
+            .new(|cx| InputState::new(window, cx).placeholder(tr!("chat.group.name_placeholder")));
         // Create waits for a name, so it follows the typing.
         let _name_changes = cx.subscribe(&name, |_, _, _: &InputEvent, cx| cx.notify());
         Self {
@@ -154,9 +156,13 @@ impl Render for NewGroupForm {
             .collect();
         let ready = !self.group_name(cx).is_empty() && !self.picked.is_empty();
         let form = cx.entity().downgrade();
-        let create = StartButton::new("create-group", "Create group", move |window, cx| {
-            let _ = form.update(cx, |form, cx| form.create(window, cx));
-        })
+        let create = StartButton::new(
+            "create-group",
+            tr!("chat.group.create"),
+            move |window, cx| {
+                let _ = form.update(cx, |form, cx| form.create(window, cx));
+            },
+        )
         .disabled(!ready);
         let muted = cx.theme().muted_foreground;
         let empty = rows.is_empty();
@@ -168,19 +174,17 @@ impl Render for NewGroupForm {
             .child(
                 v_flex()
                     .gap_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(muted)
-                            .child(format!("Friends in the group ({})", self.picked.len())),
-                    )
+                    .child(div().text_sm().text_color(muted).child(tr!(
+                        "chat.group.friends_in_group",
+                        count = self.picked.len()
+                    )))
                     .when(empty, |this| {
                         this.child(
                             div()
                                 .py_2()
                                 .text_sm()
                                 .text_color(muted)
-                                .child("Add friends on Social first."),
+                                .child(tr!("chat.group.add_friends_first")),
                         )
                     })
                     .child(
@@ -198,13 +202,16 @@ impl Render for NewGroupForm {
                         Button::new("cancel-group")
                             .ghost()
                             .large()
-                            .label("Cancel")
+                            .label(tr!("chat.group.cancel"))
                             .on_click(|_, window, cx| window.close_dialog(cx)),
                     )
                     .child(div().flex_1().child(create)),
             );
         v_flex()
-            .child(PanelHeader::new(MESSAGES_PICTURE, "New group"))
+            .child(PanelHeader::new(
+                MESSAGES_PICTURE,
+                tr!("chat.group.new_title"),
+            ))
             .child(body)
     }
 }

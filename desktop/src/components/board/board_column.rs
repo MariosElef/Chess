@@ -63,15 +63,15 @@ impl RenderOnce for BoardColumn {
         // The tools float just outside the board's right edge, level with its top, and take no
         // room, so every page lays its board out the same with or without them. The column
         // narrows with a narrow window, the board staying square inside it.
-        let has_strip = self.left_strip.is_some();
         v_flex()
             .relative()
             .h_full()
             .min_w_0()
             .gap(BAR_GAP)
-            // A strip's room is kept beside the board, so a narrow window cannot push it under
-            // the rail.
-            .when(has_strip, |this| this.ml(LEFT_STRIP_ROOM))
+            // A strip's room is kept beside every board, whether a strip shows or not: a narrow
+            // window cannot push it under the rail, and the eval bar coming and going with
+            // Stockfish never moves the board.
+            .ml(LEFT_STRIP_ROOM)
             .child(bar_slot(self.top))
             .child(
                 div()
@@ -122,14 +122,16 @@ const LEFT_STRIP_ROOM: Pixels = px(32.);
 /// The size of a tool's place beside the board: every tool centred in one, so they line up.
 const TOOL_SLOT: Pixels = px(32.);
 
-/// A tool in its square, centred, whatever kind of button it is.
+/// A tool in its square, centred, whatever kind of button it is; a tool that opens more buttons,
+/// as Copy does, grows downward from it.
 fn tool_slot(tool: AnyElement) -> Div {
     div()
-        .size(TOOL_SLOT)
+        .min_w(TOOL_SLOT)
+        .min_h(TOOL_SLOT)
         .flex()
-        .items_center()
+        .items_start()
         .justify_center()
-        .child(tool)
+        .child(div().min_h(TOOL_SLOT).flex().items_center().child(tool))
 }
 
 fn bar_slot(bar: Option<AnyElement>) -> Div {
@@ -162,4 +164,39 @@ pub fn board_page(board_column: impl IntoElement, side: impl IntoElement) -> Div
                 .min_w(SIDE_MIN_WIDTH)
                 .child(side),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::{Context, IntoElement, Render, TestAppContext, Window, div, prelude::*};
+
+    use super::BoardColumn;
+
+    /// A board column, with a strip on the board's left or without one.
+    struct Harness {
+        strip: bool,
+    }
+
+    impl Render for Harness {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let board = div().size_full().debug_selector(|| "board".to_owned());
+            BoardColumn::new(board)
+                .when(self.strip, |column| column.left_strip(div().w_4().h_full()))
+        }
+    }
+
+    #[gpui_kit::test]
+    fn a_strip_coming_and_going_leaves_the_board_where_it_was(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let (harness, cx) = cx.add_window_view(|_, _| Harness { strip: false });
+        cx.run_until_parked();
+        let without = cx.debug_bounds("board").expect("the board is drawn");
+        harness.update(cx, |harness, cx| {
+            harness.strip = true;
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let with = cx.debug_bounds("board").expect("the board is drawn");
+        assert_eq!(with, without, "the eval bar takes no room from the board");
+    }
 }

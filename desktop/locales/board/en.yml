@@ -1,0 +1,8 @@
+board:
+  copy: Copy
+  copy_fen: Copy FEN
+  copy_pgn: Copy PGN
+  flip_board: Flip board
+  side:
+    white: White
+    black: Black

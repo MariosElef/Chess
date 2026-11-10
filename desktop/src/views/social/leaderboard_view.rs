@@ -9,12 +9,13 @@ use crate::{
     clients::server::ServerClient,
     components::{shell::LEADERBOARD_PICTURE, social::RankingPanel},
     enums::social::RankingBoard,
+    i18n::tr,
     models::{
         account::Face,
         server::ServerError,
         social::{RankedPlayer, RankingPage},
     },
-    services::{server::error_message, social::face_of},
+    services::social::{face_of, problem_text},
     views::{live::SessionSource, social::profile_view::ProfileView},
 };
 
@@ -108,7 +109,7 @@ impl LeaderboardView {
                 self.me = page.me;
                 self.more = page.more;
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(problem_text(&error)),
         }
         cx.notify();
     }
@@ -157,7 +158,7 @@ impl Render for LeaderboardView {
                         div()
                             .text_3xl()
                             .font_weight(FontWeight::BOLD)
-                            .child("Leaderboard"),
+                            .child(tr!("social.leaderboard.page_title")),
                     ),
             )
             .child(panel);

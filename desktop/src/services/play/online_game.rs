@@ -5,8 +5,9 @@ use chess_domain::{Game, Move, Outcome, Side, TimeControl};
 
 use crate::{
     enums::play::{GameResult, LiveStatus},
+    i18n::tr,
     models::play::{Challenge, GameSnapshot},
-    services::board::side_name,
+    services::play::{control_label, side_label},
 };
 
 /// The game the snapshot's moves make from the start; `None` if a move is unreadable or illegal.
@@ -53,15 +54,19 @@ pub fn clock_left(snapshot: &GameSnapshot, side: Side, since: Duration) -> Durat
 pub fn result_line(snapshot: &GameSnapshot, me: Option<Side>) -> Option<String> {
     match snapshot.status {
         LiveStatus::Ongoing => return None,
-        LiveStatus::Aborted => return Some("Game aborted".to_owned()),
+        LiveStatus::Aborted => return Some(tr!("play.title.aborted")),
         LiveStatus::Finished => {}
     }
-    let by = snapshot.result.map_or("", |result| result.by());
+    let reason = snapshot.result.map_or_else(String::new, GameResult::by);
     let line = match (snapshot.winner.map(Side::from), me) {
-        (None, _) => format!("Draw by {by}"),
-        (Some(winner), Some(me)) if winner == me => format!("You won by {by}"),
-        (Some(_), Some(_)) => format!("You lost by {by}"),
-        (Some(winner), None) => format!("{} won by {by}", side_name(winner)),
+        (None, _) => tr!("play.result.draw_by", reason = reason),
+        (Some(winner), Some(me)) if winner == me => tr!("play.result.you_won_by", reason = reason),
+        (Some(_), Some(_)) => tr!("play.result.you_lost_by", reason = reason),
+        (Some(winner), None) => tr!(
+            "play.result.side_won_by",
+            side = side_label(winner),
+            reason = reason
+        ),
     };
     Some(line)
 }
@@ -81,8 +86,12 @@ pub fn challenge_terms(challenge: &Challenge) -> String {
         initial: Duration::from_secs(challenge.initial_s.into()),
         increment: Duration::from_secs(challenge.increment_s.into()),
     };
-    let kind = if challenge.rated { "rated" } else { "casual" };
-    format!("{} · {kind}", control.label())
+    let control = control_label(control);
+    if challenge.rated {
+        tr!("play.challenge.rated", control = control)
+    } else {
+        tr!("play.challenge.casual", control = control)
+    }
 }
 
 /// How a finished game ended, for the kings' badges; `None` while it goes on or once aborted.
@@ -129,7 +138,11 @@ pub fn rating_line(snapshot: &GameSnapshot, me: Side) -> Option<String> {
         Side::Black => (&snapshot.black, changes.black),
     };
     let before = player.rating?;
-    Some(format!("Rating {} ({change:+})", before + change))
+    Some(tr!(
+        "play.result.rating",
+        rating = before + change,
+        change = format!("{change:+}")
+    ))
 }
 
 #[cfg(test)]

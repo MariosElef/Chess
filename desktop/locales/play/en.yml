@@ -1,0 +1,113 @@
+play:
+  mode:
+    online: Online
+    bots: Bots
+    local: Local
+  colour:
+    white: White
+    random: Random
+    black: Black
+  side:
+    white: White
+    black: Black
+  speed:
+    bullet: Bullet
+    blitz: Blitz
+    rapid: Rapid
+    classical: Classical
+  time:
+    minutes: "%{minutes} min"
+    no_clock: No clock
+  setup:
+    strength: "Strength ~%{rating}"
+    play_as: Play as
+    guest_cannot_rate: Sign up to play rated games
+    start: Start Game
+    looking: Looking for an opponent…
+    cancel: Cancel
+  bar:
+    you: You
+    opponent: Opponent
+  bot:
+    custom: Custom
+  panel:
+    play: Play
+    play_bots: Play Bots
+    play_online: Play Online
+    chat: Chat
+  actions:
+    game_review: Game Review
+    new_game: New game
+    new_bot: New Bot
+    draw: Draw
+    resign: Resign
+    abort: Abort
+    accept_draw: Accept draw
+    decline: Decline
+  rematch:
+    ask: Rematch
+    asking: Asking…
+    cancel: Cancel
+    accepting: Accepting…
+    accept: Accept
+  problem:
+    stockfish_missing: "Stockfish was not found: install it (brew install stockfish)"
+    stockfish_failed: Stockfish would not start
+    bot_engine_stopped: The bot's engine stopped
+    no_rematch: No rematch this time
+    game_unreadable: The game could not be read
+    reconnecting: Connection lost, reconnecting…
+    connecting: Connecting to the server…
+  status:
+    your_move: Your move
+    waiting: Waiting for your opponent
+    to_move: "%{side} to move"
+    to_move_check: "%{side} to move — check!"
+    with_offer: "%{status} · %{offer}"
+    offers_draw: "%{side} offers a draw"
+    checkmate: "Checkmate — %{winner} wins"
+    resigned: "%{loser} resigned — %{winner} wins"
+    out_of_time: "%{loser} ran out of time — %{winner} wins"
+    stalemate: Stalemate
+    draw_agreed: Draw agreed
+    draw_insufficient_material: Draw by insufficient material
+    draw_repetition: Draw by threefold repetition
+    draw_fifty_moves: Draw by the fifty-move rule
+  title:
+    draw: Draw
+    side_won: "%{side} Won"
+    you_won: You Won!
+    you_beat: "You Beat %{name}!"
+    you_lost: You Lost
+    bot_won: "%{name} Won"
+    aborted: Game aborted
+  reason:
+    by: "by %{reason}"
+    aborted: called off before both sides moved
+  ending:
+    checkmate: checkmate
+    resignation: resignation
+    timeout: time
+    stalemate: stalemate
+    draw_agreement: agreement
+    insufficient_material: insufficient material
+    repetition: threefold repetition
+    fifty_move: the fifty-move rule
+  result:
+    draw_by: "Draw by %{reason}"
+    you_won_by: "You won by %{reason}"
+    you_lost_by: "You lost by %{reason}"
+    side_won_by: "%{side} won by %{reason}"
+    rating: "Rating %{rating} (%{change})"
+  history:
+    won: Won
+    lost: Lost
+    drawn: Draw
+    line: "%{control} · %{kind} · %{moves}"
+    rated: Rated
+    casual: Casual
+    moves_one: "%{count} move"
+    moves_other: "%{count} moves"
+  challenge:
+    rated: "%{control} · rated"
+    casual: "%{control} · casual"

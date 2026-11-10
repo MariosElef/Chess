@@ -1,0 +1,20 @@
+common:
+  accept: Accept
+  decline: Decline
+  rated: Rated
+  time:
+    just_now: just now
+    ago: "%{span} ago"
+    minute_one: "%{count} minute"
+    minute_other: "%{count} minutes"
+    hour_one: "%{count} hour"
+    hour_other: "%{count} hours"
+    day_one: "%{count} day"
+    day_other: "%{count} days"
+    month_one: "%{count} month"
+    month_other: "%{count} months"
+    year_one: "%{count} year"
+    year_other: "%{count} years"
+  errors:
+    unreachable: Can't reach the server. Check that it is running.
+    unexpected: Something went wrong. Try again.

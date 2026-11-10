@@ -5,6 +5,8 @@ mod countdown;
 mod game_history;
 mod game_over;
 mod online_game;
+mod side_label;
+mod speed_words;
 mod status;
 mod time_controls;
 mod time_left;
@@ -25,6 +27,8 @@ pub use online_game::{
     can_abort, challenge_terms, clock_left, friend_challenges, has_ended, my_side, outcome_of,
     rating_line, replay, result_line,
 };
+pub use side_label::side_label;
+pub use speed_words::{category_name, control_label};
 pub use status::status_text;
 pub use time_controls::{DEFAULT as DEFAULT_TIME_CONTROL, presets_in};
 pub use time_left::time_left;

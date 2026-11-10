@@ -2,32 +2,48 @@ use std::time::Duration;
 
 use chess_domain::{Game, Outcome, Side, TimeControl};
 
-use super::online_game::{game_from_uci, outcome_from};
+use super::{
+    control_label,
+    online_game::{game_from_uci, outcome_from},
+};
 use crate::{
     enums::play::PlayerResult,
+    i18n::tr,
     models::play::{GameRecord, PlayedGame},
 };
 
 /// "Won", "Lost" or "Draw", as the history's chip says it.
-pub fn result_word(result: PlayerResult) -> &'static str {
+pub fn result_word(result: PlayerResult) -> String {
     match result {
-        PlayerResult::Won => "Won",
-        PlayerResult::Lost => "Lost",
-        PlayerResult::Drawn => "Draw",
+        PlayerResult::Won => tr!("play.history.won"),
+        PlayerResult::Lost => tr!("play.history.lost"),
+        PlayerResult::Drawn => tr!("play.history.drawn"),
     }
 }
 
 /// "3 | 2 · Rated · 24 moves": the time control, whether it counted, and its length.
 pub fn game_line(game: &PlayedGame) -> String {
-    let control = TimeControl {
+    let control = control_label(TimeControl {
         initial: Duration::from_secs(game.initial_s.into()),
         increment: Duration::from_secs(game.increment_s.into()),
-    }
-    .label();
-    let rated = if game.rated { "Rated" } else { "Casual" };
-    let moves = game.plies.div_ceil(2);
-    let plural = if moves == 1 { "" } else { "s" };
-    format!("{control} · {rated} · {moves} move{plural}")
+    });
+    let kind = if game.rated {
+        tr!("play.history.rated")
+    } else {
+        tr!("play.history.casual")
+    };
+    let count = game.plies.div_ceil(2);
+    let moves = if count == 1 {
+        tr!("play.history.moves_one", count = count)
+    } else {
+        tr!("play.history.moves_other", count = count)
+    };
+    tr!(
+        "play.history.line",
+        control = control,
+        kind = kind,
+        moves = moves
+    )
 }
 
 /// The game rebuilt from its moves, and how it ended; `None` if a stored move will not play.

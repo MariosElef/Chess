@@ -18,6 +18,7 @@ use crate::{
         play::ClockFace,
     },
     enums::puzzles::BattleResult,
+    i18n::tr,
     services::puzzles::{rating_change_text, result_words},
 };
 
@@ -71,33 +72,42 @@ impl RenderOnce for BattlePanel {
             .size_full()
             .items_center()
             .gap_4()
-            .child(PanelTitle::new(BATTLE_PICTURE, "Puzzle Battle"))
+            .child(PanelTitle::new(BATTLE_PICTURE, tr!("puzzles.battle.title")))
             .child(
                 div()
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
                     .text_color(theme.muted_foreground)
-                    .child(if self.rated { "RATED" } else { "CASUAL" }),
+                    .child(if self.rated {
+                        tr!("puzzles.battle.rated_tag")
+                    } else {
+                        tr!("puzzles.battle.casual_tag")
+                    }),
             )
             .child(ClockFace::new(self.left, self.result.is_none()))
             .child(
                 h_flex()
                     .gap_4()
                     .items_center()
-                    .child(score_column("You", mine, cx))
+                    .child(score_column(tr!("puzzles.battle.you"), mine, cx))
                     .child(
                         div()
                             .text_2xl()
                             .text_color(theme.muted_foreground)
                             .child("–"),
                     )
-                    .child(score_column("Opponent", theirs, cx)),
+                    .child(score_column(tr!("puzzles.battle.opponent"), theirs, cx)),
             )
             .when_some(resign, |this, on_resign| {
                 this.child(div().flex_1()).child(
-                    ChoiceTile::new("battle-resign", "Resign", false, move |window, cx| {
-                        on_resign(window, cx);
-                    })
+                    ChoiceTile::new(
+                        "battle-resign",
+                        tr!("puzzles.battle.resign"),
+                        false,
+                        move |window, cx| {
+                            on_resign(window, cx);
+                        },
+                    )
                     .icon(IconName::Flag),
                 )
             })
@@ -119,7 +129,7 @@ impl RenderOnce for BattlePanel {
                 .child(div().flex_1())
                 .child(StartButton::new(
                     "battle-again",
-                    "Play again",
+                    tr!("puzzles.battle.play_again"),
                     move |window, cx| {
                         on_again(window, cx);
                     },
@@ -128,14 +138,14 @@ impl RenderOnce for BattlePanel {
                     Button::new("battle-back")
                         .ghost()
                         .w_full()
-                        .label("Back to Puzzle Battle")
+                        .label(tr!("puzzles.battle.back"))
                         .on_click(move |_, window, cx| on_back(window, cx)),
                 )
             })
     }
 }
 
-fn score_column(who: &'static str, score: u32, cx: &App) -> Div {
+fn score_column(who: String, score: u32, cx: &App) -> Div {
     v_flex()
         .items_center()
         .child(

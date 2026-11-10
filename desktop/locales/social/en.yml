@@ -1,0 +1,98 @@
+social:
+  page_title: Friends
+  loading: Loading…
+  search_placeholder: Search by name or username
+  tiles:
+    find: Find Friends
+    requests: Friend Requests
+  friends:
+    title: Friends
+    empty_title: No friends yet
+    empty_about: Search for players by name above and add them as friends.
+  sort:
+    recently_online: Most Recently Online
+    username: Username
+  requests:
+    title: Friend Requests
+    empty_title: No requests
+    empty_about: Requests to and from you show up here.
+    received: Received
+    sent: Sent
+    blocked: Blocked
+  search:
+    title: Players
+    empty_title: No one found
+    empty_about: No player has a name like that.
+  detail:
+    wants_friend: Wants to be friends
+    request_sent: Request sent
+    friends: Friends
+    blocked: Blocked
+  actions:
+    accept: Accept
+    decline: Decline
+    cancel: Cancel
+    cancel_request: Cancel request
+    add_friend: Add friend
+    block: Block
+    unblock: Unblock
+    challenge: Challenge
+    message: Message
+    remove_friend: Remove friend
+    view_profile: View profile
+  challenge:
+    heading: Challenges
+    title: Challenge %{name}
+    from_them: Challenges you · %{terms}
+    waiting: Waiting for an answer · %{terms}
+    offline: "Offline: a friend can be challenged once they are online"
+    pick: Pick a time control
+    guest_note: Guests play unrated games
+    send: Send challenge
+  last_online:
+    online: Online now
+    never: Not online yet
+    just_now: Last online just now
+    minutes_one: Last online %{count} minute ago
+    minutes_other: Last online %{count} minutes ago
+    hours_one: Last online %{count} hour ago
+    hours_other: Last online %{count} hours ago
+    days_one: Last online %{count} day ago
+    days_other: Last online %{count} days ago
+    months_one: Last online %{count} month ago
+    months_other: Last online %{count} months ago
+    years_one: Last online %{count} year ago
+    years_other: Last online %{count} years ago
+  profile:
+    joined: Joined %{date}
+    you: This is you
+    accept_request: Accept request
+  leaderboard:
+    page_title: Leaderboard
+    friends_title: Friends Leaderboard
+    no_ratings: No ratings yet
+    your_place: Your place
+    empty_title: No one here yet
+    empty_about: Players show up once they have a rated result on this board.
+    load_more: Load more
+    boards:
+      bullet: Bullet
+      blitz: Blitz
+      rapid: Rapid
+      classical: Classical
+      puzzles: Puzzles
+      puzzle_battle: Puzzle Battle
+      average: Average
+    played:
+      games_one: "%{count} game"
+      games_other: "%{count} games"
+      puzzles_one: "%{count} puzzle"
+      puzzles_other: "%{count} puzzles"
+      battles_one: "%{count} battle"
+      battles_other: "%{count} battles"
+      results_one: "%{count} rated result"
+      results_other: "%{count} rated results"
+  errors:
+    user_not_found: No such player
+    no_friend_request: No friend request from that player
+    cannot_befriend_yourself: You cannot add yourself

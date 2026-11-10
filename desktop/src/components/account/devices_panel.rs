@@ -5,7 +5,9 @@ use gpui_kit::{
     *,
 };
 
-use crate::{components::panel::StartButton, models::account::Device, services::time::ago_text};
+use crate::{
+    components::panel::StartButton, i18n::tr, models::account::Device, services::time::ago_text,
+};
 
 type OnClick = Box<dyn Fn(&mut Window, &mut App)>;
 
@@ -55,13 +57,13 @@ impl RenderOnce for DevicesPanel {
                         div()
                             .text_lg()
                             .font_weight(FontWeight::BOLD)
-                            .child("Devices"),
+                            .child(tr!("account.devices.title")),
                     )
                     .when(others, |this| {
                         this.child(
                             StartButton::new(
                                 "sign-out-others",
-                                "Sign out everywhere else",
+                                tr!("account.devices.sign_out_others"),
                                 move |window, cx| on_sign_out_others(window, cx),
                             )
                             .icon(IconName::LogOut)
@@ -97,9 +99,9 @@ fn device_row(device: &Device, cx: &App) -> Div {
     let theme = cx.theme();
     let (muted, green) = (theme.muted_foreground, theme.success);
     let used = if device.current {
-        "This device".to_owned()
+        tr!("account.devices.this_device")
     } else {
-        format!("Last used {}", ago_text(device.seen_s))
+        tr!("account.devices.last_used", ago = ago_text(device.seen_s))
     };
     h_flex()
         .gap_3()
@@ -120,12 +122,10 @@ fn device_row(device: &Device, cx: &App) -> Div {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(device.device.clone()),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted)
-                        .child(format!("Signed in {}", ago_text(device.signed_in_s))),
-                ),
+                .child(div().text_xs().text_color(muted).child(tr!(
+                    "account.devices.signed_in",
+                    ago = ago_text(device.signed_in_s)
+                ))),
         )
         .child(
             div()

@@ -13,7 +13,11 @@ use chess_domain::{Move, Position, Side, engine::UciScore};
 
 use super::bots::index_for;
 use crate::{
-    enums::play::{BotCharacter, BotMoment},
+    enums::{
+        play::{BotCharacter, BotMoment},
+        settings::Language,
+    },
+    i18n,
     services::board::is_capture,
 };
 
@@ -138,6 +142,19 @@ fn behind_by(score: UciScore) -> i32 {
     }
 }
 
+/// The pool of lines the bot speaks from in the language the app is showing: the Greek setting
+/// gets the character written again in Cypriot Greek, as a Cypriot would say it, not a translation
+/// of the English. The app has no separate Cypriot language, so `Language::Greek` selects it.
+fn pool(
+    english: &'static [&'static str],
+    cypriot: &'static [&'static str],
+) -> &'static [&'static str] {
+    match i18n::current() {
+        Language::English => english,
+        Language::Greek => cypriot,
+    }
+}
+
 /// One of `lines` if the bot speaks up, which it does `chance` of the time: the first roll decides
 /// whether, the second which line.
 fn speaks(
@@ -163,7 +180,13 @@ mod tests {
         deal_answer, deal_offer, greeting, moment_of, move_line, quit_line, rage_quits,
         think_time_for,
     };
-    use crate::enums::play::{BotCharacter, BotMoment};
+    use crate::{
+        enums::{
+            play::{BotCharacter, BotMoment},
+            settings::Language,
+        },
+        i18n::set_current,
+    };
 
     /// The moment `uci` makes from `fen`, for a bot playing `bot_side`.
     fn moment(fen: &str, uci: &str, bot_side: Side) -> BotMoment {
@@ -220,5 +243,74 @@ mod tests {
             None
         );
         assert_eq!(deal_answer(None, true, 0.0), None);
+    }
+
+    /// Danis's English catchphrases, which stay in English inside his Cypriot lines.
+    const CATCHPHRASES: [&str; 4] = [
+        "WWWWWOOOOOOWWW RELAX",
+        "WHY ARE YOU FUCKING USING A CHRONUS?",
+        "DID YOU BUY YOUR ACCOUNT?",
+        "OOOHH MY GOOOODDD",
+    ];
+
+    /// Rolls close enough together to land on every line of any pool, the longest having 15.
+    const ROLLS: [f64; 20] = [
+        0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75,
+        0.8, 0.85, 0.9, 0.95,
+    ];
+
+    /// Whether `letter` is one of the Greek letters, capital or small.
+    fn is_greek_letter(letter: char) -> bool {
+        ('Α'..='ω').contains(&letter)
+    }
+
+    /// Every line `character` can say in the current language, found by sweeping the rolls.
+    fn every_line(character: BotCharacter) -> Vec<&'static str> {
+        let moments = [
+            BotMoment::Quiet,
+            BotMoment::GaveCheck,
+            BotMoment::InCheck,
+            BotMoment::TookPiece,
+            BotMoment::LostPiece,
+        ];
+        let losing = UciScore::Cp(-300);
+        let mut lines = Vec::new();
+        for roll in ROLLS {
+            let who = Some(character);
+            lines.extend(greeting(who, roll));
+            lines.extend(quit_line(who, roll));
+            lines.extend(deal_offer(who, losing, (0.0, roll)));
+            lines.extend(deal_answer(who, true, roll));
+            lines.extend(deal_answer(who, false, roll));
+            for moment in moments {
+                lines.extend(move_line(who, moment, (0.0, roll)));
+            }
+        }
+        lines
+    }
+
+    #[test]
+    fn no_cypriot_line_is_left_in_english_by_mistake() {
+        set_current(Language::Greek);
+        let characters = [
+            BotCharacter::Vasilis,
+            BotCharacter::Danis,
+            BotCharacter::Stefanos,
+            BotCharacter::Andreas,
+            BotCharacter::Sporos,
+        ];
+        for character in characters {
+            let lines = every_line(character);
+            assert!(!lines.is_empty());
+            for line in lines {
+                let greek = line.chars().any(is_greek_letter);
+                let catchphrase = CATCHPHRASES.iter().any(|phrase| line.contains(phrase));
+                assert!(
+                    greek || catchphrase,
+                    "{character:?} says {line:?} in English"
+                );
+            }
+        }
+        set_current(Language::English);
     }
 }

@@ -3,6 +3,7 @@ mod storage;
 
 pub use session_token::SessionTokenFile;
 pub use storage::{
-    load_appearance, load_board_theme, load_engine_settings, load_piece_set, load_sound_set,
-    save_appearance, save_board_theme, save_engine_settings, save_piece_set, save_sound_set,
+    load_appearance, load_board_theme, load_engine_settings, load_language, load_piece_set,
+    load_sound_set, save_appearance, save_board_theme, save_engine_settings, save_language,
+    save_piece_set, save_sound_set,
 };

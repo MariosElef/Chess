@@ -11,7 +11,7 @@ use gpui_kit::{
     *,
 };
 
-use crate::components::panel::ChoiceTile;
+use crate::{components::panel::ChoiceTile, i18n::tr};
 
 type OnLoad = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -55,13 +55,13 @@ impl RenderOnce for FenInput {
                             .text_xs()
                             .font_weight(FontWeight::BOLD)
                             .text_color(theme.muted_foreground)
-                            .child("LOAD A GAME"),
+                            .child(tr!("analysis.load.title")),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(theme.muted_foreground)
-                            .child("FEN or PGN"),
+                            .child(tr!("analysis.load.formats")),
                     ),
             )
             .child(
@@ -71,9 +71,14 @@ impl RenderOnce for FenInput {
                     .child(Textarea::new(&self.state)),
             )
             .child(
-                ChoiceTile::new("load-fen", "Load", false, move |window, cx| {
-                    on_load(window, cx);
-                })
+                ChoiceTile::new(
+                    "load-fen",
+                    tr!("analysis.load.button"),
+                    false,
+                    move |window, cx| {
+                        on_load(window, cx);
+                    },
+                )
                 .icon(IconName::Upload)
                 .height(px(36.)),
             )

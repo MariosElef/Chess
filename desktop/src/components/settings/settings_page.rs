@@ -9,16 +9,18 @@ use super::{
     board_previews::{piece_set_preview, theme_preview},
     option_tile::OptionTile,
     settings_pictures::{
-        APPEARANCE_PICTURE, BOARD_PICTURE, DARK_PICTURE, LIGHT_PICTURE, SOUNDS_PICTURE,
-        STOCKFISH_PICTURE, SYSTEM_PICTURE,
+        APPEARANCE_PICTURE, BOARD_PICTURE, DARK_PICTURE, LANGUAGE_PICTURE, LIGHT_PICTURE,
+        SOUNDS_PICTURE, STOCKFISH_PICTURE, SYSTEM_PICTURE,
     },
 };
 use crate::{
     components::{board::BoardStyle, panel::ChoiceTile, shell::SETTINGS_PICTURE},
-    enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
+    enums::settings::{Appearance, BoardTheme, Language, PieceSet, SoundSet},
+    i18n::tr,
     models::engine::{DEPTH_CHOICES, EngineSettings, HASH_CHOICES, depth_label, thread_choices},
 };
 
+type OnLanguage = Rc<dyn Fn(Language, &mut Window, &mut App)>;
 type OnAppearance = Rc<dyn Fn(Appearance, &mut Window, &mut App)>;
 type OnEngine = Rc<dyn Fn(EngineSettings, &mut Window, &mut App)>;
 type OnBoardStyle = Rc<dyn Fn(BoardStyle, &mut Window, &mut App)>;
@@ -26,12 +28,14 @@ type OnSoundSet = Rc<dyn Fn(SoundSet, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct SettingsPage {
+    language: Language,
     appearance: Appearance,
     board_style: BoardStyle,
     sound_set: SoundSet,
     engine: EngineSettings,
     /// This computer's cores, which decide the thread choices.
     cores: usize,
+    on_language: OnLanguage,
     on_appearance: OnAppearance,
     on_board_style: OnBoardStyle,
     on_sound_set: OnSoundSet,
@@ -40,6 +44,7 @@ pub struct SettingsPage {
 
 /// What the settings page shows: the current choices and where each change goes.
 pub struct SettingsChoices {
+    pub language: Language,
     pub appearance: Appearance,
     pub board_style: BoardStyle,
     pub sound_set: SoundSet,
@@ -50,17 +55,20 @@ pub struct SettingsChoices {
 impl SettingsPage {
     pub fn new(
         choices: SettingsChoices,
+        on_language: impl Fn(Language, &mut Window, &mut App) + 'static,
         on_appearance: impl Fn(Appearance, &mut Window, &mut App) + 'static,
         on_board_style: impl Fn(BoardStyle, &mut Window, &mut App) + 'static,
         on_sound_set: impl Fn(SoundSet, &mut Window, &mut App) + 'static,
         on_engine: impl Fn(EngineSettings, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
+            language: choices.language,
             appearance: choices.appearance,
             board_style: choices.board_style,
             sound_set: choices.sound_set,
             engine: choices.engine,
             cores: choices.cores,
+            on_language: Rc::new(on_language),
             on_appearance: Rc::new(on_appearance),
             on_board_style: Rc::new(on_board_style),
             on_sound_set: Rc::new(on_sound_set),
@@ -83,9 +91,10 @@ impl RenderOnce for SettingsPage {
                         div()
                             .text_3xl()
                             .font_weight(FontWeight::BOLD)
-                            .child("Settings"),
+                            .child(tr!("settings.title")),
                     ),
             )
+            .child(self.language_section(cx))
             .child(self.appearance_section(cx))
             .child(self.board_section(cx))
             .child(self.sound_section(cx))
@@ -99,6 +108,32 @@ impl RenderOnce for SettingsPage {
 }
 
 impl SettingsPage {
+    /// English and Greek, each named in its own language.
+    fn language_section(&self, cx: &App) -> Div {
+        let tiles: Vec<Div> = Language::ALL
+            .into_iter()
+            .map(|language| {
+                let on_language = Rc::clone(&self.on_language);
+                div().flex_1().child(
+                    ChoiceTile::new(
+                        format!("language-{}", language.index()),
+                        language.label(),
+                        language == self.language,
+                        move |window, cx| on_language(language, window, cx),
+                    )
+                    .picture(LANGUAGE_PICTURE)
+                    .height(px(48.)),
+                )
+            })
+            .collect();
+        card(
+            (LANGUAGE_PICTURE, tr!("settings.language.title")),
+            tr!("settings.language.about"),
+            h_flex().gap_3().children(tiles),
+            cx,
+        )
+    }
+
     /// System, Light and Dark, as tiles with their icons.
     fn appearance_section(&self, cx: &App) -> Div {
         let tiles: Vec<Div> = Appearance::ALL
@@ -118,8 +153,8 @@ impl SettingsPage {
             })
             .collect();
         card(
-            (APPEARANCE_PICTURE, "Appearance"),
-            "Follow the system, or keep the app light or dark.",
+            (APPEARANCE_PICTURE, tr!("settings.appearance.title")),
+            tr!("settings.appearance.about"),
             h_flex().gap_3().children(tiles),
             cx,
         )
@@ -128,12 +163,20 @@ impl SettingsPage {
     /// The squares' colours and the pieces for every board, each choice shown as it looks.
     fn board_section(&self, cx: &App) -> Div {
         card(
-            (BOARD_PICTURE, "Board"),
-            "Every board in the app, in play, puzzles and analysis.",
+            (BOARD_PICTURE, tr!("settings.board.title")),
+            tr!("settings.board.about"),
             v_flex()
                 .gap_4()
-                .child(labelled("Theme", self.theme_tiles(cx), cx))
-                .child(labelled("Pieces", self.piece_set_tiles(cx), cx)),
+                .child(labelled(
+                    tr!("settings.board.theme"),
+                    self.theme_tiles(cx),
+                    cx,
+                ))
+                .child(labelled(
+                    tr!("settings.board.pieces"),
+                    self.piece_set_tiles(cx),
+                    cx,
+                )),
             cx,
         )
     }
@@ -199,8 +242,8 @@ impl SettingsPage {
             })
             .collect();
         card(
-            (SOUNDS_PICTURE, "Sounds"),
-            "Every move, capture, check and clock warning. Pick one to hear them all.",
+            (SOUNDS_PICTURE, tr!("settings.sounds.title")),
+            tr!("settings.sounds.about"),
             h_flex().gap_3().children(tiles),
             cx,
         )
@@ -211,12 +254,12 @@ impl SettingsPage {
         let threads = thread_choices(self.cores);
         let engine = self.engine;
         card(
-            (STOCKFISH_PICTURE, "Stockfish"),
-            "Fewer threads and a depth limit keep the computer quiet; more search deeper.",
+            (STOCKFISH_PICTURE, "Stockfish".to_owned()),
+            tr!("settings.stockfish.about"),
             v_flex()
                 .gap_4()
                 .child(labelled(
-                    "Threads",
+                    tr!("settings.stockfish.threads"),
                     self.engine_tiles(
                         ("engine-threads", &threads, engine.threads),
                         |threads| threads.to_string(),
@@ -225,7 +268,7 @@ impl SettingsPage {
                     cx,
                 ))
                 .child(labelled(
-                    "Memory (MB)",
+                    tr!("settings.stockfish.memory"),
                     self.engine_tiles(
                         ("engine-hash", &HASH_CHOICES, engine.hash_mb),
                         |hash_mb| hash_mb.to_string(),
@@ -234,7 +277,7 @@ impl SettingsPage {
                     cx,
                 ))
                 .child(labelled(
-                    "Search depth",
+                    tr!("settings.stockfish.depth"),
                     self.engine_tiles(
                         ("engine-depth", &DEPTH_CHOICES, engine.depth),
                         depth_label,
@@ -277,8 +320,8 @@ impl SettingsPage {
 /// A settings card, as the app's panels: a band with its icon and title, a line about it, and
 /// its choices under them.
 fn card(
-    (picture, title): (&'static str, &'static str),
-    about: &'static str,
+    (picture, title): (&'static str, String),
+    about: String,
     body: impl IntoElement,
     cx: &App,
 ) -> Div {
@@ -315,7 +358,7 @@ fn card(
 }
 
 /// A small heading over a row of choices.
-fn labelled(label: &'static str, choices: impl IntoElement, cx: &App) -> Div {
+fn labelled(label: String, choices: impl IntoElement, cx: &App) -> Div {
     v_flex()
         .gap_2()
         .child(
@@ -345,7 +388,7 @@ mod tests {
     use super::{SettingsChoices, SettingsPage};
     use crate::{
         components::board::BoardStyle,
-        enums::settings::{Appearance, BoardTheme, PieceSet, SoundSet},
+        enums::settings::{Appearance, BoardTheme, Language, PieceSet, SoundSet},
         models::engine::EngineSettings,
         testing::click,
     };
@@ -363,12 +406,14 @@ mod tests {
             let (appearance, engine) = (Rc::clone(&self.appearance), Rc::clone(&self.engine));
             SettingsPage::new(
                 SettingsChoices {
+                    language: Language::English,
                     appearance: self.appearance.get(),
                     board_style: self.style.get(),
                     sound_set: SoundSet::Standard,
                     engine: self.engine.get(),
                     cores: 4,
                 },
+                |_, _, _| {},
                 move |picked, _, _| appearance.set(picked),
                 move |style, _, _| chosen.set(style),
                 |_, _, _| {},

@@ -10,6 +10,7 @@ use gpui_kit::{
 
 use crate::{
     components::{panel::StartButton, shell::Toast},
+    i18n::tr,
     models::{
         play::{Challenge, ClientMessage, LiveEvent, ServerMessage},
         puzzles::BattleChallenge,
@@ -62,8 +63,8 @@ impl Invite {
     fn title(&self) -> String {
         let name = &self.from().username;
         match self {
-            Invite::Game(_) => format!("{name} challenges you"),
-            Invite::Battle(_) => format!("{name} invites you to a Puzzle Battle"),
+            Invite::Game(_) => tr!("shell.invite.challenges_you", name = name),
+            Invite::Battle(_) => tr!("shell.invite.invites_battle", name = name),
         }
     }
 
@@ -71,8 +72,8 @@ impl Invite {
     fn terms(&self) -> String {
         match self {
             Invite::Game(challenge) => challenge_terms(challenge),
-            Invite::Battle(challenge) if challenge.rated => "Rated".to_owned(),
-            Invite::Battle(_) => "Casual".to_owned(),
+            Invite::Battle(challenge) if challenge.rated => tr!("shell.invite.rated"),
+            Invite::Battle(_) => tr!("shell.invite.casual"),
         }
     }
 
@@ -340,7 +341,7 @@ impl Render for InviteToast {
         }
         toast
             .action(
-                StartButton::new("invite-accept", "Accept", {
+                StartButton::new("invite-accept", tr!("common.accept"), {
                     let toast = cx.entity().downgrade();
                     move |_, cx| {
                         // The toast outlives its buttons unless the window is closing.
@@ -353,7 +354,7 @@ impl Render for InviteToast {
                 Button::new("invite-decline")
                     .ghost()
                     .small()
-                    .label("Decline")
+                    .label(tr!("common.decline"))
                     .on_click(cx.listener(|toast, _, _, cx| toast.answer(false, cx))),
             )
             .into_any_element()

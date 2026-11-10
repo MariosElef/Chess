@@ -24,9 +24,11 @@ use crate::{
         social::{ActionTile, EmptyState, FriendRow, Leaderboard, PeopleList, PersonRow, SortMenu},
     },
     enums::{
+        settings::Language,
         social::{FriendSort, LeaderBoard, Relation, SocialStage},
         sound::Sound,
     },
+    i18n::{self, tr},
     models::{
         play::{Challenge, ClientMessage, LiveEvent, ServerMessage},
         server::ServerError,
@@ -34,8 +36,7 @@ use crate::{
     },
     services::{
         play::{DEFAULT_TIME_CONTROL, challenge_terms, friend_challenges, whole_seconds},
-        server::error_message,
-        social::{avatar_path, last_online_text, leaderboard, sorted_friends},
+        social::{avatar_path, last_online_text, leaderboard, problem_text, sorted_friends},
     },
     views::{
         chat::ChatsView,
@@ -64,6 +65,8 @@ pub struct SocialView {
     loaded: bool,
     problem: Option<String>,
     search: Entity<InputState>,
+    /// The language the search box's placeholder was written in.
+    placeholder_in: Language,
     _search_changes: Subscription,
     found: Vec<FoundUser>,
     _search_task: Option<Task<()>>,
@@ -96,7 +99,7 @@ impl SocialView {
             view.on_event(event, cx);
         });
         let search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search by name or username"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(tr!("social.search_placeholder")));
         let _search_changes = cx.subscribe(&search, |view, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
                 view.search_changed(cx);
@@ -111,6 +114,7 @@ impl SocialView {
             loaded: false,
             problem: None,
             search,
+            placeholder_in: i18n::current(),
             _search_changes,
             found: Vec::new(),
             _search_task: None,
@@ -172,7 +176,7 @@ impl SocialView {
                 self.friends = friends;
                 self.loaded = true;
             }
-            Err(error) => self.problem = Some(error_message(&error)),
+            Err(error) => self.problem = Some(problem_text(&error)),
         }
         cx.notify();
     }
@@ -197,7 +201,7 @@ impl SocialView {
             let _ = view.update(cx, |view, cx| {
                 match result {
                     Ok(found) => view.found = found,
-                    Err(error) => view.problem = Some(error_message(&error)),
+                    Err(error) => view.problem = Some(problem_text(&error)),
                 }
                 cx.notify();
             });
@@ -219,7 +223,7 @@ impl SocialView {
                     view.search_changed(cx);
                 }
                 Err(error) => {
-                    view.problem = Some(error_message(&error));
+                    view.problem = Some(problem_text(&error));
                     cx.notify();
                 }
             });
@@ -376,6 +380,18 @@ impl SocialView {
         cx.notify();
     }
 
+    /// The search box asks in the language now shown, once that changes.
+    fn write_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let language = i18n::current();
+        if self.placeholder_in == language {
+            return;
+        }
+        self.placeholder_in = language;
+        self.search.update(cx, |input, cx| {
+            input.set_placeholder(tr!("social.search_placeholder"), window, cx);
+        });
+    }
+
     /// A search long enough to go out is in the box: its results take the friends' place.
     fn searching(&self, cx: &App) -> bool {
         self.search.read(cx).value().trim().chars().count() >= SHORTEST_SEARCH
@@ -399,7 +415,7 @@ impl SocialView {
             .gap_3()
             .child(ActionTile::new(
                 "find-friends",
-                (IconName::Search, "Find Friends"),
+                (IconName::Search, tr!("social.tiles.find")),
                 move |window, cx| {
                     search.update(cx, |input, cx| input.focus(window, cx));
                     let _ = find.update(cx, |view, cx| view.pick_stage(SocialStage::Friends, cx));
@@ -408,7 +424,7 @@ impl SocialView {
             .child(
                 ActionTile::new(
                     "friend-requests",
-                    (IconName::UserPlus, "Friend Requests"),
+                    (IconName::UserPlus, tr!("social.tiles.requests")),
                     move |window, cx| {
                         let _ = requests.update(cx, |view, cx| view.open_requests(window, cx));
                     },
@@ -427,11 +443,14 @@ impl SocialView {
             let (accept, decline) = (challenge.id.clone(), challenge.id.clone());
             let row = PersonRow::new(challenge.from.username.clone())
                 .picture(picture_of(&challenge.from))
-                .detail(format!("Challenges you · {}", challenge_terms(challenge)))
+                .detail(tr!(
+                    "social.challenge.from_them",
+                    terms = challenge_terms(challenge)
+                ))
                 .action({
                     let view = cx.entity().downgrade();
                     let id = format!("accept-challenge-{accept}");
-                    StartButton::new(id, "Accept", move |_, cx| {
+                    StartButton::new(id, tr!("social.actions.accept"), move |_, cx| {
                         let message = ClientMessage::AcceptChallenge {
                             challenge_id: accept.clone(),
                         };
@@ -441,13 +460,17 @@ impl SocialView {
                     .small()
                 })
                 .action(
-                    icon_button(("decline-challenge", &decline), IconName::Close, "Decline")
-                        .on_click(cx.listener(move |view, _, _, cx| {
-                            let message = ClientMessage::DeclineChallenge {
-                                challenge_id: decline.clone(),
-                            };
-                            view.send_live(message, cx);
-                        })),
+                    icon_button(
+                        ("decline-challenge", &decline),
+                        IconName::Close,
+                        tr!("social.actions.decline"),
+                    )
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        let message = ClientMessage::DeclineChallenge {
+                            challenge_id: decline.clone(),
+                        };
+                        view.send_live(message, cx);
+                    })),
                 );
             rows.push(row);
         }
@@ -455,23 +478,30 @@ impl SocialView {
             let id = challenge.id.clone();
             let row = PersonRow::new(challenge.to.username.clone())
                 .picture(picture_of(&challenge.to))
-                .detail(format!(
-                    "Waiting for an answer · {}",
-                    challenge_terms(challenge)
+                .detail(tr!(
+                    "social.challenge.waiting",
+                    terms = challenge_terms(challenge)
                 ))
                 .action(
-                    icon_button(("cancel-challenge", &id), IconName::Close, "Cancel").on_click(
-                        cx.listener(move |view, _, _, cx| {
-                            let message = ClientMessage::CancelChallenge {
-                                challenge_id: id.clone(),
-                            };
-                            view.send_live(message, cx);
-                        }),
-                    ),
+                    icon_button(
+                        ("cancel-challenge", &id),
+                        IconName::Close,
+                        tr!("social.actions.cancel"),
+                    )
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        let message = ClientMessage::CancelChallenge {
+                            challenge_id: id.clone(),
+                        };
+                        view.send_live(message, cx);
+                    })),
                 );
             rows.push(row);
         }
-        Some(PeopleList::new().heading("Challenges").children(rows))
+        Some(
+            PeopleList::new()
+                .heading(tr!("social.challenge.heading"))
+                .children(rows),
+        )
     }
 
     /// Under the search box: what it found, or else the friends or the requests.
@@ -497,7 +527,7 @@ impl SocialView {
                         div()
                             .text_lg()
                             .font_weight(FontWeight::BOLD)
-                            .child("Friends"),
+                            .child(tr!("social.friends.title")),
                     )
                     .child(count_chip(self.friends.friends.len(), cx)),
             )
@@ -508,13 +538,13 @@ impl SocialView {
             return v_flex()
                 .gap_2()
                 .child(heading)
-                .child(muted_line("Loading…", cx));
+                .child(muted_line(tr!("social.loading"), cx));
         }
         if self.friends.friends.is_empty() {
             return v_flex().gap_2().child(heading).child(EmptyState::new(
                 IconName::Users,
-                "No friends yet",
-                "Search for players by name above and add them as friends.",
+                tr!("social.friends.empty_title"),
+                tr!("social.friends.empty_about"),
             ));
         }
         let rows: Vec<FriendRow> = sorted_friends(&self.friends.friends, self.sort)
@@ -571,7 +601,7 @@ impl SocialView {
             div()
                 .text_lg()
                 .font_weight(FontWeight::BOLD)
-                .child("Friend Requests"),
+                .child(tr!("social.requests.title")),
         );
         let Friends {
             incoming,
@@ -582,8 +612,8 @@ impl SocialView {
         if incoming.is_empty() && outgoing.is_empty() && blocked.is_empty() {
             return v_flex().gap_2().child(heading).child(EmptyState::new(
                 IconName::UserPlus,
-                "No requests",
-                "Requests to and from you show up here.",
+                tr!("social.requests.empty_title"),
+                tr!("social.requests.empty_about"),
             ));
         }
         let received: Vec<PersonRow> = incoming
@@ -591,10 +621,14 @@ impl SocialView {
             .map(|person| {
                 PersonRow::new(person.username.clone())
                     .picture(picture_of(person))
-                    .detail("Wants to be friends")
+                    .detail(tr!("social.detail.wants_friend"))
                     .action(self.accept_button("accept-friend", person, cx))
                     .action(self.remove_button(
-                        ("decline-friend", IconName::UserX, "Decline"),
+                        (
+                            "decline-friend",
+                            IconName::UserX,
+                            tr!("social.actions.decline"),
+                        ),
                         person,
                         cx,
                     ))
@@ -605,9 +639,13 @@ impl SocialView {
             .map(|person| {
                 PersonRow::new(person.username.clone())
                     .picture(picture_of(person))
-                    .detail("Request sent")
+                    .detail(tr!("social.detail.request_sent"))
                     .action(self.remove_button(
-                        ("withdraw-friend", IconName::Close, "Cancel request"),
+                        (
+                            "withdraw-friend",
+                            IconName::Close,
+                            tr!("social.actions.cancel_request"),
+                        ),
                         person,
                         cx,
                     ))
@@ -618,7 +656,7 @@ impl SocialView {
             .map(|person| {
                 PersonRow::new(person.username.clone())
                     .picture(picture_of(person))
-                    .detail("Blocked")
+                    .detail(tr!("social.detail.blocked"))
                     .action(self.unblock_button(person, cx))
             })
             .collect();
@@ -626,13 +664,25 @@ impl SocialView {
             .gap_4()
             .child(heading)
             .when(!received.is_empty(), |this| {
-                this.child(PeopleList::new().heading("Received").children(received))
+                this.child(
+                    PeopleList::new()
+                        .heading(tr!("social.requests.received"))
+                        .children(received),
+                )
             })
             .when(!sent.is_empty(), |this| {
-                this.child(PeopleList::new().heading("Sent").children(sent))
+                this.child(
+                    PeopleList::new()
+                        .heading(tr!("social.requests.sent"))
+                        .children(sent),
+                )
             })
             .when(!blocked.is_empty(), |this| {
-                this.child(PeopleList::new().heading("Blocked").children(blocked))
+                this.child(
+                    PeopleList::new()
+                        .heading(tr!("social.requests.blocked"))
+                        .children(blocked),
+                )
             })
     }
 
@@ -641,12 +691,12 @@ impl SocialView {
         let heading = div()
             .text_lg()
             .font_weight(FontWeight::BOLD)
-            .child("Players");
+            .child(tr!("social.search.title"));
         if self.found.is_empty() {
             return v_flex().gap_2().child(heading).child(EmptyState::new(
                 IconName::Search,
-                "No one found",
-                "No player has a name like that.",
+                tr!("social.search.empty_title"),
+                tr!("social.search.empty_about"),
             ));
         }
         let rows: Vec<PersonRow> = self
@@ -673,15 +723,15 @@ impl SocialView {
                 .action(self.add_button(&person, cx))
                 .action(self.block_button(&person, cx)),
             Relation::RequestReceived => row
-                .detail("Wants to be friends")
+                .detail(tr!("social.detail.wants_friend"))
                 .action(self.accept_button("accept-found", &person, cx))
                 .action(self.block_button(&person, cx)),
             Relation::RequestSent => row
-                .detail("Request sent")
+                .detail(tr!("social.detail.request_sent"))
                 .action(self.block_button(&person, cx)),
-            Relation::Friends => row.detail("Friends"),
+            Relation::Friends => row.detail(tr!("social.detail.friends")),
             Relation::Blocked => row
-                .detail("Blocked")
+                .detail(tr!("social.detail.blocked"))
                 .action(self.unblock_button(&person, cx)),
         }
     }
@@ -693,15 +743,19 @@ impl SocialView {
             .primary()
             .small()
             .icon(IconName::UserPlus)
-            .label("Add friend")
+            .label(tr!("social.actions.add_friend"))
             .on_click(cx.listener(move |view, _, _, cx| view.add_friend(&user_id, cx)))
     }
 
     /// Blocks them: no request, challenge or message from them reaches the player.
     fn block_button(&self, person: &UserRef, cx: &mut Context<Self>) -> Button {
         let user_id = person.id.clone();
-        icon_button(("block-found", &user_id), IconName::Ban, "Block")
-            .on_click(cx.listener(move |view, _, _, cx| view.block(&user_id, cx)))
+        icon_button(
+            ("block-found", &user_id),
+            IconName::Ban,
+            tr!("social.actions.block"),
+        )
+        .on_click(cx.listener(move |view, _, _, cx| view.block(&user_id, cx)))
     }
 
     /// Lifts the player's block.
@@ -710,7 +764,7 @@ impl SocialView {
         Button::new(SharedString::from(format!("unblock-{user_id}")))
             .ghost()
             .small()
-            .label("Unblock")
+            .label(tr!("social.actions.unblock"))
             .on_click(cx.listener(move |view, _, _, cx| view.unblock(&user_id, cx)))
     }
 
@@ -718,17 +772,21 @@ impl SocialView {
     fn accept_button(&self, id: &str, person: &UserRef, cx: &mut Context<Self>) -> StartButton {
         let user_id = person.id.clone();
         let view = cx.entity().downgrade();
-        StartButton::new(format!("{id}-{user_id}"), "Accept", move |_, cx| {
-            // The page outlives its buttons unless the window is closing.
-            let _ = view.update(cx, |view, cx| view.accept_friend(&user_id, cx));
-        })
+        StartButton::new(
+            format!("{id}-{user_id}"),
+            tr!("social.actions.accept"),
+            move |_, cx| {
+                // The page outlives its buttons unless the window is closing.
+                let _ = view.update(cx, |view, cx| view.accept_friend(&user_id, cx));
+            },
+        )
         .small()
     }
 
     /// Ends the request, whichever way it went.
     fn remove_button(
         &self,
-        (id, icon, tooltip): (&str, IconName, &'static str),
+        (id, icon, tooltip): (&str, IconName, String),
         person: &UserRef,
         cx: &mut Context<Self>,
     ) -> Button {
@@ -757,7 +815,8 @@ impl SocialView {
 }
 
 impl Render for SocialView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.write_placeholder(window, cx);
         let card = v_flex()
             .gap_5()
             .p_5()
@@ -804,7 +863,7 @@ fn heading() -> Div {
         div()
             .text_3xl()
             .font_weight(FontWeight::BOLD)
-            .child("Friends"),
+            .child(tr!("social.page_title")),
     )
 }
 
@@ -820,7 +879,7 @@ fn count_chip(count: usize, cx: &App) -> Div {
 }
 
 /// A round icon button with its name on hover: the row actions.
-fn icon_button((id, key): (&str, &str), icon: IconName, tooltip: &'static str) -> Button {
+fn icon_button((id, key): (&str, &str), icon: IconName, tooltip: String) -> Button {
     Button::new(SharedString::from(format!("{id}-{key}")))
         .ghost()
         .small()
@@ -828,7 +887,7 @@ fn icon_button((id, key): (&str, &str), icon: IconName, tooltip: &'static str) -
         .tooltip(tooltip)
 }
 
-fn muted_line(text: &'static str, cx: &App) -> Div {
+fn muted_line(text: String, cx: &App) -> Div {
     div()
         .text_sm()
         .text_color(cx.theme().muted_foreground)

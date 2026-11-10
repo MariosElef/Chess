@@ -5,7 +5,7 @@ use gpui_kit::App;
 use crate::{
     clients::server::ServerClient,
     models::{
-        puzzles::{AttemptReport, Puzzle, PuzzleRating, RatingRange},
+        puzzles::{AttemptReport, Puzzle, PuzzleProblem, PuzzleRating, RatingRange},
         server::ServerError,
     },
 };
@@ -13,17 +13,14 @@ use crate::{
 /// Reads the signed-in session's token, for asking the server for puzzles.
 pub type TokenSource = Rc<dyn Fn(&App) -> Option<String>>;
 
-/// What the page says when nobody is signed in.
-pub const SIGN_IN_FIRST: &str = "Sign in to solve puzzles.";
-
 /// A request for a puzzle rated within `range`, or why none can be made.
 pub fn request_puzzle(
     client: &ServerClient,
     token: &TokenSource,
     range: RatingRange,
     cx: &App,
-) -> Result<impl Future<Output = Result<Puzzle, ServerError>> + use<>, &'static str> {
-    let token = token(cx).ok_or(SIGN_IN_FIRST)?;
+) -> Result<impl Future<Output = Result<Puzzle, ServerError>> + use<>, PuzzleProblem> {
+    let token = token(cx).ok_or(PuzzleProblem::SignInFirst)?;
     Ok(client.next_puzzle(&token, range))
 }
 
@@ -32,8 +29,8 @@ pub fn request_rated_puzzle(
     client: &ServerClient,
     token: &TokenSource,
     cx: &App,
-) -> Result<impl Future<Output = Result<Puzzle, ServerError>> + use<>, &'static str> {
-    let token = token(cx).ok_or(SIGN_IN_FIRST)?;
+) -> Result<impl Future<Output = Result<Puzzle, ServerError>> + use<>, PuzzleProblem> {
+    let token = token(cx).ok_or(PuzzleProblem::SignInFirst)?;
     Ok(client.rated_puzzle(&token))
 }
 

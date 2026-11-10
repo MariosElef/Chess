@@ -1,3 +1,5 @@
+use crate::i18n::tr;
+
 /// The thread counts offered, kept to those this device has.
 const THREAD_STEPS: [usize; 6] = [1, 2, 4, 8, 16, 32];
 /// The default never takes more than this many threads: plenty for analysis, and quiet.
@@ -71,7 +73,10 @@ pub fn thread_choices(cores: usize) -> Vec<usize> {
 
 /// `24`, or `Infinite` for no limit, as the settings page shows it.
 pub fn depth_label(depth: Option<u32>) -> String {
-    depth.map_or_else(|| "Infinite".to_owned(), |depth| depth.to_string())
+    depth.map_or_else(
+        || tr!("settings.stockfish.infinite"),
+        |depth| depth.to_string(),
+    )
 }
 
 fn depth_key(depth: Option<u32>) -> String {

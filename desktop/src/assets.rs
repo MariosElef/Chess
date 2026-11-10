@@ -53,7 +53,9 @@ icon_assets!(
         Ban,
         Mail,
         Monitor,
-        Volume2
+        Volume2,
+        Grid3x3,
+        ListOrdered
     ]
 );
 
