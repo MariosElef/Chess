@@ -20,11 +20,13 @@ pub struct Engine {
 impl Engine {
     /// Starts the engine at `path`; its lines arrive on the returned receiver, read off-thread.
     pub fn spawn(path: &Path) -> io::Result<(Self, Receiver<EngineEvent>)> {
-        let mut child = Process::new(path)
+        let mut process = Process::new(path);
+        process
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
+            .stderr(Stdio::null());
+        without_console(&mut process);
+        let mut child = process.spawn()?;
         let stdin = child.stdin.take().ok_or_else(|| missing_pipe("stdin"))?;
         let stdout = child.stdout.take().ok_or_else(|| missing_pipe("stdout"))?;
         let (sender, receiver) = unbounded();
@@ -49,6 +51,19 @@ impl Drop for Engine {
         let _ = self.child.wait();
     }
 }
+
+/// On Windows a window app that starts a console program gets a console window for it, one per
+/// engine; the engine talks over pipes, so it is started without one.
+#[cfg(windows)]
+fn without_console(process: &mut Process) {
+    use std::os::windows::process::CommandExt as _;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    process.creation_flags(CREATE_NO_WINDOW);
+}
+
+/// Elsewhere a program started from an app has no window of its own.
+#[cfg(not(windows))]
+fn without_console(_: &mut Process) {}
 
 /// Forwards every line until the engine's output ends or the app stops listening.
 fn read_lines(stdout: ChildStdout, sender: &Sender<EngineEvent>) {

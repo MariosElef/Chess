@@ -1,5 +1,6 @@
 mod action_bar;
 mod choice_tile;
+mod fill_scroll;
 mod menu_tile;
 mod on_back;
 mod panel_header;
@@ -11,6 +12,7 @@ mod stat_card;
 
 pub use action_bar::action_bar;
 pub use choice_tile::ChoiceTile;
+pub use fill_scroll::fill_scroll;
 pub use menu_tile::MenuTile;
 pub use on_back::OnBack;
 pub use panel_header::PanelHeader;

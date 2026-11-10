@@ -1,9 +1,13 @@
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex},
+    prelude::FluentBuilder as _,
     *,
 };
 
-use super::app_logo::APP_LOGO;
+use super::{
+    app_logo::APP_LOGO,
+    window_controls::{WindowControls, draws_window_controls},
+};
 
 /// The bar across the top: the app's mark on the left, its actions on the right.
 #[derive(IntoElement)]
@@ -24,7 +28,8 @@ impl AppHeader {
     }
 }
 
-/// Room on the left for the Mac's close, minimise and zoom buttons.
+/// Room on the left for the Mac's close, minimise and zoom buttons; elsewhere the app draws its
+/// own on the right.
 const WINDOW_BUTTONS: Pixels = px(88.);
 
 /// Where the Mac's buttons sit: centred in the 56px header.
@@ -40,13 +45,20 @@ fn move_window(event: &MouseDownEvent, window: &mut Window, _: &mut App) {
 }
 
 impl RenderOnce for AppHeader {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme();
+        let own_controls = draws_window_controls(window);
         h_flex()
             .h(px(56.))
             .flex_shrink_0()
-            .pl(WINDOW_BUTTONS)
-            .pr_6()
+            .map(|this| {
+                if cfg!(target_os = "macos") {
+                    this.pl(WINDOW_BUTTONS)
+                } else {
+                    this.pl_6()
+                }
+            })
+            .when(!own_controls, |this| this.pr_6())
             .gap_6()
             .bg(theme.sidebar)
             .text_color(theme.sidebar_foreground)
@@ -55,6 +67,9 @@ impl RenderOnce for AppHeader {
                     .id("title-bar")
                     .h_full()
                     .flex_1()
+                    // Windows moves and snaps the window itself from the area it is told is the
+                    // title bar; it has no move to start from a press.
+                    .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(MouseButton::Left, move_window)
                     .gap_2p5()
                     .text_xl()
@@ -64,5 +79,6 @@ impl RenderOnce for AppHeader {
                     .child("Chess"),
             )
             .child(h_flex().items_center().gap_5().children(self.actions))
+            .when(own_controls, |this| this.child(WindowControls))
     }
 }

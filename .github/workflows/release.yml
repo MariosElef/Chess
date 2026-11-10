@@ -1,6 +1,7 @@
 # Builds the app for macOS, Windows and Linux when a version tag is pushed (`git tag v0.2.0 &&
 # git push origin v0.2.0`), each with the server's address built in and Stockfish beside it, and
-# attaches them to a GitHub release. The address is the repository variable CHESS_SERVER_URL
+# attaches them to a GitHub release: a .dmg for macOS, a setup program for Windows, a tarball for
+# Linux. The address is the repository variable CHESS_SERVER_URL
 # (Settings → Secrets and variables → Actions → Variables).
 name: Release
 
@@ -45,13 +46,17 @@ jobs:
           unzip -q stockfish.zip -d stockfish
           cp stockfish/stockfish/stockfish-windows-x86-64-universal.exe dist/Chess/stockfish.exe
           cp stockfish/stockfish/Copying.txt dist/Chess/Stockfish-COPYING.txt
-      - name: Zip it
+      # One setup program to download, rather than a folder with two programs in it.
+      - name: Make the installer
         shell: pwsh
-        run: Compress-Archive -Path dist/Chess -DestinationPath dist/Chess-windows-x64.zip
+        run: |
+          choco install innosetup --no-progress -y
+          $version = (Select-String -Path desktop/Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" scripts\windows-installer.iss
       - uses: actions/upload-artifact@v7
         with:
           name: windows
-          path: dist/Chess-windows-x64.zip
+          path: dist/*-windows-x64-setup.exe
 
   linux:
     runs-on: ubuntu-22.04

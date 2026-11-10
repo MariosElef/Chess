@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::enums::analysis::MoveClass;
+use crate::{components::panel::fill_scroll, enums::analysis::MoveClass};
 
 use gpui_kit::{
     component::{ActiveTheme as _, h_flex, v_flex},
@@ -54,15 +54,16 @@ impl MoveList {
 impl RenderOnce for MoveList {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         // It takes the room its panel has, and scrolls inside it, unless its panel scrolls it.
-        v_flex()
-            .id("move-list")
+        let list = v_flex()
             .w_full()
-            .when(!self.unbounded, |this| {
-                this.flex_1().min_h(rems(10.)).overflow_y_scroll()
-            })
             .text_sm()
             .when(self.sans.is_empty(), |this| this.child(empty_text(cx)))
-            .children(self.rows(cx))
+            .children(self.rows(cx));
+        if self.unbounded {
+            list.into_any_element()
+        } else {
+            fill_scroll("move-list", rems(10.), list).into_any_element()
+        }
     }
 }
 

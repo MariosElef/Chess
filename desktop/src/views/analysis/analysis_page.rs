@@ -23,7 +23,7 @@ use crate::{
         },
         board::{BoardColumn, board_page, copy_fen},
         history::{MoveList, NavigationBar},
-        panel::{ChoiceTile, PanelHeader, SidePanel, StartButton},
+        panel::{ChoiceTile, PanelHeader, SidePanel, StartButton, fill_scroll},
         shell::ANALYSIS_PICTURE,
     },
     enums::{
@@ -615,20 +615,16 @@ impl AnalysisPage {
         .classes(self.review_classes());
         match self.review_panel(cx) {
             None => moves.into_any_element(),
-            Some(review) => div()
-                .id("analysis-middle")
-                .w_full()
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .child(
-                    v_flex()
-                        .w_full()
-                        .gap_3()
-                        .child(review)
-                        .child(moves.unbounded()),
-                )
-                .into_any_element(),
+            Some(review) => fill_scroll(
+                "analysis-middle",
+                rems(10.),
+                v_flex()
+                    .w_full()
+                    .gap_3()
+                    .child(review)
+                    .child(moves.unbounded()),
+            )
+            .into_any_element(),
         }
     }
 

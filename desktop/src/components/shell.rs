@@ -4,6 +4,7 @@ mod app_logo;
 mod nav_pictures;
 mod nav_rail;
 mod toast;
+mod window_controls;
 
 pub use account_menu::{AccountMenu, MenuPerson};
 pub use app_header::{AppHeader, WINDOW_BUTTONS_AT};
